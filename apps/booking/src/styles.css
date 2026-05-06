@@ -1,0 +1,344 @@
+:root {
+  --primary: #4f46e5;
+  --primary-strong: #4338ca;
+  --primary-soft: #eef2ff;
+  --primary-line: #c7d2fe;
+  --accent: #8b5cf6;
+
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-muted: #f1f5f9;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --subtle: #94a3b8;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  --success: #059669;
+  --success-soft: #ecfdf5;
+
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.07), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-focus: 0 0 0 3px rgba(79, 70, 229, 0.2);
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+}
+
+[data-theme="dark"] {
+  --primary: #818cf8;
+  --primary-strong: #a5b4fc;
+  --primary-soft: rgba(129, 140, 248, 0.14);
+  --primary-line: rgba(129, 140, 248, 0.32);
+
+  --bg: #0b0f1a;
+  --surface: #141925;
+  --surface-muted: #1c2230;
+  --ink: #f5f7fb;
+  --muted: #a4b0c7;
+  --subtle: #7a8aa3;
+  --border: #2a3142;
+  --border-strong: #3d465d;
+
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.14);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-focus: 0 0 0 3px rgba(129, 140, 248, 0.32);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 18px;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui,
+    "Helvetica Neue", Arial, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+h1,
+h2,
+p,
+ul {
+  margin: 0;
+}
+
+.booking-app {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--s-5) var(--s-4) var(--s-6);
+  display: grid;
+  gap: var(--s-4);
+}
+
+.booking-header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.brand-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #f5f7fb;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 60%, #8b5cf6 100%);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+
+.brand-mark svg {
+  display: block;
+}
+
+.eyebrow {
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.booking-header h1 {
+  margin-top: 2px;
+  font-size: clamp(1.4rem, 5.4vw, 1.85rem);
+  letter-spacing: -0.012em;
+}
+
+.tenant {
+  margin-top: 4px;
+  color: var(--subtle);
+  font-size: 0.84rem;
+}
+
+.variant-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.variant-nav > * {
+  min-width: 0;
+}
+
+.variant-link {
+  min-height: 52px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 0 var(--s-2);
+}
+
+.variant-link.is-active {
+  border-color: var(--primary-line);
+  color: var(--primary-strong);
+  background: var(--primary-soft);
+}
+
+.surface {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  padding: var(--s-4);
+  display: grid;
+  gap: var(--s-3);
+}
+
+.surface h2 {
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.supporting {
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.service-list,
+.therapist-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+
+.service-item,
+.therapist-item {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.service-item {
+  display: grid;
+  gap: 2px;
+}
+
+.service-item.is-selected,
+.therapist-item.is-selected {
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+}
+
+.service-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-meta,
+.service-note {
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.btn {
+  min-height: 40px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 var(--s-3);
+  cursor: pointer;
+}
+
+.btn-primary {
+  color: #f5f7fb;
+  background: var(--primary);
+}
+
+.btn-primary:hover {
+  background: var(--primary-strong);
+}
+
+.btn-ghost {
+  color: var(--ink);
+  border-color: var(--border);
+  background: transparent;
+}
+
+.btn-ghost:hover {
+  background: var(--surface-muted);
+}
+
+.manage-link {
+  color: var(--muted);
+  font-size: 0.84rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+}
+
+.next-step {
+  font-size: 0.84rem;
+  color: var(--success);
+  background: var(--success-soft);
+  border: 1px solid rgba(5, 150, 105, 0.22);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+}
+
+.service-item:focus-visible,
+.therapist-item:focus-visible,
+.btn:focus-visible,
+.manage-link:focus-visible,
+.variant-link:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+@media (min-width: 860px) {
+  .booking-app {
+    max-width: 980px;
+    grid-template-columns: 1.25fr 1fr;
+    align-items: start;
+  }
+
+  .booking-header,
+  .variant-nav {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  .variant-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
