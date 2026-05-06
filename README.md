@@ -1,0 +1,120 @@
+# Agenda Luna Mandala
+
+Rebuild limpio de Agenda Luna para el repo nuevo:
+
+```txt
+Dran9/agenda-luna-mandala
+```
+
+Este proyecto nace despues del prototipo `agendaluna`. El prototipo sirvio para aprender el producto, validar decisiones y descubrir riesgos. Este repo no debe copiar su codigo a ciegas.
+
+## Decision Central
+
+Agenda Luna Mandala es una app Hostinger Web/Node.js-first para centros terapeuticos pequenos con:
+
+- varios terapeutas;
+- varios servicios;
+- salas limitadas;
+- booking publico mobile-first;
+- round-robin simple;
+- pagos por comprobante;
+- WhatsApp para clientes;
+- Telegram para terapeutas;
+- admin operativo para secretaria/centro.
+
+No es Super Agenda reducida. No es una app enterprise. No usa VPS en v1.
+
+## Regla De Rebuild
+
+Se mantiene la logica aprendida:
+
+- MySQL/MariaDB como fuente de verdad.
+- Claims por minuto para evitar doble reserva de terapeuta/sala.
+- Google Calendar solo como espejo opcional futuro.
+- Hostinger Web/Node.js como restriccion v1.
+- React/Vite + Express + MySQL.
+- CSS plano con variables.
+- Phosphor Icons.
+
+Se descarta:
+
+- deuda de commits mezclados;
+- runtime tocado junto a features;
+- C1 roto del prototipo;
+- carpetas o codigo copiado sin revisar;
+- cualquier implementacion que no pase gates por microfase.
+
+## Documentos
+
+Leer en este orden:
+
+1. `AGENTS.md`
+2. `docs/00_MASTER_SPEC.md`
+3. `docs/01_SCOPE_LOCK.md`
+4. `docs/02_ARCHITECTURE.md`
+5. `docs/03_DATABASE_PLAN.md`
+6. `docs/04_HOSTINGER_DEPLOY_CONTRACT.md`
+7. `docs/05_UI_UX_BRIEF.md`
+8. `docs/06_ENGINEERING_GUARDRAILS.md`
+9. `docs/07_ROADMAP_MICROPHASES.md`
+10. `docs/08_ACCEPTANCE_GATES.md`
+11. `docs/09_CODEX_START_PROMPT.md`
+
+## Nuevo Repo Y Nueva DB
+
+Repo nuevo:
+
+```txt
+git@github.com:Dran9/agenda-luna-mandala.git
+```
+
+DB nueva recomendada:
+
+```txt
+u926460478_lunamandala_v2
+```
+
+La DB anterior queda congelada como referencia. No migrar datos del prototipo a la DB nueva durante el MVP.
+
+## Stack Permitido
+
+- Node.js + Express.
+- MySQL/MariaDB con `mysql2`.
+- React + Vite.
+- CSS plano con variables.
+- Phosphor Icons.
+- Zod.
+- JWT.
+- Node test runner.
+
+## Prohibido En V1
+
+- Next.js.
+- NestJS.
+- Tailwind.
+- shadcn.
+- Prisma.
+- Drizzle.
+- Redis.
+- BullMQ.
+- Socket.IO.
+- Google Calendar como fuente de disponibilidad.
+
+## Filosofia De Implementacion
+
+Cada microfase debe:
+
+- tocar pocos archivos;
+- no mezclar runtime con features;
+- pasar tests;
+- pasar build;
+- poder desplegarse en Hostinger;
+- tener rollback facil;
+- dejar una app operativa, aunque pequena.
+
+La primera meta no es feature richness. La primera meta es una tuberia estable:
+
+```txt
+Express arranca -> sirve /api/health -> sirve / -> sirve /admin -> deploy Hostinger OK
+```
+
