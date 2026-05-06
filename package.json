@@ -1,0 +1,26 @@
+{
+  "name": "agenda-luna-mandala",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fase 0 - Tuberia Hostinger para Agenda Luna Mandala",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev:server": "node --watch server/index.js",
+    "dev:admin": "vite --config apps/admin/vite.config.js",
+    "dev:booking": "vite --config apps/booking/vite.config.js",
+    "build": "npm run build:booking && npm run build:admin",
+    "build:admin": "vite build --config apps/admin/vite.config.js",
+    "build:booking": "vite build --config apps/booking/vite.config.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "express": "^5.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.12"
+  }
+}
