@@ -24,6 +24,17 @@ Agenda Luna Mandala es una app Hostinger Web/Node.js-first para centros terapeut
 
 No es Super Agenda reducida. No es una app enterprise. No usa VPS en v1.
 
+## Nombres De Superficies
+
+Para evitar ambiguedad:
+
+- Reserva publica: la experiencia que usa el cliente/paciente para reservar.
+- `booking-web`: nombre tecnico de la app de Reserva publica.
+- `public-booking-api`: endpoints publicos de reserva.
+- Admin: operacion interna del centro.
+
+No usar "frontend" como nombre de una superficie, porque Admin tambien es frontend.
+
 ## Regla De Rebuild
 
 Se mantiene la logica aprendida:
@@ -35,6 +46,7 @@ Se mantiene la logica aprendida:
 - React/Vite + Express + MySQL.
 - CSS plano con variables.
 - Phosphor Icons.
+- Direccion visual activa: `DESIGN_BRIEF_AGENDA_LUNA.md` + `design.md`.
 
 Se descarta:
 
@@ -55,10 +67,13 @@ Leer en este orden:
 5. `docs/03_DATABASE_PLAN.md`
 6. `docs/04_HOSTINGER_DEPLOY_CONTRACT.md`
 7. `docs/05_UI_UX_BRIEF.md`
-8. `docs/06_ENGINEERING_GUARDRAILS.md`
-9. `docs/07_ROADMAP_MICROPHASES.md`
-10. `docs/08_ACCEPTANCE_GATES.md`
-11. `docs/09_CODEX_START_PROMPT.md`
+8. `DESIGN_BRIEF_AGENDA_LUNA.md`
+9. `design.md`
+10. `docs/06_ENGINEERING_GUARDRAILS.md`
+11. `docs/07_ROADMAP_MICROPHASES.md`
+12. `docs/08_ACCEPTANCE_GATES.md`
+13. `docs/10_PUBLIC_BOOKING_SPEC.md`
+14. `docs/09_CODEX_START_PROMPT.md`
 
 ## Nuevo Repo Y Nueva DB
 
@@ -83,6 +98,7 @@ La DB anterior queda congelada como referencia. No migrar datos del prototipo a 
 - React + Vite.
 - CSS plano con variables.
 - Phosphor Icons.
+- Direccion visual activa: `DESIGN_BRIEF_AGENDA_LUNA.md` + `design.md`.
 - Zod.
 - JWT.
 - Node test runner.

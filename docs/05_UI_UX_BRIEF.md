@@ -1,5 +1,12 @@
 # 05 - UI/UX Brief
 
+## Fuente Visual Activa
+
+- `DESIGN_BRIEF_AGENDA_LUNA.md`: intencion visual, marca blanca, booking, admin y proceso UI.
+- `design.md`: tokens, paleta Twilight, tipografia, layout shell, componentes y reglas concretas.
+
+Este archivo resume los gates de UX. No reemplaza esos dos documentos.
+
 ## Lenguaje Visual
 
 Base: Twilight.
@@ -27,9 +34,15 @@ Sensacion:
 - No botones falsos.
 - No texto que se corte.
 
-## Booking Publico
+## Reserva Publica (`booking-web`)
 
-Mobile-first.
+Mobile-first. No es landing page; es una herramienta de reserva hermosa, clara y rapida.
+
+Debe soportar tres variantes desde el inicio de la fase de booking real:
+
+- `Booking default`: servicio primero, terapeuta opcional despues.
+- `Single therapist`: flujo optimizado para centro/persona con pocos servicios.
+- `Hybrid explore`: explorar por enfoque, terapeuta u orientacion guiada.
 
 Primera pantalla:
 
@@ -40,7 +53,13 @@ Primera pantalla:
 - boton "Buscar guia" hacia WhatsApp;
 - acceso discreto a gestionar cita.
 
-No es landing page. Es herramienta de reserva hermosa.
+Reglas de UX duras:
+
+- ningun horario aparece antes de identificar WhatsApp;
+- si el cliente ya tiene cita futura, primero se muestra `Ya tienes cita`;
+- holds deben mostrar expiracion;
+- cancelacion/reagenda tardia debe explicar politica 6h/50%;
+- `Hablar con alguien` siempre debe abrir WhatsApp aunque falle el POST interno.
 
 ## Admin
 

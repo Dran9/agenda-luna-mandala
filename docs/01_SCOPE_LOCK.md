@@ -1,8 +1,15 @@
 # 01 - Scope Lock
 
+## Nomenclatura
+
+- Reserva publica: nombre humano/comercial del booking que usa el cliente final.
+- `booking-web`: app tecnica React/Vite de Reserva publica.
+- `public-booking-api`: API publica bajo `/api/public/booking`.
+- Admin: superficie interna del centro.
+
 ## MVP Permitido
 
-### Booking Publico
+### Reserva Publica (`booking-web`)
 
 - Catalogo de servicios.
 - Seleccion por servicio.
@@ -11,7 +18,9 @@
 - Disponibilidad por fecha.
 - Confirmacion con nombre + WhatsApp.
 - Gestion basica de cita existente con token.
+- Reagendar/cancelar con politica minima de 6h/50%.
 - Boton "Buscar guia" hacia WhatsApp.
+- Tres variantes de pantalla inicial segun `docs/10_PUBLIC_BOOKING_SPEC.md`.
 
 ### Disponibilidad
 

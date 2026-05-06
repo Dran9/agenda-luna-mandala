@@ -20,9 +20,12 @@ Lee en este orden:
 6. docs/03_DATABASE_PLAN.md
 7. docs/04_HOSTINGER_DEPLOY_CONTRACT.md
 8. docs/05_UI_UX_BRIEF.md
-9. docs/06_ENGINEERING_GUARDRAILS.md
-10. docs/07_ROADMAP_MICROPHASES.md
-11. docs/08_ACCEPTANCE_GATES.md
+9. DESIGN_BRIEF_AGENDA_LUNA.md
+10. design.md
+11. docs/06_ENGINEERING_GUARDRAILS.md
+12. docs/07_ROADMAP_MICROPHASES.md
+13. docs/08_ACCEPTANCE_GATES.md
+14. docs/10_PUBLIC_BOOKING_SPEC.md
 
 Objetivo de esta primera tarea:
 Implementar SOLO Fase 0 - Tuberia Hostinger.
@@ -30,6 +33,7 @@ Implementar SOLO Fase 0 - Tuberia Hostinger.
 No implementes DB.
 No implementes auth.
 No implementes booking real.
+Lee la spec de Reserva publica para respetar nombres/rutas, pero en Fase 0 solo crea placeholder.
 No implementes admin real.
 No implementes disponibilidad.
 No copies codigo del repo viejo.
@@ -51,7 +55,7 @@ Entregables Fase 0:
 - server/routes/health.route.js.
 - apps/booking React/Vite placeholder real en `/`.
 - apps/admin React/Vite placeholder real en `/admin`.
-- CSS plano con variables basicas Twilight.
+- CSS plano con variables basicas Twilight tomadas de `design.md`.
 - .env.example sin secretos.
 - .gitignore.
 - test minimo para health/app creation si aplica.
@@ -64,6 +68,7 @@ Reglas criticas:
 - No condicionar el arranque por NODE_ENV si el archivo se ejecuta directamente.
 - No tocar deploy automatico de Hostinger mas alla de lo documentado.
 - No crear features fuera de Fase 0.
+- Aunque sean placeholders, `/` y `/admin/` no deben verse genericos ni amateur: respetar `DESIGN_BRIEF_AGENDA_LUNA.md` y `design.md`.
 
 Validacion obligatoria:
 npm install

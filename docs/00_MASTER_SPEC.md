@@ -70,15 +70,19 @@ No es cliente principal del admin, pero recibe informacion operacional:
 
 ## Flujo Publico MVP
 
-1. Cliente entra al booking.
+La superficie publica se llama Reserva publica. Su app tecnica es `booking-web`; su contrato detallado vive en `docs/10_PUBLIC_BOOKING_SPEC.md`.
+
+1. Cliente entra a la Reserva publica.
 2. Ve logo/nombre del centro.
-3. Elige servicio o terapeuta.
-4. Si elige servicio, backend recomienda terapeuta con disponibilidad real.
-5. Cliente elige slot.
-6. Cliente ingresa nombre y WhatsApp.
-7. Backend confirma cita con claims de terapeuta y sala.
-8. Se crea pago pendiente.
-9. Se registra mensaje en outbox/test provider.
+3. Elige servicio o terapeuta segun variante de pantalla.
+4. Ingresa WhatsApp antes de ver horarios.
+5. Si ya tiene cita futura, puede gestionarla o reservar otra sesion explicitamente.
+6. Backend muestra disponibilidad real por terapeuta+sala.
+7. Cliente elige slot y se crea hold temporal.
+8. Cliente nuevo completa onboarding; cliente existente no repite datos.
+9. Backend confirma cita con claims de terapeuta y sala.
+10. Se crea pago pendiente cuando aplique.
+11. Se registra mensaje en outbox/test provider.
 
 ## Flujo Admin MVP
 

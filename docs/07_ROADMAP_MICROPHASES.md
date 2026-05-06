@@ -30,6 +30,38 @@ Gate:
 - Hostinger responde `/api/health`.
 - `/` y `/admin/` cargan.
 
+## Fase 0.5 - Direccion Visual Base
+
+Objetivo:
+
+Fijar la cara minima premium antes de construir DB y pantallas reales encima.
+
+Entregables:
+
+- tokens CSS base desde `design.md`;
+- placeholders de Reserva publica y Admin visualmente dignos;
+- logo/brand mark placeholder visible;
+- layout mobile de Reserva publica sin sensacion de landing generica;
+- shell admin Twilight minimo;
+- ninguna funcionalidad falsa.
+
+Prohibido:
+
+- DB;
+- auth;
+- booking real;
+- admin real;
+- disponibilidad;
+- cambios de runtime/deploy salvo bug directo de Fase 0.
+
+Gate:
+
+- `/` y `/admin/` siguen cargando;
+- `/api/health` sigue respondiendo;
+- build/test pasan;
+- la UI respeta `DESIGN_BRIEF_AGENDA_LUNA.md` y `design.md`;
+- no hay overflow evidente en mobile.
+
 ## Fase 1 - DB Core
 
 Objetivo:
@@ -71,25 +103,34 @@ Gate:
 - dos citas simultaneas validas con recursos distintos;
 - cancelar libera claims.
 
-## Fase 3 - Booking Publico Real
+## Fase 3 - Reserva Publica Real
 
 Objetivo:
 
-Cliente puede reservar de punta a punta.
+Cliente puede reservar, reagendar y cancelar de punta a punta desde `booking-web`, cumpliendo `docs/10_PUBLIC_BOOKING_SPEC.md`.
 
 Entregables:
 
-- catalogo;
-- disponibilidad;
-- confirmacion;
-- pago pendiente;
-- guia WhatsApp `test_outbox`;
-- manage token basico.
+- catalogo publico;
+- tres variantes iniciales: default, single therapist, hybrid explore;
+- identificacion por WhatsApp antes de horarios;
+- disponibilidad real por terapeuta+sala;
+- hold con TTL y expiracion visible;
+- confirmacion con idempotencia;
+- onboarding para cliente nuevo;
+- gestion de cita existente con `managementToken`;
+- cancelacion/reagenda con politica 6h/50%;
+- soporte WhatsApp `Hablar con alguien`;
+- guia WhatsApp via `test_outbox` cuando aplique.
 
 Gate:
 
 - booking mobile usable;
+- ninguna hora aparece antes de identificar WhatsApp;
 - cita crea claims;
+- hold expirado no confirma;
+- reagenda fallida conserva cita original;
+- operaciones mutables usan idempotency key;
 - Control aun puede ser minimo.
 
 ## Fase 4 - Admin C0
