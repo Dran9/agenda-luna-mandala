@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   CalendarCheck,
@@ -684,6 +684,7 @@ function BookingApp() {
   const [confirmedClientName, setConfirmedClientName] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [nowTick, setNowTick] = useState(Date.now());
+  const confirmationSectionRef = useRef(null);
 
   const catalog = catalogState.data;
   const services = catalog?.services || [];
@@ -800,6 +801,17 @@ function BookingApp() {
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    if (confirmState.status !== "success") {
+      return;
+    }
+
+    const confirmationNode = confirmationSectionRef.current;
+    if (confirmationNode && typeof confirmationNode.scrollIntoView === "function") {
+      confirmationNode.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [confirmState.status]);
 
   useEffect(() => {
     setPhoneInput((current) => {
@@ -1016,6 +1028,10 @@ function BookingApp() {
   ]);
 
   useEffect(() => {
+    if (confirmState.status === "success") {
+      return;
+    }
+
     if (identifyState.status !== "success") {
       return;
     }
@@ -1031,6 +1047,7 @@ function BookingApp() {
     setDecision("book_now");
     void loadAvailability(selectedDateKey, true);
   }, [
+    confirmState.status,
     decision,
     hasActiveHold,
     identifyState.status,
@@ -1337,7 +1354,6 @@ function BookingApp() {
       setRequiresOnboarding(false);
       setOnboardingTouched({});
       setOnboardingHint("");
-      setDecision("");
     } catch (error) {
       const mapped = normalizeRequestError(error);
       setConfirmState({
@@ -1424,6 +1440,22 @@ function BookingApp() {
     }
   }
 
+  function handleBookAnother() {
+    setIdentifyState({
+      status: "idle",
+      data: null,
+      error: null
+    });
+    setPhoneInput("");
+    setConfirmState({
+      status: "idle",
+      data: null,
+      error: null
+    });
+    setConfirmedClientName("");
+    resetFromIdentifyDownstream();
+  }
+
   function formatAppointmentSummary(appointment) {
     if (!appointment) {
       return "--";
@@ -1475,6 +1507,16 @@ function BookingApp() {
     ? (services.find((service) => service.id === String(holdState.serviceId))?.name || selectedService?.name || "Servicio")
     : "";
   const holdTimezoneShort = holdState ? formatTimezoneShort(holdState.startsAt, selectedTimezone) : selectedTimezone;
+  const confirmedAppointment = confirmState.data?.appointment || {};
+  const confirmationMissingFields = [];
+
+  if (confirmState.status === "success") {
+    if (!confirmedAppointment.publicCode) confirmationMissingFields.push("codigo publico");
+    if (!confirmedAppointment.startsAt) confirmationMissingFields.push("fecha/hora");
+    if (!confirmedAppointment.serviceName) confirmationMissingFields.push("servicio");
+    if (!confirmedAppointment.therapistName) confirmationMissingFields.push("terapeuta");
+    if (!confirmedAppointment.roomName) confirmationMissingFields.push("sala");
+  }
 
   return (
     <main className="booking-app">
@@ -2180,7 +2222,7 @@ function BookingApp() {
       ) : null}
 
       {confirmState.status === "success" ? (
-        <section className="surface surface-success" aria-live="polite">
+        <section ref={confirmationSectionRef} className="surface surface-success" aria-live="polite">
           <h2 className="section-title">
             <CalendarCheck size={20} weight="fill" aria-hidden="true" />
             Tu cita esta confirmada
@@ -2188,23 +2230,23 @@ function BookingApp() {
           <ul className="confirmation-list" aria-label="Detalle de cita confirmada">
             <li>
               <strong>Fecha y hora</strong>
-              <span>{formatDateTime(confirmState.data?.appointment?.startsAt, selectedTimezone)}</span>
+              <span>{formatDateTime(confirmedAppointment.startsAt, selectedTimezone)}</span>
             </li>
             <li>
               <strong>Servicio</strong>
-              <span>{confirmState.data?.appointment?.serviceName || "--"}</span>
+              <span>{confirmedAppointment.serviceName || "--"}</span>
             </li>
             <li>
               <strong>Terapeuta</strong>
-              <span>{confirmState.data?.appointment?.therapistName || "--"}</span>
+              <span>{confirmedAppointment.therapistName || "--"}</span>
             </li>
             <li>
               <strong>Sala</strong>
-              <span>{confirmState.data?.appointment?.roomName || "--"}</span>
+              <span>{confirmedAppointment.roomName || "--"}</span>
             </li>
             <li>
               <strong>Codigo publico</strong>
-              <span>{confirmState.data?.appointment?.publicCode || "--"}</span>
+              <span>{confirmedAppointment.publicCode || "--"}</span>
             </li>
             <li>
               <strong>WhatsApp</strong>
@@ -2216,17 +2258,25 @@ function BookingApp() {
                 {selectedTimezoneOption.flag} {selectedTimezoneOption.country} ({selectedTimezoneOption.timezone})
               </span>
             </li>
-            {confirmedClientName ? (
-              <li>
-                <strong>Cliente</strong>
-                <span>{confirmedClientName}</span>
-              </li>
-            ) : null}
+            <li>
+              <strong>Cliente</strong>
+              <span>{confirmedClientName || "--"}</span>
+            </li>
           </ul>
-          <a className="btn btn-ghost" href={supportManageHref} target="_blank" rel="noreferrer">
-            <WhatsappLogo size={18} weight="regular" aria-hidden="true" />
-            Hablar con alguien
-          </a>
+          {confirmationMissingFields.length > 0 ? (
+            <p className="confirmation-warning">
+              Confirmamos la cita, pero faltan datos en la respuesta: {confirmationMissingFields.join(", ")}.
+            </p>
+          ) : null}
+          <div className="confirmation-actions">
+            <button type="button" className="btn btn-primary" onClick={handleBookAnother}>
+              Reservar otra cita
+            </button>
+            <a className="btn btn-ghost" href={supportManageHref} target="_blank" rel="noreferrer">
+              <WhatsappLogo size={18} weight="regular" aria-hidden="true" />
+              Hablar con alguien
+            </a>
+          </div>
         </section>
       ) : null}
 

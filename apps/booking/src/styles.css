@@ -918,6 +918,21 @@ button {
   color: var(--ink);
 }
 
+.confirmation-warning {
+  margin: 0;
+  border: 1px solid rgba(180, 83, 9, 0.24);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.52);
+  padding: 8px 10px;
+  font-size: 0.74rem;
+  color: #8b4513;
+}
+
+.confirmation-actions {
+  display: grid;
+  gap: var(--s-2);
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }
@@ -966,6 +981,10 @@ button {
 
   .support-row,
   .actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .confirmation-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
