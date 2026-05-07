@@ -60,6 +60,30 @@ Cuando el cliente elige servicio:
 - permitir cambiar terapeuta;
 - luego calendario y slots.
 
+### Estado Pais, Horarios Y Calendario
+
+Para sesiones online, el booking debe asumir que el cliente puede estar en otro pais.
+
+El selector de pais/zona horaria debe sentirse como parte premium del flujo:
+
+- boton/panel con bandera, pais y hora local actual;
+- busqueda por pais;
+- agrupacion regional cuando haya muchas opciones;
+- helper de WhatsApp que cuenta digitos segun pais;
+- texto breve que explique que horarios y recordatorios se mostraran en esa zona horaria.
+
+La disponibilidad debe evitar una lista larga y tecnica:
+
+- primero mostrar una tira corta de fechas cercanas;
+- usar `Ver mas fechas` para desplegar calendario;
+- calendario con mes, navegacion y dias no disponibles deshabilitados;
+- slots como tarjetas/botones grandes;
+- grupos `Manana` y `Tarde`;
+- hora como dato principal;
+- terapeuta y zona horaria como datos secundarios cuando aporten claridad.
+
+Durante un hold activo, la UI debe sentirse bloqueada y segura: no permitir cambiar fecha, servicio, terapeuta, telefono ni pais/zona horaria hasta confirmar o expirar.
+
 ### Estado Guia
 
 "Buscar guia" abre WhatsApp con texto prellenado:
@@ -207,4 +231,3 @@ Antes de implementar pantallas finales:
 6. Levantar dev server.
 7. Revisar desktop y mobile con navegador.
 8. Corregir cualquier sensacion amateur antes de seguir agregando features.
-

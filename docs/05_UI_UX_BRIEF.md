@@ -58,6 +58,12 @@ Reglas de UX duras:
 - ningun horario aparece antes de identificar WhatsApp;
 - si el cliente ya tiene cita futura, primero se muestra `Ya tienes cita`;
 - holds deben mostrar expiracion;
+- mientras hay hold activo, no se puede cambiar servicio, terapeuta, telefono, pais/zona horaria ni fecha;
+- sesiones online deben tener selector visual de pais/zona horaria con bandera, pais, hora local y busqueda;
+- el helper de WhatsApp debe contar digitos segun pais/zona horaria;
+- la disponibilidad debe mostrar primero una tira corta de fechas cercanas y un calendario extendido solo bajo demanda;
+- los horarios deben mostrarse como botones/tarjetas grandes agrupados por `Manana` y `Tarde`;
+- los horarios visibles deben respetar la zona horaria elegida por el cliente;
 - cancelacion/reagenda tardia debe explicar politica 6h/50%;
 - `Hablar con alguien` siempre debe abrir WhatsApp aunque falle el POST interno.
 
@@ -108,4 +114,3 @@ Despues de cada fase UI:
 - capturar overflow o botones cortados.
 
 Si hay Playwright disponible, usarlo para screenshots. Si no, documentar revision manual.
-

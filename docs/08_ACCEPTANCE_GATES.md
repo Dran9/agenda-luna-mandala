@@ -56,8 +56,15 @@ curl -s http://127.0.0.1:3000/api/health
 - Servicio seleccionable.
 - Terapeuta recomendado cuando aplica.
 - Ningun slot aparece antes de identificar WhatsApp.
+- Selector pais/zona horaria visible para sesiones online.
+- Helper de WhatsApp cuenta digitos segun pais/zona horaria.
+- Horarios visibles respetan zona horaria elegida por el cliente.
+- Disponibilidad muestra tira corta de fechas antes de calendario extendido.
+- Calendario extendido aparece solo bajo demanda y deshabilita dias no disponibles.
+- Slots aparecen como botones/tarjetas grandes agrupados por `Manana` y `Tarde`.
 - Cliente con cita futura ve `Ya tienes cita` antes de poder reservar otra.
 - Hold crea `holdToken`, muestra expiracion y no confirma vencido.
+- Con hold activo no se puede cambiar servicio, terapeuta, telefono, pais/zona horaria ni fecha.
 - Confirmacion clara para cliente nuevo y existente.
 - Reagendar/cancelar respeta politica 6h/50%.
 - `Hablar con alguien` abre WhatsApp siempre.
@@ -83,4 +90,3 @@ curl -s http://127.0.0.1:3000/api/health
 - Sin archivos basura.
 - Sin `.env`.
 - Sin push sin revision si la tarea no lo autoriza.
-

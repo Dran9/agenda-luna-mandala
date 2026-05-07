@@ -212,6 +212,35 @@ Regla dura: ningun horario aparece antes de identificar WhatsApp.
 7. Guardar `holdToken` y `expiresAt`.
 8. Mientras exista hold activo, bloquear nueva seleccion o exigir liberar/expirar el hold anterior.
 
+### Presentacion Visual De Fechas Y Horarios
+
+La disponibilidad no debe sentirse como una lista tecnica. Debe ser una decision guiada, clara y mobile-first.
+
+Reglas:
+
+- Mostrar primero una tira corta de fechas cercanas, idealmente 5 dias habiles.
+- La tira de fechas debe usar botones grandes con dia de semana y fecha.
+- Incluir accion `Ver mas fechas` para desplegar calendario extendido.
+- El calendario extendido se muestra solo cuando el cliente lo pide.
+- El calendario debe indicar mes y ano, permitir navegar mes anterior/siguiente cuando aplique y deshabilitar dias no seleccionables.
+- No mostrar sabados ni domingos como fechas reservables en v1.
+- El dia seleccionado debe tener estado visual claro.
+- Los slots deben renderizarse como botones/tarjetas grandes, no como links ni lista plana.
+- Agrupar slots en `Manana` y `Tarde`.
+- Cada slot debe mostrar hora principal y, cuando aporte claridad, terapeuta y zona horaria visible.
+- En mobile los slots deben mantener targets tactiles comodos y no cortar textos.
+- Si no hay slots para una fecha, mostrar empty state claro y mantener acceso a otras fechas.
+
+Mientras hay hold activo:
+
+- Bloquear cambio de fecha.
+- Bloquear cambio de calendario.
+- Bloquear cambio de servicio.
+- Bloquear cambio de terapeuta.
+- Bloquear cambio de telefono.
+- Bloquear cambio de pais/zona horaria.
+- Mantener visible expiracion del hold y accion de confirmacion.
+
 ### Confirmacion
 
 Cliente nuevo:
@@ -381,10 +410,38 @@ La UI nunca debe romper el flujo por estos errores. Debe explicar el problema y 
 
 ## Zona Horaria Y Telefono
 
-- Selector de zona horaria visible en el flujo.
+- Selector de pais/zona horaria visible en el flujo.
 - Sugerir zona horaria por IP cuando sea posible.
 - Placeholder telefono: `71234567`.
 - Mostrar helper de conteo de digitos.
+- Validar estricto solo donde el largo esta definido en esta tabla; para paises con formatos variables, aceptar rango prudente y guiar con helper.
+- El selector no debe ser un `<select>` basico si hay paises multiples.
+- El selector debe mostrar bandera, pais y hora local actual.
+- Debe permitir busqueda por pais.
+- Debe agrupar opciones por region cuando haya suficientes paises.
+- Cambiar pais/zona horaria actualiza helper de telefono y formato de horarios.
+- Los horarios visibles se formatean en la zona horaria elegida por el cliente.
+- El backend recibe y conserva timestamps ISO; el frontend decide presentacion local.
+- La zona horaria del navegador puede sugerir default, pero no reemplaza la eleccion explicita del cliente.
+
+Paises minimos para v1 internacional:
+
+- Bolivia: `America/La_Paz`.
+- Argentina: `America/Argentina/Buenos_Aires`.
+- Chile: `America/Santiago`.
+- Peru: `America/Lima`.
+- Colombia: `America/Bogota`.
+- Mexico: `America/Mexico_City`.
+- Uruguay: `America/Montevideo`.
+- Brasil: `America/Sao_Paulo`.
+- USA Este: `America/New_York`.
+- USA Centro: `America/Chicago`.
+- USA Pacifico: `America/Los_Angeles`.
+- Canada Este: `America/Toronto`.
+- Espana: `Europe/Madrid`.
+- Francia: `Europe/Paris`.
+- Italia: `Europe/Rome`.
+- Alemania: `Europe/Berlin`.
 
 Reglas por timezone:
 
@@ -399,7 +456,12 @@ Reglas por timezone:
 | `America/Montevideo` | 8 |
 | `America/Sao_Paulo` | 10-11 |
 | `Europe/Madrid` | 9 |
+| `Europe/Paris` | 8-11 |
+| `Europe/Rome` | 8-11 |
+| `Europe/Berlin` | 10-11 |
 | `America/New_York` | 10 |
+| `America/Chicago` | 10 |
+| `America/Los_Angeles` | 10 |
 | `America/Toronto` | 10 |
 
 ## Textos Funcionales
@@ -433,6 +495,11 @@ Usar estos textos como baseline del flujo:
 13. Todas las operaciones mutables usan `idempotencyKey`.
 14. Conflicto de slot responde `409` y la UI permite elegir otro horario.
 15. Hold expirado responde `410` y la UI permite crear un nuevo hold.
+16. El selector pais/zona horaria muestra bandera, pais y hora local actual.
+17. El helper de WhatsApp cambia segun pais/zona horaria.
+18. La disponibilidad muestra primero tira corta de fechas y calendario extendido solo bajo demanda.
+19. Los slots se muestran como botones/tarjetas grandes agrupados por `Manana` y `Tarde`.
+20. Los horarios visibles usan la zona horaria elegida por el cliente.
 
 ## Payloads De Referencia
 
