@@ -831,6 +831,66 @@ test("identify devuelve cliente nuevo si no existe", async () => {
   assert.equal(result.status, "new");
 });
 
+test("identify rechaza telefono Bolivia +591 que no inicia con 6 o 7", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  await assert.rejects(
+    identify({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "+59144444444",
+      now: "2026-05-11T08:00:00-04:00"
+    }),
+    (error) =>
+      error &&
+      error.code === "VALIDATION_ERROR" &&
+      error.message === "En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7."
+  );
+});
+
+test("identify acepta telefono Bolivia +591 que inicia con 6 o 7", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  const result = await identify({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "+59174444444",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  assert.equal(result.status, "new");
+});
+
+test("identify rechaza telefono legacy local Bolivia que no inicia con 6 o 7", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  await assert.rejects(
+    identify({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "44444444",
+      now: "2026-05-11T08:00:00-04:00"
+    }),
+    (error) =>
+      error &&
+      error.code === "VALIDATION_ERROR" &&
+      error.message === "En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7."
+  );
+});
+
+test("identify acepta telefono legacy local Bolivia que inicia con 6 o 7", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  const result = await identify({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "74444444",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  assert.equal(result.status, "new");
+});
+
 test("identify si devuelve confirmed futura con managementToken", async () => {
   const fixture = createFixture({
     clients: [{ id: 501, centerId: 1, phoneE164: "71234567", fullName: "Cliente", isActive: 1 }],
@@ -1075,6 +1135,27 @@ test("availability no devuelve slots ocupados por claim", async () => {
   assert.equal(result.slots.some((slot) => slot.startsAt === "2026-05-11T13:00:00.000Z"), false);
 });
 
+test("availability rechaza telefono local invalido de Bolivia", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  await assert.rejects(
+    getAvailability({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "44444444",
+      serviceId: 10,
+      date: "2026-05-11",
+      timezone: "America/La_Paz",
+      stepMinutes: 60,
+      now: "2026-05-11T08:00:00-04:00"
+    }),
+    (error) =>
+      error &&
+      error.code === "VALIDATION_ERROR" &&
+      error.message === "En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7."
+  );
+});
+
 test("hold crea cita pending con token y calcula endsAt", async () => {
   const connection = new FakeBookingConnection(createFixture());
 
@@ -1093,6 +1174,25 @@ test("hold crea cita pending con token y calcula endsAt", async () => {
   assert.equal(connection.state.appointments.length, 1);
   assert.equal(connection.state.appointments[0].status, "pending");
   assert.ok(connection.state.claims.length > 0);
+});
+
+test("hold rechaza telefono local invalido de Bolivia", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  await assert.rejects(
+    hold({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "44444444",
+      serviceId: 10,
+      startsAt: "2026-05-11T09:00:00-04:00",
+      now: "2026-05-11T08:00:00-04:00"
+    }),
+    (error) =>
+      error &&
+      error.code === "VALIDATION_ERROR" &&
+      error.message === "En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7."
+  );
 });
 
 test("segundo hold del mismo recurso y hora falla por claims del hold vigente", async () => {
@@ -1245,6 +1345,87 @@ test("confirm cliente nuevo sin onboarding falla 422", async () => {
   );
 });
 
+test("confirm rechaza telefono local invalido de Bolivia", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  const holdResult = await hold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "74444444",
+    serviceId: 10,
+    startsAt: "2026-05-11T09:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  await assert.rejects(
+    confirm({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "44444444",
+      holdToken: holdResult.holdToken,
+      idempotencyKey: "idem-invalid-bolivia-local",
+      payload: {
+        tenantSlug: "luna-mandala",
+        phoneE164: "44444444",
+        holdToken: holdResult.holdToken,
+        client: {
+          firstName: "Ana",
+          lastName: "Rojas",
+          age: 32,
+          city: "La Paz",
+          source: "Instagram"
+        }
+      },
+      now: "2026-05-11T08:02:00-04:00"
+    }),
+    (error) =>
+      error &&
+      error.code === "VALIDATION_ERROR" &&
+      error.message === "En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7."
+  );
+});
+
+test("confirm rechaza onboarding con texto basura", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  const holdResult = await hold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "+59174444444",
+    serviceId: 10,
+    startsAt: "2026-05-11T09:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  await assert.rejects(
+    confirm({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "+59174444444",
+      holdToken: holdResult.holdToken,
+      idempotencyKey: "idem-onboarding-garbage",
+      payload: {
+        tenantSlug: "luna-mandala",
+        phoneE164: "+59174444444",
+        holdToken: holdResult.holdToken,
+        client: {
+          firstName: "adsfa",
+          lastName: "Rojas",
+          age: 32,
+          city: "La Paz",
+          source: "Instagram"
+        }
+      },
+      now: "2026-05-11T08:02:00-04:00"
+    }),
+    (error) =>
+      error instanceof PublicBookingError &&
+      error.status === 422 &&
+      error.code === "ONBOARDING_INVALID_TEXT" &&
+      error.details?.field === "firstName"
+  );
+});
+
 test("confirm cliente existente con onboarding completo no exige payload", async () => {
   const fixture = createFixture({
     clients: [
@@ -1284,6 +1465,54 @@ test("confirm cliente existente con onboarding completo no exige payload", async
     payload: {
       tenantSlug: "luna-mandala",
       phoneE164: "71234567",
+      holdToken: holdResult.holdToken
+    },
+    now: "2026-05-11T08:02:00-04:00"
+  });
+
+  assert.equal(result.responseBody.status, "confirmed");
+  assert.equal(connection.state.clients[0].firstName, "Ana");
+});
+
+test("confirm cliente existente completo acepta telefono Bolivia en formato +591 sin repetir onboarding", async () => {
+  const fixture = createFixture({
+    clients: [
+      {
+        id: 501,
+        centerId: 1,
+        phoneE164: "74444444",
+        fullName: "Ana Rojas",
+        firstName: "Ana",
+        lastName: "Rojas",
+        age: 32,
+        city: "La Paz",
+        source: "Instagram",
+        onboardingCompletedAt: new Date("2026-05-01T10:00:00-04:00"),
+        isActive: 1
+      }
+    ]
+  });
+
+  const connection = new FakeBookingConnection(fixture);
+
+  const holdResult = await hold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "+59174444444",
+    serviceId: 10,
+    startsAt: "2026-05-11T09:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  const result = await confirm({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "+59174444444",
+    holdToken: holdResult.holdToken,
+    idempotencyKey: "idem-existing-complete-bo-e164",
+    payload: {
+      tenantSlug: "luna-mandala",
+      phoneE164: "+59174444444",
       holdToken: holdResult.holdToken
     },
     now: "2026-05-11T08:02:00-04:00"

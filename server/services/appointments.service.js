@@ -12,6 +12,18 @@ const {
 } = require("./errors");
 
 const HOLD_TTL_SECONDS = 180;
+const BOLIVIA_DIAL_DIGITS = "591";
+const BOLIVIA_LOCAL_MOBILE_PATTERN = /^[67]\d{7}$/;
+const ONBOARDING_KEYBOARD_SMASHES = new Set([
+  "asdf",
+  "asdfasd",
+  "adsfa",
+  "qwer",
+  "zxcv",
+  "aaaa",
+  "test",
+  "prueba"
+]);
 
 function randomToken(size = 24) {
   return crypto.randomBytes(size).toString("hex");
@@ -59,13 +71,47 @@ function normalizeTherapistId(therapistId) {
 }
 
 function normalizeRequiredOnboardingText(value, fieldName) {
-  const normalized = String(value || "").trim();
+  const normalized = String(value || "").trim().replace(/\s+/g, " ");
 
   if (!normalized) {
     throw new PublicBookingError({
       status: 422,
       code: "ONBOARDING_REQUIRED",
       message: `${fieldName} es obligatorio`,
+      details: { field: fieldName }
+    });
+  }
+
+  const minimumLength = fieldName === "city" || fieldName === "source" ? 3 : 2;
+  const normalizedForQuality = normalized
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+
+  if (normalized.length < minimumLength) {
+    throw new PublicBookingError({
+      status: 422,
+      code: "ONBOARDING_INVALID_TEXT",
+      message: `${fieldName} debe tener al menos ${minimumLength} caracteres`,
+      details: { field: fieldName, minLength: minimumLength }
+    });
+  }
+
+  if (!/[A-Za-zÀ-ÿ]/.test(normalized)) {
+    throw new PublicBookingError({
+      status: 422,
+      code: "ONBOARDING_INVALID_TEXT",
+      message: `${fieldName} debe incluir texto valido`,
+      details: { field: fieldName }
+    });
+  }
+
+  if (/^([a-z0-9])\1{2,}$/.test(normalizedForQuality) || ONBOARDING_KEYBOARD_SMASHES.has(normalizedForQuality)) {
+    throw new PublicBookingError({
+      status: 422,
+      code: "ONBOARDING_INVALID_TEXT",
+      message: `${fieldName} parece invalido`,
       details: { field: fieldName }
     });
   }
@@ -137,7 +183,30 @@ function normalizeOnboardingPayload(payload) {
   };
 }
 
-async function findOrCreateClient({ connection, centerId, phoneE164 }) {
+function buildPhoneLookupCandidates(phoneDigits) {
+  const normalizedPhone = String(phoneDigits || "").replace(/\D/g, "");
+  const candidates = [normalizedPhone];
+
+  if (normalizedPhone.startsWith(BOLIVIA_DIAL_DIGITS)) {
+    const localCandidate = normalizedPhone.slice(BOLIVIA_DIAL_DIGITS.length);
+    if (BOLIVIA_LOCAL_MOBILE_PATTERN.test(localCandidate)) {
+      candidates.push(localCandidate);
+    }
+  } else if (BOLIVIA_LOCAL_MOBILE_PATTERN.test(normalizedPhone)) {
+    candidates.push(`${BOLIVIA_DIAL_DIGITS}${normalizedPhone}`);
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+function areEquivalentPhones(leftPhone, rightPhone) {
+  const leftCandidates = buildPhoneLookupCandidates(leftPhone);
+  const rightCandidates = new Set(buildPhoneLookupCandidates(rightPhone));
+
+  return leftCandidates.some((candidate) => rightCandidates.has(candidate));
+}
+
+async function loadClientByPhone({ connection, centerId, phoneE164 }) {
   const [existingRows] = await connection.query(
     `SELECT
       id,
@@ -157,19 +226,36 @@ async function findOrCreateClient({ connection, centerId, phoneE164 }) {
     [centerId, phoneE164]
   );
 
-  if (existingRows.length > 0) {
-    return {
-      id: Number(existingRows[0].id),
-      fullName: existingRows[0].fullName,
-      firstName: existingRows[0].firstName,
-      lastName: existingRows[0].lastName,
-      age: existingRows[0].age === null ? null : Number(existingRows[0].age),
-      city: existingRows[0].city,
-      source: existingRows[0].source,
-      onboardingCompletedAt: existingRows[0].onboardingCompletedAt,
-      phoneE164: existingRows[0].phoneE164,
-      created: false
-    };
+  if (existingRows.length === 0) {
+    return null;
+  }
+
+  return {
+    id: Number(existingRows[0].id),
+    fullName: existingRows[0].fullName,
+    firstName: existingRows[0].firstName,
+    lastName: existingRows[0].lastName,
+    age: existingRows[0].age === null ? null : Number(existingRows[0].age),
+    city: existingRows[0].city,
+    source: existingRows[0].source,
+    onboardingCompletedAt: existingRows[0].onboardingCompletedAt,
+    phoneE164: existingRows[0].phoneE164,
+    created: false
+  };
+}
+
+async function findOrCreateClient({ connection, centerId, phoneE164 }) {
+  const phoneCandidates = buildPhoneLookupCandidates(phoneE164);
+  for (const candidate of phoneCandidates) {
+    const existingClient = await loadClientByPhone({
+      connection,
+      centerId,
+      phoneE164: candidate
+    });
+
+    if (existingClient) {
+      return existingClient;
+    }
   }
 
   const defaultName = `Cliente ${phoneE164}`;
@@ -204,41 +290,18 @@ async function findOrCreateClient({ connection, centerId, phoneE164 }) {
       throw error;
     }
 
-    const [rowsAfterDuplicate] = await connection.query(
-      `SELECT
-        id,
-        full_name AS fullName,
-        first_name AS firstName,
-        last_name AS lastName,
-        age,
-        city,
-        source,
-        onboarding_completed_at AS onboardingCompletedAt,
-        whatsapp_e164 AS phoneE164
-       FROM clients
-       WHERE center_id = ?
-         AND whatsapp_e164 = ?
-         AND is_active = 1
-       LIMIT 1`,
-      [centerId, phoneE164]
-    );
+    for (const candidate of phoneCandidates) {
+      const clientAfterDuplicate = await loadClientByPhone({
+        connection,
+        centerId,
+        phoneE164: candidate
+      });
 
-    if (rowsAfterDuplicate.length === 0) {
-      throw error;
+      if (clientAfterDuplicate) {
+        return clientAfterDuplicate;
+      }
     }
-
-    return {
-      id: Number(rowsAfterDuplicate[0].id),
-      fullName: rowsAfterDuplicate[0].fullName,
-      firstName: rowsAfterDuplicate[0].firstName,
-      lastName: rowsAfterDuplicate[0].lastName,
-      age: rowsAfterDuplicate[0].age === null ? null : Number(rowsAfterDuplicate[0].age),
-      city: rowsAfterDuplicate[0].city,
-      source: rowsAfterDuplicate[0].source,
-      onboardingCompletedAt: rowsAfterDuplicate[0].onboardingCompletedAt,
-      phoneE164: rowsAfterDuplicate[0].phoneE164,
-      created: false
-    };
+    throw error;
   }
 }
 
@@ -691,7 +754,7 @@ async function confirmHoldAppointment({
 
     const hold = holdRows[0];
 
-    if (String(hold.phoneE164) !== String(phoneE164)) {
+    if (!areEquivalentPhones(hold.phoneE164, phoneE164)) {
       throw new PublicBookingError({
         status: 409,
         code: "HOLD_PHONE_MISMATCH",

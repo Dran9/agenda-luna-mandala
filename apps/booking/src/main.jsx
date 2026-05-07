@@ -29,6 +29,7 @@ const BUSINESS_DAYS_TO_SHOW = 5;
 const CALENDAR_SPAN_DAYS = 180;
 const WEEKDAY_LABELS = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"];
 const ONBOARDING_FIELDS = ["firstName", "lastName", "age", "city", "source"];
+const ONBOARDING_BANNED_TEXT = new Set(["asdf", "asdfasd", "adsfa", "qwer", "zxcv", "aaaa", "test", "prueba"]);
 const EMPTY_ONBOARDING_FORM = {
   firstName: "",
   lastName: "",
@@ -248,13 +249,44 @@ function normalizeOnboardingPayload(values) {
   const city = String(values?.city || "").trim();
   const source = String(values?.source || "").trim();
   const errors = {};
+  const normalizeQualityText = (value) =>
+    String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+  const hasValidTextQuality = (value) => {
+    const quality = normalizeQualityText(value);
+
+    if (!quality) {
+      return false;
+    }
+
+    if (/^([a-z0-9])\1{2,}$/.test(quality)) {
+      return false;
+    }
+
+    if (ONBOARDING_BANNED_TEXT.has(quality)) {
+      return false;
+    }
+
+    return true;
+  };
 
   if (!firstName) {
     errors.firstName = "Ingresa tu nombre.";
+  } else if (firstName.length < 2) {
+    errors.firstName = "Tu nombre debe tener al menos 2 caracteres.";
+  } else if (!hasValidTextQuality(firstName)) {
+    errors.firstName = "Ingresa un nombre valido.";
   }
 
   if (!lastName) {
     errors.lastName = "Ingresa tu apellido.";
+  } else if (lastName.length < 2) {
+    errors.lastName = "Tu apellido debe tener al menos 2 caracteres.";
+  } else if (!hasValidTextQuality(lastName)) {
+    errors.lastName = "Ingresa un apellido valido.";
   }
 
   const age = Number.parseInt(ageRaw, 10);
@@ -266,10 +298,18 @@ function normalizeOnboardingPayload(values) {
 
   if (!city) {
     errors.city = "Ingresa tu ciudad.";
+  } else if (city.length < 3) {
+    errors.city = "La ciudad debe tener al menos 3 caracteres.";
+  } else if (!hasValidTextQuality(city)) {
+    errors.city = "Ingresa una ciudad valida.";
   }
 
   if (!source) {
     errors.source = "Indica como nos encontraste.";
+  } else if (source.length < 3) {
+    errors.source = "La fuente debe tener al menos 3 caracteres.";
+  } else if (!hasValidTextQuality(source)) {
+    errors.source = "Describe de forma valida como nos encontraste.";
   }
 
   return {
@@ -545,6 +585,18 @@ function isPhoneValidByTimezone(phoneDigits, timezoneOption) {
   return length >= timezoneOption.digitsMin && length <= timezoneOption.digitsMax;
 }
 
+function isBoliviaMobilePhone(phoneDigits, timezoneOption) {
+  if (timezoneOption?.timezone !== "America/La_Paz") {
+    return true;
+  }
+
+  return /^[67]\d{7}$/.test(phoneDigits);
+}
+
+function buildPhonePayload(phoneDigits, timezoneOption) {
+  return `${timezoneOption.dialCode}${phoneDigits}`;
+}
+
 function toMinutesAndSeconds(totalSeconds) {
   const safe = Math.max(0, Number(totalSeconds) || 0);
   const minutes = Math.floor(safe / 60);
@@ -702,7 +754,12 @@ function BookingApp() {
 
   const phoneDigits = normalizePhone(phoneInput);
   const isPhoneLengthValid = isPhoneValidByTimezone(phoneDigits, selectedTimezoneOption);
-  const phoneHelper = `${selectedTimezoneOption.flag} ${selectedTimezoneOption.country}: ${formatDigitsRule(selectedTimezoneOption)} · ingresaste ${phoneDigits.length}.`;
+  const isPhoneCountryRuleValid = isBoliviaMobilePhone(phoneDigits, selectedTimezoneOption);
+  const isPhoneValid = isPhoneLengthValid && isPhoneCountryRuleValid;
+  const phoneForApi = buildPhonePayload(phoneDigits, selectedTimezoneOption);
+  const phoneHelper = selectedTimezoneOption.timezone === "America/La_Paz"
+    ? `En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7. Ingresaste ${phoneDigits.length}.`
+    : `${selectedTimezoneOption.flag} ${selectedTimezoneOption.country}: ${formatDigitsRule(selectedTimezoneOption)} · ingresaste ${phoneDigits.length}.`;
   const onboardingValidation = useMemo(() => normalizeOnboardingPayload(onboardingForm), [onboardingForm]);
   const onboardingErrors = useMemo(
     () => ({
@@ -956,7 +1013,7 @@ function BookingApp() {
       return undefined;
     }
 
-    if (identifyState.status !== "success" || !selectedServiceId || !isPhoneLengthValid) {
+    if (identifyState.status !== "success" || !selectedServiceId || !isPhoneValid) {
       return undefined;
     }
 
@@ -1021,7 +1078,7 @@ function BookingApp() {
     decision,
     hasActiveHold,
     identifyState.status,
-    isPhoneLengthValid,
+    isPhoneValid,
     monthBusinessDays,
     selectedServiceId,
     showCalendar
@@ -1040,7 +1097,7 @@ function BookingApp() {
       return;
     }
 
-    if (!selectedServiceId || !isPhoneLengthValid) {
+    if (!selectedServiceId || !isPhoneValid) {
       return;
     }
 
@@ -1051,7 +1108,7 @@ function BookingApp() {
     decision,
     hasActiveHold,
     identifyState.status,
-    isPhoneLengthValid,
+    isPhoneValid,
     nextAppointment,
     selectedDateKey,
     selectedServiceId
@@ -1103,14 +1160,16 @@ function BookingApp() {
       return;
     }
 
-    if (!isPhoneLengthValid) {
+    if (!isPhoneValid) {
       setIdentifyState({
         status: "error",
         data: null,
         error: {
           status: 422,
           code: "PHONE_INVALID",
-          message: `WhatsApp invalido para ${selectedTimezoneOption.country}. Usa ${formatDigitsRule(selectedTimezoneOption)}.`
+          message: selectedTimezoneOption.timezone === "America/La_Paz"
+            ? "En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7."
+            : `WhatsApp invalido para ${selectedTimezoneOption.country}. Usa ${formatDigitsRule(selectedTimezoneOption)}.`
         }
       });
       return;
@@ -1131,7 +1190,7 @@ function BookingApp() {
         },
         body: JSON.stringify({
           tenantSlug: config.tenantSlug,
-          phoneE164: phoneDigits
+          phoneE164: phoneForApi
         })
       });
 
@@ -1166,7 +1225,7 @@ function BookingApp() {
       },
       body: JSON.stringify({
         tenantSlug: config.tenantSlug,
-        phoneE164: phoneDigits,
+        phoneE164: phoneForApi,
         serviceId: selectedServiceId,
         therapistId: selectedTherapistId || undefined,
         date: dateKey || undefined,
@@ -1176,7 +1235,7 @@ function BookingApp() {
   }
 
   async function loadAvailability(dateKey = selectedDateKey, skipDecisionCheck = false, preserveConfirmState = false) {
-    const phoneValid = isPhoneLengthValid;
+    const phoneValid = isPhoneValid;
     const identifyReady = identifyState.status === "success";
     const decisionReady = skipDecisionCheck || Boolean(decision);
 
@@ -1253,7 +1312,7 @@ function BookingApp() {
         },
         body: JSON.stringify({
           tenantSlug: config.tenantSlug,
-          phoneE164: phoneDigits,
+          phoneE164: phoneForApi,
           serviceId: selectedServiceId,
           startsAt: slot.startsAt,
           therapistId: slot.therapistId,
@@ -1313,7 +1372,7 @@ function BookingApp() {
 
     const requestPayload = {
       tenantSlug: config.tenantSlug,
-      phoneE164: phoneDigits,
+      phoneE164: phoneForApi,
       holdToken: holdState.holdToken
     };
     const onboardingPayload = needsOnboardingForConfirmation ? onboardingValidation.normalized : null;
@@ -1696,7 +1755,7 @@ function BookingApp() {
                   placeholder={selectedTimezoneOption.example}
                 />
               </label>
-              <p className={`phone-helper${!isPhoneLengthValid && phoneDigits.length > 0 ? " is-invalid" : ""}`}>
+              <p className={`phone-helper${!isPhoneValid && phoneDigits.length > 0 ? " is-invalid" : ""}`}>
                 {phoneHelper}
               </p>
             </div>
@@ -1780,7 +1839,7 @@ function BookingApp() {
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={identifyState.status === "loading" || lockByHold}
+                disabled={identifyState.status === "loading" || lockByHold || !selectedServiceId || !isPhoneValid}
               >
                 {identifyState.status === "loading" ? (
                   <>
@@ -1985,7 +2044,7 @@ function BookingApp() {
                 <div className="onboarding-panel">
                   <p className="onboarding-title">Completa tus datos para confirmar</p>
                   <p className="onboarding-copy">
-                    Es obligatorio para clientes nuevos o con onboarding incompleto.
+                    Estos datos nos ayudan a preparar tu atencion y confirmar tu reserva.
                   </p>
                   {onboardingHint ? <p className="onboarding-banner">{onboardingHint}</p> : null}
                   <div className="onboarding-grid">

@@ -14,6 +14,9 @@ const DEFAULT_AVAILABILITY_WINDOW_DAYS = 5;
 const DEFAULT_MIN_NOTICE_HOURS = 6;
 const DEFAULT_PENALTY_PERCENT = 50;
 const DEFAULT_DB_OFFSET = process.env.DB_TIMEZONE || "-04:00";
+const BOLIVIA_DIAL_DIGITS = "591";
+const BOLIVIA_LOCAL_MOBILE_PATTERN = /^[67]\d{7}$/;
+const LEGACY_LOCAL_8_DIGIT_PATTERN = /^\d{8}$/;
 
 function normalizeTenantSlug(rawTenantSlug) {
   const value = String(rawTenantSlug || DEFAULT_TENANT_SLUG).trim();
@@ -27,7 +30,69 @@ function normalizePhoneE164(rawPhone) {
     throw new ValidationError("phoneE164 es requerido");
   }
 
+  if (digits.startsWith(BOLIVIA_DIAL_DIGITS)) {
+    const localBoliviaNumber = digits.slice(BOLIVIA_DIAL_DIGITS.length);
+
+    if (!BOLIVIA_LOCAL_MOBILE_PATTERN.test(localBoliviaNumber)) {
+      throw new ValidationError(
+        "En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7.",
+        { field: "phoneE164", country: "BO" }
+      );
+    }
+  }
+
+  if (LEGACY_LOCAL_8_DIGIT_PATTERN.test(digits) && !BOLIVIA_LOCAL_MOBILE_PATTERN.test(digits)) {
+    throw new ValidationError(
+      "En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7.",
+      { field: "phoneE164", country: "BO" }
+    );
+  }
+
   return digits;
+}
+
+function buildPhoneLookupCandidates(normalizedPhone) {
+  const candidates = [normalizedPhone];
+
+  if (normalizedPhone.startsWith(BOLIVIA_DIAL_DIGITS)) {
+    const localCandidate = normalizedPhone.slice(BOLIVIA_DIAL_DIGITS.length);
+    if (BOLIVIA_LOCAL_MOBILE_PATTERN.test(localCandidate)) {
+      candidates.push(localCandidate);
+    }
+  } else if (BOLIVIA_LOCAL_MOBILE_PATTERN.test(normalizedPhone)) {
+    candidates.push(`${BOLIVIA_DIAL_DIGITS}${normalizedPhone}`);
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+async function findClientByPhoneCandidates({ connection, centerId, phoneCandidates }) {
+  for (const phoneCandidate of phoneCandidates) {
+    const [clientRows] = await connection.query(
+      `SELECT
+        id,
+        full_name AS fullName,
+        first_name AS firstName,
+        last_name AS lastName,
+        age,
+        city,
+        source,
+        onboarding_completed_at AS onboardingCompletedAt,
+        whatsapp_e164 AS phoneE164
+       FROM clients
+       WHERE center_id = ?
+         AND whatsapp_e164 = ?
+         AND is_active = 1
+       LIMIT 1`,
+      [centerId, phoneCandidate]
+    );
+
+    if (clientRows.length > 0) {
+      return clientRows[0];
+    }
+  }
+
+  return null;
 }
 
 function parseInteger(value, fallback) {
@@ -241,34 +306,19 @@ async function getCatalog({ connection, tenantSlug }) {
 async function identify({ connection, tenantSlug, phoneE164, now = new Date() }) {
   const center = await resolveCenter(connection, tenantSlug);
   const normalizedPhone = normalizePhoneE164(phoneE164);
+  const phoneCandidates = buildPhoneLookupCandidates(normalizedPhone);
+  const client = await findClientByPhoneCandidates({
+    connection,
+    centerId: center.id,
+    phoneCandidates
+  });
 
-  const [clientRows] = await connection.query(
-    `SELECT
-      id,
-      full_name AS fullName,
-      first_name AS firstName,
-      last_name AS lastName,
-      age,
-      city,
-      source,
-      onboarding_completed_at AS onboardingCompletedAt,
-      whatsapp_e164 AS phoneE164
-     FROM clients
-     WHERE center_id = ?
-       AND whatsapp_e164 = ?
-       AND is_active = 1
-     LIMIT 1`,
-    [center.id, normalizedPhone]
-  );
-
-  if (clientRows.length === 0) {
+  if (!client) {
     return {
       status: "new",
       center
     };
   }
-
-  const client = clientRows[0];
 
   const [settingRows] = await connection.query(
     `SELECT
@@ -364,6 +414,8 @@ async function getAvailability({
       message: "Debes identificar WhatsApp antes de consultar horarios"
     });
   }
+
+  normalizePhoneE164(phoneE164);
 
   const center = await resolveCenter(connection, tenantSlug);
   const normalizedServiceId = parseInteger(serviceId, NaN);
