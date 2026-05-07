@@ -107,7 +107,7 @@ function normalizeAppointment(input) {
   };
 }
 
-async function createAppointmentClaims({ connection, appointment }) {
+async function createAppointmentClaims({ connection, appointment, manageTransaction = true }) {
   if (!connection) {
     throw new ValidationError("Se requiere una conexion DB activa");
   }
@@ -128,8 +128,10 @@ async function createAppointmentClaims({ connection, appointment }) {
   let startedTransaction = false;
 
   try {
-    await connection.beginTransaction();
-    startedTransaction = true;
+    if (manageTransaction) {
+      await connection.beginTransaction();
+      startedTransaction = true;
+    }
 
     await connection.query(
       "DELETE FROM appointment_resource_claims WHERE appointment_id = ?",
@@ -147,7 +149,9 @@ async function createAppointmentClaims({ connection, appointment }) {
       values
     );
 
-    await connection.commit();
+    if (manageTransaction) {
+      await connection.commit();
+    }
 
     return {
       appointmentId: normalizedAppointment.appointmentId,
@@ -170,7 +174,7 @@ async function createAppointmentClaims({ connection, appointment }) {
   }
 }
 
-async function releaseAppointmentClaims({ connection, appointmentId }) {
+async function releaseAppointmentClaims({ connection, appointmentId, manageTransaction = true }) {
   if (!connection) {
     throw new ValidationError("Se requiere una conexion DB activa");
   }
@@ -182,15 +186,19 @@ async function releaseAppointmentClaims({ connection, appointmentId }) {
   let startedTransaction = false;
 
   try {
-    await connection.beginTransaction();
-    startedTransaction = true;
+    if (manageTransaction) {
+      await connection.beginTransaction();
+      startedTransaction = true;
+    }
 
     const [result] = await connection.query(
       "DELETE FROM appointment_resource_claims WHERE appointment_id = ?",
       [appointmentId]
     );
 
-    await connection.commit();
+    if (manageTransaction) {
+      await connection.commit();
+    }
 
     return {
       appointmentId,

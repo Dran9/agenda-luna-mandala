@@ -7,6 +7,21 @@ class SlotOccupiedError extends Error {
   }
 }
 
+class PublicBookingError extends Error {
+  constructor({
+    message = "Error de reserva publica",
+    code = "PUBLIC_BOOKING_ERROR",
+    status = 500,
+    details = {}
+  } = {}) {
+    super(message);
+    this.name = "PublicBookingError";
+    this.code = code;
+    this.status = status;
+    this.details = details;
+  }
+}
+
 class InvalidAppointmentStateError extends Error {
   constructor(status) {
     super(`No se pueden crear claims para estado terminal: ${status}`);
@@ -27,6 +42,7 @@ class ValidationError extends Error {
 
 module.exports = {
   SlotOccupiedError,
+  PublicBookingError,
   InvalidAppointmentStateError,
   ValidationError
 };

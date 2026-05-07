@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("node:path");
 
 const { healthRoute } = require("./routes/health.route");
+const { publicBookingRoute } = require("./routes/publicBooking.route");
 
 const bookingDistDir = path.resolve(__dirname, "../apps/booking/dist");
 const adminDistDir = path.resolve(__dirname, "../apps/admin/dist");
@@ -15,6 +16,7 @@ function createApp() {
   app.use(express.urlencoded({ extended: false }));
 
   app.use("/api/health", healthRoute);
+  app.use("/api/public/booking", publicBookingRoute);
 
   app.use("/admin", express.static(adminDistDir));
   app.get(["/admin", "/admin/{*splat}"], (_req, res) => {
