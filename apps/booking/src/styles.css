@@ -798,23 +798,71 @@ button {
   color: var(--muted);
 }
 
-.hold-header {
+.hold-panel {
+  border: 1px solid rgba(180, 83, 9, 0.3);
+  border-radius: var(--r-md);
+  background: linear-gradient(180deg, #fffdf9 0%, #fff7ed 100%);
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.hold-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: var(--s-2);
+  gap: 8px;
 }
 
-.hold-header span {
+.hold-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9a3412;
+}
+
+.hold-countdown {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #9a3412;
+  border: 1px solid rgba(180, 83, 9, 0.25);
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.hold-time {
+  font-size: 1.28rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #7c2d12;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hold-time span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(124, 45, 18, 0.72);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.hold-date {
+  font-size: 0.78rem;
+  color: rgba(124, 45, 18, 0.72);
+  margin-top: -8px;
 }
 
 .hold-note {
   font-size: 0.72rem;
-  color: rgba(0, 0, 0, 0.62);
+  color: rgba(124, 45, 18, 0.78);
+  margin-top: -2px;
 }
 
 .hold-summary {
@@ -822,53 +870,71 @@ button {
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .hold-summary li {
   display: grid;
-  gap: 2px;
+  gap: 3px;
+  border: 1px solid rgba(180, 83, 9, 0.2);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.86);
+  padding: 8px 10px;
 }
 
 .hold-summary strong {
-  font-size: 0.68rem;
-  color: rgba(0, 0, 0, 0.68);
+  font-size: 0.64rem;
+  color: rgba(124, 45, 18, 0.8);
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.09em;
 }
 
 .hold-summary span {
-  font-size: 0.78rem;
-  color: inherit;
+  font-size: 0.8rem;
+  color: #7c2d12;
+  font-weight: 500;
 }
 
 .onboarding-panel {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.86);
+  padding: 12px;
 }
 
 .onboarding-title {
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   font-weight: 700;
+  color: #1e1b4b;
 }
 
 .onboarding-copy {
   font-size: 0.74rem;
-  color: rgba(0, 0, 0, 0.7);
+  color: rgba(30, 27, 75, 0.72);
+  line-height: 1.45;
 }
 
 .onboarding-banner {
   margin: 0;
   border: 1px solid rgba(180, 83, 9, 0.24);
   border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.72);
   padding: 8px 10px;
   font-size: 0.72rem;
 }
 
 .onboarding-grid {
   display: grid;
-  gap: 8px;
+  gap: 10px;
+}
+
+.onboarding-grid .field input,
+.onboarding-grid .field select {
+  min-height: 44px;
+  border-color: rgba(79, 70, 229, 0.24);
+  background: #fff;
 }
 
 .source-options {
@@ -877,27 +943,62 @@ button {
 }
 
 .source-option {
-  min-height: 44px;
-  border: 1px solid var(--border);
+  min-height: 52px;
+  border: 1px solid rgba(79, 70, 229, 0.26);
   border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--ink);
+  background: #fff;
+  color: #1e1b4b;
   font-size: 0.82rem;
   font-weight: 600;
   text-align: left;
   padding: 0 12px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.source-option-radio {
+  width: 18px;
+  height: 18px;
+  border: 1.8px solid rgba(79, 70, 229, 0.55);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  background: #fff;
+}
+
+.source-option-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.source-option-label {
+  font-size: 0.82rem;
+  line-height: 1.3;
 }
 
 .source-option:hover {
-  border-color: rgba(79, 70, 229, 0.32);
-  background: rgba(79, 70, 229, 0.06);
+  border-color: rgba(79, 70, 229, 0.46);
+  background: rgba(79, 70, 229, 0.05);
 }
 
 .source-option.is-selected {
-  border-color: rgba(79, 70, 229, 0.56);
-  background: rgba(79, 70, 229, 0.12);
+  border-color: rgba(79, 70, 229, 0.64);
+  background: rgba(79, 70, 229, 0.14);
   color: #3730a3;
+}
+
+.source-option.is-selected .source-option-radio {
+  border-color: rgba(79, 70, 229, 0.9);
+}
+
+.source-option.is-selected .source-option-dot {
+  background: #4f46e5;
 }
 
 .source-option:disabled {
@@ -924,7 +1025,43 @@ button {
 
 .surface-success {
   border-color: rgba(5, 150, 105, 0.36);
-  background: var(--success-soft);
+  background: linear-gradient(180deg, #f8fffb 0%, #ecfdf5 100%);
+}
+
+.confirmation-surface {
+  gap: 12px;
+}
+
+.confirmation-head {
+  display: grid;
+  gap: 4px;
+}
+
+.confirmation-subtitle {
+  font-size: 0.76rem;
+  color: rgba(5, 46, 22, 0.72);
+}
+
+.confirmation-code-wrap {
+  border: 1px solid rgba(5, 150, 105, 0.26);
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.86);
+  padding: 10px 12px;
+  display: grid;
+  gap: 2px;
+}
+
+.confirmation-code-label {
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: rgba(5, 46, 22, 0.68);
+}
+
+.confirmation-code {
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  color: #065f46;
 }
 
 .confirmation-list {
@@ -937,7 +1074,11 @@ button {
 
 .confirmation-list li {
   display: grid;
-  gap: 2px;
+  gap: 3px;
+  border: 1px solid rgba(5, 150, 105, 0.2);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.84);
+  padding: 8px 10px;
 }
 
 .confirmation-list strong {
@@ -965,6 +1106,10 @@ button {
 .confirmation-actions {
   display: grid;
   gap: var(--s-2);
+}
+
+.confirmation-actions--final .btn {
+  min-height: 44px;
 }
 
 .spin {
@@ -1023,6 +1168,10 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .hold-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .availability-head {
     grid-template-columns: 1fr auto;
     align-items: center;
@@ -1037,6 +1186,23 @@ button {
   }
 
   .onboarding-grid .field:last-child {
+    grid-column: span 2;
+  }
+
+  .source-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .source-option {
+    min-height: 56px;
+  }
+
+  .confirmation-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .confirmation-list li:first-child,
+  .confirmation-list li:last-child {
     grid-column: span 2;
   }
 }

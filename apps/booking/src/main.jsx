@@ -2007,21 +2007,20 @@ function BookingApp() {
           ) : null}
 
           {holdState ? (
-            <div className="feedback feedback-warning" role="status">
-              <div className="hold-header">
-                <strong>Hold activo</strong>
-                <span>
+            <div className="hold-panel" role="status">
+              <div className="hold-top">
+                <p className="hold-kicker">Horario reservado</p>
+                <span className="hold-countdown">
                   <ClockCountdown size={16} aria-hidden="true" />
                   Expira en {toMinutesAndSeconds(holdSecondsLeft)}
                 </span>
               </div>
+              <p className="hold-time">
+                {formatTime(holdState.startsAt, selectedTimezone)}
+                <span>{holdTimezoneShort}</span>
+              </p>
+              <p className="hold-date">{formatDateTime(holdState.startsAt, selectedTimezone)}</p>
               <ul className="hold-summary" aria-label="Resumen del hold">
-                <li>
-                  <strong>Hora</strong>
-                  <span>
-                    {formatDateTime(holdState.startsAt, selectedTimezone)} ({holdTimezoneShort})
-                  </span>
-                </li>
                 <li>
                   <strong>Servicio</strong>
                   <span>{holdServiceName}</span>
@@ -2140,7 +2139,10 @@ function BookingApp() {
                                 setOnboardingTouched((current) => ({ ...current, source: true }));
                               }}
                             >
-                              {sourceOption}
+                              <span className="source-option-radio" aria-hidden="true">
+                                <span className="source-option-dot" />
+                              </span>
+                              <span className="source-option-label">{sourceOption}</span>
                             </button>
                           );
                         })}
@@ -2302,11 +2304,18 @@ function BookingApp() {
       ) : null}
 
       {confirmState.status === "success" ? (
-        <section ref={confirmationSectionRef} className="surface surface-success" aria-live="polite">
-          <h2 className="section-title">
-            <CalendarCheck size={20} weight="fill" aria-hidden="true" />
-            Tu cita esta confirmada
-          </h2>
+        <section ref={confirmationSectionRef} className="surface surface-success confirmation-surface" aria-live="polite">
+          <div className="confirmation-head">
+            <h2 className="section-title">
+              <CalendarCheck size={20} weight="fill" aria-hidden="true" />
+              Tu cita esta confirmada
+            </h2>
+            <p className="confirmation-subtitle">Todo listo. Te esperamos en el horario reservado.</p>
+          </div>
+          <div className="confirmation-code-wrap">
+            <span className="confirmation-code-label">Codigo publico</span>
+            <strong className="confirmation-code">{confirmedAppointment.publicCode || "--"}</strong>
+          </div>
           <ul className="confirmation-list" aria-label="Detalle de cita confirmada">
             <li>
               <strong>Fecha y hora</strong>
@@ -2323,10 +2332,6 @@ function BookingApp() {
             <li>
               <strong>Sala</strong>
               <span>{confirmedAppointment.roomName || "--"}</span>
-            </li>
-            <li>
-              <strong>Codigo publico</strong>
-              <span>{confirmedAppointment.publicCode || "--"}</span>
             </li>
             <li>
               <strong>WhatsApp</strong>
@@ -2348,7 +2353,7 @@ function BookingApp() {
               Confirmamos la cita, pero faltan datos en la respuesta: {confirmationMissingFields.join(", ")}.
             </p>
           ) : null}
-          <div className="confirmation-actions">
+          <div className="confirmation-actions confirmation-actions--final">
             <button type="button" className="btn btn-primary" onClick={handleBookAnother}>
               Reservar otra cita
             </button>
