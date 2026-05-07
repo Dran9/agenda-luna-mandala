@@ -28,6 +28,14 @@ const DEFAULT_TIMEZONE = "America/La_Paz";
 const BUSINESS_DAYS_TO_SHOW = 5;
 const CALENDAR_SPAN_DAYS = 180;
 const WEEKDAY_LABELS = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"];
+const ONBOARDING_FIELDS = ["firstName", "lastName", "age", "city", "source"];
+const EMPTY_ONBOARDING_FORM = {
+  firstName: "",
+  lastName: "",
+  age: "",
+  city: "",
+  source: ""
+};
 
 const COUNTRY_TIMEZONE_OPTIONS = [
   {
@@ -231,6 +239,49 @@ function createVariantHref(tenantSlug, screenType) {
 
 function normalizePhone(value) {
   return String(value || "").replace(/\D/g, "");
+}
+
+function normalizeOnboardingPayload(values) {
+  const firstName = String(values?.firstName || "").trim();
+  const lastName = String(values?.lastName || "").trim();
+  const ageRaw = String(values?.age || "").trim();
+  const city = String(values?.city || "").trim();
+  const source = String(values?.source || "").trim();
+  const errors = {};
+
+  if (!firstName) {
+    errors.firstName = "Ingresa tu nombre.";
+  }
+
+  if (!lastName) {
+    errors.lastName = "Ingresa tu apellido.";
+  }
+
+  const age = Number.parseInt(ageRaw, 10);
+  if (!ageRaw) {
+    errors.age = "Ingresa tu edad.";
+  } else if (!Number.isInteger(age) || age < 18 || age > 75) {
+    errors.age = "La edad debe estar entre 18 y 75.";
+  }
+
+  if (!city) {
+    errors.city = "Ingresa tu ciudad.";
+  }
+
+  if (!source) {
+    errors.source = "Indica como nos encontraste.";
+  }
+
+  return {
+    errors,
+    normalized: {
+      firstName,
+      lastName,
+      age,
+      city,
+      source
+    }
+  };
 }
 
 function toDateKeyFromDateUtc(date) {
@@ -506,7 +557,8 @@ function normalizeRequestError(error) {
     return {
       status: 0,
       code: "NETWORK_ERROR",
-      message: "No pudimos conectar con el servidor. Reintenta en unos segundos."
+      message: "No pudimos conectar con el servidor. Reintenta en unos segundos.",
+      details: {}
     };
   }
 
@@ -514,14 +566,16 @@ function normalizeRequestError(error) {
     return {
       status: Number(error.status),
       code: error.code || "API_ERROR",
-      message: error.message || "No se pudo completar la solicitud."
+      message: error.message || "No se pudo completar la solicitud.",
+      details: error.details || {}
     };
   }
 
   return {
     status: 0,
     code: "UNKNOWN_ERROR",
-    message: "Ocurrio un error inesperado. Reintenta."
+    message: "Ocurrio un error inesperado. Reintenta.",
+    details: {}
   };
 }
 
@@ -548,6 +602,7 @@ async function requestJson(url, options = {}) {
     error.status = response.status;
     error.code = payload?.error?.code || "API_ERROR";
     error.message = payload?.error?.message || "No se pudo completar la solicitud";
+    error.details = payload?.error?.details || {};
     throw error;
   }
 
@@ -621,12 +676,20 @@ function BookingApp() {
     data: null,
     error: null
   });
+  const [requiresOnboarding, setRequiresOnboarding] = useState(false);
+  const [onboardingForm, setOnboardingForm] = useState(EMPTY_ONBOARDING_FORM);
+  const [onboardingTouched, setOnboardingTouched] = useState({});
+  const [onboardingBackendErrors, setOnboardingBackendErrors] = useState({});
+  const [onboardingHint, setOnboardingHint] = useState("");
+  const [confirmedClientName, setConfirmedClientName] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [nowTick, setNowTick] = useState(Date.now());
 
   const catalog = catalogState.data;
   const services = catalog?.services || [];
   const compatibleTherapists = (catalog?.therapists || []).filter((therapist) => therapist.serviceIds.includes(selectedServiceId));
+  const selectedService = services.find((service) => service.id === selectedServiceId) || null;
+  const selectedTherapist = compatibleTherapists.find((therapist) => therapist.id === selectedTherapistId) || null;
   const nextAppointment = identifyState.data?.nextAppointment || null;
 
   const selectedTimezoneOption = useMemo(
@@ -639,6 +702,18 @@ function BookingApp() {
   const phoneDigits = normalizePhone(phoneInput);
   const isPhoneLengthValid = isPhoneValidByTimezone(phoneDigits, selectedTimezoneOption);
   const phoneHelper = `${selectedTimezoneOption.flag} ${selectedTimezoneOption.country}: ${formatDigitsRule(selectedTimezoneOption)} · ingresaste ${phoneDigits.length}.`;
+  const onboardingValidation = useMemo(() => normalizeOnboardingPayload(onboardingForm), [onboardingForm]);
+  const onboardingErrors = useMemo(
+    () => ({
+      ...onboardingValidation.errors,
+      ...onboardingBackendErrors
+    }),
+    [onboardingBackendErrors, onboardingValidation.errors]
+  );
+  const onboardingIsValid = useMemo(
+    () => Object.keys(onboardingValidation.errors).length === 0,
+    [onboardingValidation.errors]
+  );
 
   const minSelectableDateKey = useMemo(() => nextBusinessDateKey(selectedTimezone), [selectedTimezone]);
   const maxSelectableDateKey = useMemo(() => addDaysToDateKey(minSelectableDateKey, CALENDAR_SPAN_DAYS), [minSelectableDateKey]);
@@ -711,6 +786,10 @@ function BookingApp() {
 
   const hasActiveHold = Boolean(holdState) && confirmState.status !== "success";
   const lockByHold = hasActiveHold;
+  const needsOnboardingForConfirmation = hasActiveHold && requiresOnboarding;
+  const canConfirm = Boolean(holdState?.holdToken)
+    && confirmState.status !== "loading"
+    && (!needsOnboardingForConfirmation || onboardingIsValid);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -721,6 +800,13 @@ function BookingApp() {
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    setPhoneInput((current) => {
+      const trimmed = normalizePhone(current).slice(0, selectedTimezoneOption.digitsMax);
+      return trimmed === current ? current : trimmed;
+    });
+  }, [selectedTimezoneOption.digitsMax]);
 
   useEffect(() => {
     async function loadCatalog() {
@@ -966,6 +1052,12 @@ function BookingApp() {
     setHoldSecondsLeft(0);
     setHoldingSlotStartsAt("");
     setIdempotencyKey("");
+    setRequiresOnboarding(false);
+    setOnboardingForm(EMPTY_ONBOARDING_FORM);
+    setOnboardingTouched({});
+    setOnboardingBackendErrors({});
+    setOnboardingHint("");
+    setConfirmedClientName("");
     setConfirmState({
       status: "idle",
       data: null,
@@ -1031,6 +1123,14 @@ function BookingApp() {
         data: response,
         error: null
       });
+      const requiresForNewClient = response?.status === "new";
+      const requiresForExistingClient = response?.status === "existing" && response?.client?.onboardingComplete !== true;
+      setRequiresOnboarding(requiresForNewClient || requiresForExistingClient);
+      setOnboardingForm(EMPTY_ONBOARDING_FORM);
+      setOnboardingTouched({});
+      setOnboardingBackendErrors({});
+      setOnboardingHint("");
+      setConfirmedClientName("");
     } catch (error) {
       const mapped = normalizeRequestError(error);
       setIdentifyState({
@@ -1120,6 +1220,8 @@ function BookingApp() {
     }
 
     setHoldingSlotStartsAt(slot.startsAt);
+    setOnboardingBackendErrors({});
+    setOnboardingHint("");
     setConfirmState({
       status: "idle",
       data: null,
@@ -1165,9 +1267,41 @@ function BookingApp() {
       return;
     }
 
+    setOnboardingBackendErrors({});
+    setOnboardingHint("");
+
+    if (needsOnboardingForConfirmation && !onboardingIsValid) {
+      const touchedFields = {};
+      for (const field of ONBOARDING_FIELDS) {
+        touchedFields[field] = true;
+      }
+      setOnboardingTouched(touchedFields);
+      setConfirmState({
+        status: "error",
+        data: null,
+        error: {
+          status: 422,
+          code: "ONBOARDING_REQUIRED",
+          message: "Completa tus datos antes de confirmar la cita.",
+          details: {}
+        }
+      });
+      return;
+    }
+
     const requestKey = idempotencyKey || createIdempotencyKey();
     if (!idempotencyKey) {
       setIdempotencyKey(requestKey);
+    }
+
+    const requestPayload = {
+      tenantSlug: config.tenantSlug,
+      phoneE164: phoneDigits,
+      holdToken: holdState.holdToken
+    };
+    const onboardingPayload = needsOnboardingForConfirmation ? onboardingValidation.normalized : null;
+    if (onboardingPayload) {
+      requestPayload.client = onboardingPayload;
     }
 
     setConfirmState({
@@ -1183,11 +1317,7 @@ function BookingApp() {
           "Content-Type": "application/json",
           "Idempotency-Key": requestKey
         },
-        body: JSON.stringify({
-          tenantSlug: config.tenantSlug,
-          phoneE164: phoneDigits,
-          holdToken: holdState.holdToken
-        })
+        body: JSON.stringify(requestPayload)
       });
 
       setConfirmState({
@@ -1196,9 +1326,17 @@ function BookingApp() {
         error: null
       });
 
+      setConfirmedClientName(
+        onboardingPayload
+          ? `${onboardingPayload.firstName} ${onboardingPayload.lastName}`.trim()
+          : (identifyState.data?.client?.fullName || "")
+      );
       setHoldState(null);
       setHoldingSlotStartsAt("");
       setIdempotencyKey("");
+      setRequiresOnboarding(false);
+      setOnboardingTouched({});
+      setOnboardingHint("");
       setDecision("");
     } catch (error) {
       const mapped = normalizeRequestError(error);
@@ -1208,16 +1346,81 @@ function BookingApp() {
         error: mapped
       });
 
+      if (mapped.code === "ONBOARDING_REQUIRED" || mapped.code === "ONBOARDING_INVALID_AGE" || mapped.status === 422) {
+        setRequiresOnboarding(true);
+      }
+
+      if (mapped.code === "ONBOARDING_REQUIRED") {
+        setOnboardingHint(mapped.message || "Completa tus datos antes de confirmar.");
+        const requiredFields = Array.isArray(mapped.details?.requiredFields)
+          ? mapped.details.requiredFields
+          : ONBOARDING_FIELDS;
+
+        setOnboardingTouched((current) => {
+          const next = { ...current };
+          for (const field of requiredFields) {
+            if (ONBOARDING_FIELDS.includes(field)) {
+              next[field] = true;
+            }
+          }
+          return next;
+        });
+      }
+
+      if (mapped.code === "ONBOARDING_INVALID_AGE") {
+        setOnboardingBackendErrors((current) => ({
+          ...current,
+          age: mapped.message || "La edad debe estar entre 18 y 75."
+        }));
+        setOnboardingTouched((current) => ({
+          ...current,
+          age: true
+        }));
+      } else if (mapped.status === 422 && ONBOARDING_FIELDS.includes(mapped.details?.field)) {
+        const field = mapped.details.field;
+        setOnboardingBackendErrors((current) => ({
+          ...current,
+          [field]: mapped.message || "Revisa este dato."
+        }));
+        setOnboardingTouched((current) => ({
+          ...current,
+          [field]: true
+        }));
+      }
+
       if (mapped.code === "HOLD_EXPIRED" || mapped.status === 410) {
         setHoldState(null);
         setIdempotencyKey("");
+        setOnboardingTouched({});
+        setOnboardingHint("");
       }
 
       if (mapped.code === "SLOT_NOT_AVAILABLE" || mapped.status === 409) {
         setHoldState(null);
         setIdempotencyKey("");
+        setOnboardingTouched({});
+        setOnboardingHint("");
         await loadAvailability(selectedDateKey, false, true);
       }
+    }
+  }
+
+  function handleOnboardingFieldChange(field, value) {
+    setOnboardingForm((current) => ({
+      ...current,
+      [field]: value
+    }));
+    setOnboardingBackendErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+    if (onboardingHint) {
+      setOnboardingHint("");
     }
   }
 
@@ -1268,6 +1471,10 @@ function BookingApp() {
   }
 
   const activeHoldStartsAt = holdState?.startsAt || "";
+  const holdServiceName = holdState
+    ? (services.find((service) => service.id === String(holdState.serviceId))?.name || selectedService?.name || "Servicio")
+    : "";
+  const holdTimezoneShort = holdState ? formatTimezoneShort(holdState.startsAt, selectedTimezone) : selectedTimezone;
 
   return (
     <main className="booking-app">
@@ -1414,10 +1621,46 @@ function BookingApp() {
                   ))}
                 </select>
               </label>
+              <p className="therapist-helper">
+                {selectedTherapist
+                  ? `Seleccionaste a ${selectedTherapist.displayName}.`
+                  : "Terapeuta sugerido automaticamente."}
+              </p>
             </div>
 
             <div className="step">
-              <p className="step-label">3. Pais y zona horaria</p>
+              <p className="step-label">3. WhatsApp</p>
+              <label className="field">
+                <span>Numero WhatsApp ({selectedTimezoneOption.dialCode})</span>
+                <input
+                  className="phone-input"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  value={phoneInput}
+                  onChange={(event) => {
+                    if (lockByHold) {
+                      return;
+                    }
+                    const trimmed = normalizePhone(event.target.value).slice(0, selectedTimezoneOption.digitsMax);
+                    setPhoneInput(trimmed);
+                    setIdentifyState((current) =>
+                      current.status === "idle" ? current : { status: "idle", data: null, error: null }
+                    );
+                    resetFromIdentifyDownstream();
+                  }}
+                  disabled={lockByHold}
+                  maxLength={selectedTimezoneOption.digitsMax}
+                  placeholder={selectedTimezoneOption.example}
+                />
+              </label>
+              <p className={`phone-helper${!isPhoneLengthValid && phoneDigits.length > 0 ? " is-invalid" : ""}`}>
+                {phoneHelper}
+              </p>
+            </div>
+
+            <div className="step">
+              <p className="step-label">4. Pais y zona horaria</p>
               <div className="timezone-picker">
                 <button
                   type="button"
@@ -1492,34 +1735,6 @@ function BookingApp() {
                 ) : null}
               </div>
               <p className="timezone-help">Los horarios y recordatorios se mostraran en esta zona horaria.</p>
-            </div>
-
-            <div className="step">
-              <p className="step-label">4. WhatsApp</p>
-              <label className="field">
-                <span>Numero WhatsApp ({selectedTimezoneOption.dialCode})</span>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel"
-                  value={phoneInput}
-                  onChange={(event) => {
-                    if (lockByHold) {
-                      return;
-                    }
-                    setPhoneInput(normalizePhone(event.target.value));
-                    setIdentifyState((current) =>
-                      current.status === "idle" ? current : { status: "idle", data: null, error: null }
-                    );
-                    resetFromIdentifyDownstream();
-                  }}
-                  disabled={lockByHold}
-                  placeholder={selectedTimezoneOption.example}
-                />
-              </label>
-              <p className={`phone-helper${!isPhoneLengthValid && phoneDigits.length > 0 ? " is-invalid" : ""}`}>
-                {phoneHelper}
-              </p>
               <button
                 type="submit"
                 className="btn btn-primary"
@@ -1694,13 +1909,129 @@ function BookingApp() {
                   Expira en {toMinutesAndSeconds(holdSecondsLeft)}
                 </span>
               </div>
-              <span>
-                {formatDateTime(holdState.startsAt, selectedTimezone)} · {holdState.therapistName} · {holdState.roomName}
-              </span>
+              <ul className="hold-summary" aria-label="Resumen del hold">
+                <li>
+                  <strong>Hora</strong>
+                  <span>
+                    {formatDateTime(holdState.startsAt, selectedTimezone)} ({holdTimezoneShort})
+                  </span>
+                </li>
+                <li>
+                  <strong>Servicio</strong>
+                  <span>{holdServiceName}</span>
+                </li>
+                <li>
+                  <strong>Terapeuta asignado</strong>
+                  <span>{holdState.therapistName || "Por asignar"}</span>
+                </li>
+                <li>
+                  <strong>Sala</strong>
+                  <span>{holdState.roomName || "--"}</span>
+                </li>
+                <li>
+                  <strong>Zona horaria</strong>
+                  <span>
+                    {selectedTimezoneOption.flag} {selectedTimezoneOption.country} ({selectedTimezoneOption.timezone})
+                  </span>
+                </li>
+              </ul>
               <p className="hold-note">
                 Servicio, terapeuta, telefono, fecha y zona horaria quedan bloqueados para proteger este horario.
               </p>
-              <button type="button" className="btn btn-primary" onClick={handleConfirm} disabled={confirmState.status === "loading"}>
+
+              {needsOnboardingForConfirmation ? (
+                <div className="onboarding-panel">
+                  <p className="onboarding-title">Completa tus datos para confirmar</p>
+                  <p className="onboarding-copy">
+                    Es obligatorio para clientes nuevos o con onboarding incompleto.
+                  </p>
+                  {onboardingHint ? <p className="onboarding-banner">{onboardingHint}</p> : null}
+                  <div className="onboarding-grid">
+                    <label className="field">
+                      <span>Nombre</span>
+                      <input
+                        type="text"
+                        autoComplete="given-name"
+                        value={onboardingForm.firstName}
+                        onBlur={() => setOnboardingTouched((current) => ({ ...current, firstName: true }))}
+                        onChange={(event) => handleOnboardingFieldChange("firstName", event.target.value)}
+                        disabled={confirmState.status === "loading"}
+                      />
+                      {onboardingTouched.firstName && onboardingErrors.firstName ? (
+                        <small className="field-error">{onboardingErrors.firstName}</small>
+                      ) : null}
+                    </label>
+
+                    <label className="field">
+                      <span>Apellido</span>
+                      <input
+                        type="text"
+                        autoComplete="family-name"
+                        value={onboardingForm.lastName}
+                        onBlur={() => setOnboardingTouched((current) => ({ ...current, lastName: true }))}
+                        onChange={(event) => handleOnboardingFieldChange("lastName", event.target.value)}
+                        disabled={confirmState.status === "loading"}
+                      />
+                      {onboardingTouched.lastName && onboardingErrors.lastName ? (
+                        <small className="field-error">{onboardingErrors.lastName}</small>
+                      ) : null}
+                    </label>
+
+                    <label className="field">
+                      <span>Edad</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        maxLength={2}
+                        value={onboardingForm.age}
+                        onBlur={() => setOnboardingTouched((current) => ({ ...current, age: true }))}
+                        onChange={(event) =>
+                          handleOnboardingFieldChange("age", String(event.target.value || "").replace(/\D/g, "").slice(0, 2))
+                        }
+                        disabled={confirmState.status === "loading"}
+                        placeholder="18-75"
+                      />
+                      {onboardingTouched.age && onboardingErrors.age ? (
+                        <small className="field-error">{onboardingErrors.age}</small>
+                      ) : null}
+                    </label>
+
+                    <label className="field">
+                      <span>Ciudad</span>
+                      <input
+                        type="text"
+                        autoComplete="address-level2"
+                        value={onboardingForm.city}
+                        onBlur={() => setOnboardingTouched((current) => ({ ...current, city: true }))}
+                        onChange={(event) => handleOnboardingFieldChange("city", event.target.value)}
+                        disabled={confirmState.status === "loading"}
+                      />
+                      {onboardingTouched.city && onboardingErrors.city ? (
+                        <small className="field-error">{onboardingErrors.city}</small>
+                      ) : null}
+                    </label>
+
+                    <label className="field">
+                      <span>Como nos encontraste</span>
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        value={onboardingForm.source}
+                        onBlur={() => setOnboardingTouched((current) => ({ ...current, source: true }))}
+                        onChange={(event) => handleOnboardingFieldChange("source", event.target.value)}
+                        disabled={confirmState.status === "loading"}
+                        placeholder="Instagram, recomendacion, Google..."
+                      />
+                      {onboardingTouched.source && onboardingErrors.source ? (
+                        <small className="field-error">{onboardingErrors.source}</small>
+                      ) : null}
+                    </label>
+                  </div>
+                </div>
+              ) : null}
+
+              <button type="button" className="btn btn-primary" onClick={handleConfirm} disabled={!canConfirm}>
                 {confirmState.status === "loading" ? (
                   <>
                     <CircleNotch size={18} className="spin" aria-hidden="true" />
@@ -1759,8 +2090,11 @@ function BookingApp() {
                           >
                             <span className="slot-main">
                               <strong>{formatTime(slot.startsAt, selectedTimezone)}</strong>
-                              <span>
-                                {slot.therapistName} · {slot.roomName} · {timezoneShort}
+                              <span className="slot-meta-line">
+                                <strong>Terapeuta:</strong> {slot.therapistName}
+                              </span>
+                              <span className="slot-meta-line">
+                                <strong>Sala:</strong> {slot.roomName} · {timezoneShort}
                               </span>
                             </span>
                             {isLoadingHold ? (
@@ -1796,8 +2130,11 @@ function BookingApp() {
                           >
                             <span className="slot-main">
                               <strong>{formatTime(slot.startsAt, selectedTimezone)}</strong>
-                              <span>
-                                {slot.therapistName} · {slot.roomName} · {timezoneShort}
+                              <span className="slot-meta-line">
+                                <strong>Terapeuta:</strong> {slot.therapistName}
+                              </span>
+                              <span className="slot-meta-line">
+                                <strong>Sala:</strong> {slot.roomName} · {timezoneShort}
                               </span>
                             </span>
                             {isLoadingHold ? (
@@ -1825,6 +2162,13 @@ function BookingApp() {
                   Elige un nuevo horario para continuar.
                 </p>
               )}
+              {(confirmState.error?.code === "ONBOARDING_REQUIRED"
+                || confirmState.error?.code === "ONBOARDING_INVALID_AGE") ? (
+                <p className="hint-line">
+                  <WarningCircle size={16} aria-hidden="true" />
+                  Completa onboarding para poder confirmar esta cita.
+                </p>
+              ) : null}
               {confirmState.error?.code === "NETWORK_ERROR" ? (
                 <button type="button" className="btn btn-primary" onClick={handleConfirm} disabled={!holdState}>
                   Reintentar confirmacion
@@ -1841,14 +2185,44 @@ function BookingApp() {
             <CalendarCheck size={20} weight="fill" aria-hidden="true" />
             Tu cita esta confirmada
           </h2>
-          <p className="supporting">
-            {formatDateTime(confirmState.data?.appointment?.startsAt, selectedTimezone)} · {confirmState.data?.appointment?.serviceName} con{" "}
-            {confirmState.data?.appointment?.therapistName}
-          </p>
-          <p className="supporting">Codigo: {confirmState.data?.appointment?.publicCode || "--"}</p>
-          <p className="supporting">
-            Zona horaria elegida: {selectedTimezoneOption.flag} {selectedTimezoneOption.country} ({selectedTimezoneOption.timezone})
-          </p>
+          <ul className="confirmation-list" aria-label="Detalle de cita confirmada">
+            <li>
+              <strong>Fecha y hora</strong>
+              <span>{formatDateTime(confirmState.data?.appointment?.startsAt, selectedTimezone)}</span>
+            </li>
+            <li>
+              <strong>Servicio</strong>
+              <span>{confirmState.data?.appointment?.serviceName || "--"}</span>
+            </li>
+            <li>
+              <strong>Terapeuta</strong>
+              <span>{confirmState.data?.appointment?.therapistName || "--"}</span>
+            </li>
+            <li>
+              <strong>Sala</strong>
+              <span>{confirmState.data?.appointment?.roomName || "--"}</span>
+            </li>
+            <li>
+              <strong>Codigo publico</strong>
+              <span>{confirmState.data?.appointment?.publicCode || "--"}</span>
+            </li>
+            <li>
+              <strong>WhatsApp</strong>
+              <span>{selectedTimezoneOption.dialCode} {phoneDigits}</span>
+            </li>
+            <li>
+              <strong>Zona horaria</strong>
+              <span>
+                {selectedTimezoneOption.flag} {selectedTimezoneOption.country} ({selectedTimezoneOption.timezone})
+              </span>
+            </li>
+            {confirmedClientName ? (
+              <li>
+                <strong>Cliente</strong>
+                <span>{confirmedClientName}</span>
+              </li>
+            ) : null}
+          </ul>
           <a className="btn btn-ghost" href={supportManageHref} target="_blank" rel="noreferrer">
             <WhatsappLogo size={18} weight="regular" aria-hidden="true" />
             Hablar con alguien

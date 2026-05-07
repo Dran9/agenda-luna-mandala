@@ -284,6 +284,17 @@ button {
   cursor: not-allowed;
 }
 
+.phone-input {
+  font-size: 24px !important;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.therapist-helper {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 .timezone-picker {
   position: relative;
   display: grid;
@@ -758,9 +769,7 @@ button {
 }
 
 .slot-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
   gap: var(--s-2);
 }
 
@@ -771,6 +780,14 @@ button {
 .slot-main span {
   font-size: 0.74rem;
   color: var(--muted);
+}
+
+.slot-meta-line strong {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-right: 4px;
+  color: var(--subtle);
 }
 
 .slot-state {
@@ -800,6 +817,65 @@ button {
   color: rgba(0, 0, 0, 0.62);
 }
 
+.hold-summary {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.hold-summary li {
+  display: grid;
+  gap: 2px;
+}
+
+.hold-summary strong {
+  font-size: 0.68rem;
+  color: rgba(0, 0, 0, 0.68);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.hold-summary span {
+  font-size: 0.78rem;
+  color: inherit;
+}
+
+.onboarding-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.onboarding-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.onboarding-copy {
+  font-size: 0.74rem;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.onboarding-banner {
+  margin: 0;
+  border: 1px solid rgba(180, 83, 9, 0.24);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.5);
+  padding: 8px 10px;
+  font-size: 0.72rem;
+}
+
+.onboarding-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.field-error {
+  font-size: 0.68rem;
+  color: var(--danger);
+}
+
 .hint-line {
   display: inline-flex;
   align-items: center;
@@ -815,6 +891,31 @@ button {
 .surface-success {
   border-color: rgba(5, 150, 105, 0.36);
   background: var(--success-soft);
+}
+
+.confirmation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.confirmation-list li {
+  display: grid;
+  gap: 2px;
+}
+
+.confirmation-list strong {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: rgba(15, 23, 42, 0.72);
+}
+
+.confirmation-list span {
+  font-size: 0.82rem;
+  color: var(--ink);
 }
 
 .spin {
@@ -875,6 +976,14 @@ button {
 
   .date-strip {
     grid-auto-columns: minmax(108px, 1fr);
+  }
+
+  .onboarding-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .onboarding-grid .field:last-child {
+    grid-column: span 2;
   }
 }
 

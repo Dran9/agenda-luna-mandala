@@ -38,6 +38,22 @@ function parseInteger(value, fallback) {
   return parsed;
 }
 
+function isClientOnboardingComplete(client) {
+  if (!client) {
+    return false;
+  }
+
+  const firstName = String(client.firstName || "").trim();
+  const lastName = String(client.lastName || "").trim();
+  const city = String(client.city || "").trim();
+  const source = String(client.source || "").trim();
+  const age = Number.parseInt(client.age, 10);
+  const hasValidAge = Number.isInteger(age) && age >= 18 && age <= 75;
+  const hasCompletedAt = Boolean(client.onboardingCompletedAt);
+
+  return Boolean(firstName && lastName && city && source && hasValidAge && hasCompletedAt);
+}
+
 function normalizeDateKey(rawDate) {
   const value = String(rawDate || "").trim();
 
@@ -230,6 +246,12 @@ async function identify({ connection, tenantSlug, phoneE164, now = new Date() })
     `SELECT
       id,
       full_name AS fullName,
+      first_name AS firstName,
+      last_name AS lastName,
+      age,
+      city,
+      source,
+      onboarding_completed_at AS onboardingCompletedAt,
       whatsapp_e164 AS phoneE164
      FROM clients
      WHERE center_id = ?
@@ -314,7 +336,8 @@ async function identify({ connection, tenantSlug, phoneE164, now = new Date() })
     client: {
       id: String(client.id),
       phoneE164: client.phoneE164,
-      fullName: client.fullName
+      fullName: client.fullName,
+      onboardingComplete: isClientOnboardingComplete(client)
     },
     appointments,
     nextAppointment: appointments[0] || null

@@ -942,6 +942,70 @@ test("identify si devuelve hold pending vigente", async () => {
   assert.equal(result.appointments[0].managementToken, "mgmt-pending");
 });
 
+test("identify expone onboardingComplete false para cliente existente incompleto", async () => {
+  const fixture = createFixture({
+    clients: [
+      {
+        id: 501,
+        centerId: 1,
+        phoneE164: "71234567",
+        fullName: "Cliente 71234567",
+        firstName: null,
+        lastName: null,
+        age: null,
+        city: null,
+        source: null,
+        onboardingCompletedAt: null,
+        isActive: 1
+      }
+    ]
+  });
+
+  const connection = new FakeBookingConnection(fixture);
+
+  const result = await identify({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  assert.equal(result.status, "existing");
+  assert.equal(result.client.onboardingComplete, false);
+});
+
+test("identify expone onboardingComplete true para cliente existente completo", async () => {
+  const fixture = createFixture({
+    clients: [
+      {
+        id: 501,
+        centerId: 1,
+        phoneE164: "71234567",
+        fullName: "Ana Rojas",
+        firstName: "Ana",
+        lastName: "Rojas",
+        age: 32,
+        city: "La Paz",
+        source: "Instagram",
+        onboardingCompletedAt: new Date("2026-05-01T10:00:00-04:00"),
+        isActive: 1
+      }
+    ]
+  });
+
+  const connection = new FakeBookingConnection(fixture);
+
+  const result = await identify({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  assert.equal(result.status, "existing");
+  assert.equal(result.client.onboardingComplete, true);
+});
+
 test("availability acepta contrato date/timezone y devuelve BookingSlot plano", async () => {
   const connection = new FakeBookingConnection(createFixture());
 
