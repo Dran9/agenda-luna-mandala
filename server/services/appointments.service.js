@@ -24,6 +24,8 @@ const ONBOARDING_KEYBOARD_SMASHES = new Set([
   "test",
   "prueba"
 ]);
+const ONBOARDING_CITY_OPTIONS = ["Cochabamba", "Santa Cruz", "La Paz", "Sucre", "Otro"];
+const ONBOARDING_SOURCE_OPTIONS = ["Referencia de amigos", "Redes sociales", "Otro"];
 
 function randomToken(size = 24) {
   return crypto.randomBytes(size).toString("hex");
@@ -82,7 +84,24 @@ function normalizeRequiredOnboardingText(value, fieldName) {
     });
   }
 
-  const minimumLength = fieldName === "city" || fieldName === "source" ? 3 : 2;
+  if (fieldName === "city" || fieldName === "source") {
+    const allowedOptions = fieldName === "city" ? ONBOARDING_CITY_OPTIONS : ONBOARDING_SOURCE_OPTIONS;
+    const normalizedLower = normalized.toLowerCase();
+    const canonicalValue = allowedOptions.find((option) => option.toLowerCase() === normalizedLower);
+
+    if (!canonicalValue) {
+      throw new PublicBookingError({
+        status: 422,
+        code: "ONBOARDING_INVALID_TEXT",
+        message: `${fieldName} debe ser una opcion valida`,
+        details: { field: fieldName }
+      });
+    }
+
+    return canonicalValue;
+  }
+
+  const minimumLength = 2;
   const normalizedForQuality = normalized
     .toLowerCase()
     .normalize("NFD")

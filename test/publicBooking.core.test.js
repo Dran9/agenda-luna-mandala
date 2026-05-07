@@ -1297,7 +1297,7 @@ test("confirm cliente nuevo con onboarding valido crea confirmed + claims en una
         lastName: "Rojas",
         age: 32,
         city: "La Paz",
-        source: "Instagram"
+        source: "Redes sociales"
       }
     },
     now: "2026-05-11T08:02:00-04:00"
@@ -1309,7 +1309,7 @@ test("confirm cliente nuevo con onboarding valido crea confirmed + claims en una
   assert.equal(connection.state.clients[0].lastName, "Rojas");
   assert.equal(connection.state.clients[0].age, 32);
   assert.equal(connection.state.clients[0].city, "La Paz");
-  assert.equal(connection.state.clients[0].source, "Instagram");
+  assert.equal(connection.state.clients[0].source, "Redes sociales");
   assert.ok(connection.state.clients[0].onboardingCompletedAt);
   assert.ok(connection.state.claims.length > 0);
   assert.equal(connection.beginCount - beginsBeforeConfirm, 1);
@@ -1345,6 +1345,88 @@ test("confirm cliente nuevo sin onboarding falla 422", async () => {
   );
 });
 
+test("confirm rechaza onboarding con city fuera de lista", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  const holdResult = await hold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    startsAt: "2026-05-11T09:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  await assert.rejects(
+    confirm({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "71234567",
+      holdToken: holdResult.holdToken,
+      idempotencyKey: "idem-city-out-of-list",
+      payload: {
+        tenantSlug: "luna-mandala",
+        phoneE164: "71234567",
+        holdToken: holdResult.holdToken,
+        client: {
+          firstName: "Ana",
+          lastName: "Rojas",
+          age: 32,
+          city: "Tarija",
+          source: "Redes sociales"
+        }
+      },
+      now: "2026-05-11T08:02:00-04:00"
+    }),
+    (error) =>
+      error instanceof PublicBookingError &&
+      error.status === 422 &&
+      error.code === "ONBOARDING_INVALID_TEXT" &&
+      error.details?.field === "city"
+  );
+});
+
+test("confirm rechaza onboarding con source fuera de lista", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  const holdResult = await hold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    startsAt: "2026-05-11T09:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  await assert.rejects(
+    confirm({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "71234567",
+      holdToken: holdResult.holdToken,
+      idempotencyKey: "idem-source-out-of-list",
+      payload: {
+        tenantSlug: "luna-mandala",
+        phoneE164: "71234567",
+        holdToken: holdResult.holdToken,
+        client: {
+          firstName: "Ana",
+          lastName: "Rojas",
+          age: 32,
+          city: "La Paz",
+          source: "Google"
+        }
+      },
+      now: "2026-05-11T08:02:00-04:00"
+    }),
+    (error) =>
+      error instanceof PublicBookingError &&
+      error.status === 422 &&
+      error.code === "ONBOARDING_INVALID_TEXT" &&
+      error.details?.field === "source"
+  );
+});
+
 test("confirm rechaza telefono local invalido de Bolivia", async () => {
   const connection = new FakeBookingConnection(createFixture());
 
@@ -1373,7 +1455,7 @@ test("confirm rechaza telefono local invalido de Bolivia", async () => {
           lastName: "Rojas",
           age: 32,
           city: "La Paz",
-          source: "Instagram"
+          source: "Redes sociales"
         }
       },
       now: "2026-05-11T08:02:00-04:00"
@@ -1413,7 +1495,7 @@ test("confirm rechaza onboarding con texto basura", async () => {
           lastName: "Rojas",
           age: 32,
           city: "La Paz",
-          source: "Instagram"
+          source: "Redes sociales"
         }
       },
       now: "2026-05-11T08:02:00-04:00"
@@ -1598,7 +1680,7 @@ test("confirm falla con age fuera de 18..75", async () => {
           lastName: "Rojas",
           age: 16,
           city: "La Paz",
-          source: "Instagram"
+          source: "Redes sociales"
         }
       },
       now: "2026-05-11T08:02:00-04:00"
@@ -1644,7 +1726,7 @@ test("confirm con colision devuelve 409 SLOT_NOT_AVAILABLE", async () => {
           lastName: "Rojas",
           age: 32,
           city: "La Paz",
-          source: "Instagram"
+          source: "Redes sociales"
         }
       },
       now: "2026-05-11T08:02:00-04:00"
@@ -1674,7 +1756,7 @@ test("idempotency replay devuelve la respuesta anterior", async () => {
       lastName: "Rojas",
       age: 32,
       city: "La Paz",
-      source: "Instagram"
+      source: "Redes sociales"
     }
   };
 

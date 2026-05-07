@@ -30,6 +30,8 @@ const CALENDAR_SPAN_DAYS = 180;
 const WEEKDAY_LABELS = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"];
 const ONBOARDING_FIELDS = ["firstName", "lastName", "age", "city", "source"];
 const ONBOARDING_BANNED_TEXT = new Set(["asdf", "asdfasd", "adsfa", "qwer", "zxcv", "aaaa", "test", "prueba"]);
+const ONBOARDING_CITY_OPTIONS = ["Cochabamba", "Santa Cruz", "La Paz", "Sucre", "Otro"];
+const ONBOARDING_SOURCE_OPTIONS = ["Referencia de amigos", "Redes sociales", "Otro"];
 const EMPTY_ONBOARDING_FORM = {
   firstName: "",
   lastName: "",
@@ -249,6 +251,10 @@ function normalizeOnboardingPayload(values) {
   const city = String(values?.city || "").trim();
   const source = String(values?.source || "").trim();
   const errors = {};
+  const resolveAllowedOptionValue = (value, options) => {
+    const lowered = String(value || "").toLowerCase();
+    return options.find((option) => option.toLowerCase() === lowered) || "";
+  };
   const normalizeQualityText = (value) =>
     String(value || "")
       .toLowerCase()
@@ -298,19 +304,18 @@ function normalizeOnboardingPayload(values) {
 
   if (!city) {
     errors.city = "Ingresa tu ciudad.";
-  } else if (city.length < 3) {
-    errors.city = "La ciudad debe tener al menos 3 caracteres.";
-  } else if (!hasValidTextQuality(city)) {
-    errors.city = "Ingresa una ciudad valida.";
+  } else if (!resolveAllowedOptionValue(city, ONBOARDING_CITY_OPTIONS)) {
+    errors.city = "Selecciona una ciudad valida.";
   }
 
   if (!source) {
     errors.source = "Indica como nos encontraste.";
-  } else if (source.length < 3) {
-    errors.source = "La fuente debe tener al menos 3 caracteres.";
-  } else if (!hasValidTextQuality(source)) {
-    errors.source = "Describe de forma valida como nos encontraste.";
+  } else if (!resolveAllowedOptionValue(source, ONBOARDING_SOURCE_OPTIONS)) {
+    errors.source = "Selecciona una fuente valida.";
   }
+
+  const normalizedCity = resolveAllowedOptionValue(city, ONBOARDING_CITY_OPTIONS);
+  const normalizedSource = resolveAllowedOptionValue(source, ONBOARDING_SOURCE_OPTIONS);
 
   return {
     errors,
@@ -318,8 +323,8 @@ function normalizeOnboardingPayload(values) {
       firstName,
       lastName,
       age,
-      city,
-      source
+      city: normalizedCity || city,
+      source: normalizedSource || source
     }
   };
 }
@@ -2100,34 +2105,50 @@ function BookingApp() {
 
                     <label className="field">
                       <span>Ciudad</span>
-                      <input
-                        type="text"
-                        autoComplete="address-level2"
+                      <select
                         value={onboardingForm.city}
                         onBlur={() => setOnboardingTouched((current) => ({ ...current, city: true }))}
                         onChange={(event) => handleOnboardingFieldChange("city", event.target.value)}
                         disabled={confirmState.status === "loading"}
-                      />
+                      >
+                        <option value="">Selecciona una ciudad</option>
+                        {ONBOARDING_CITY_OPTIONS.map((cityOption) => (
+                          <option key={cityOption} value={cityOption}>
+                            {cityOption}
+                          </option>
+                        ))}
+                      </select>
                       {onboardingTouched.city && onboardingErrors.city ? (
                         <small className="field-error">{onboardingErrors.city}</small>
                       ) : null}
                     </label>
 
-                    <label className="field">
+                    <div className="field">
                       <span>Como nos encontraste</span>
-                      <input
-                        type="text"
-                        autoComplete="off"
-                        value={onboardingForm.source}
-                        onBlur={() => setOnboardingTouched((current) => ({ ...current, source: true }))}
-                        onChange={(event) => handleOnboardingFieldChange("source", event.target.value)}
-                        disabled={confirmState.status === "loading"}
-                        placeholder="Instagram, recomendacion, Google..."
-                      />
+                      <div className="source-options" role="radiogroup" aria-label="Fuente de llegada">
+                        {ONBOARDING_SOURCE_OPTIONS.map((sourceOption) => {
+                          const isSelected = onboardingForm.source === sourceOption;
+                          return (
+                            <button
+                              key={sourceOption}
+                              type="button"
+                              className={`source-option${isSelected ? " is-selected" : ""}`}
+                              disabled={confirmState.status === "loading"}
+                              aria-pressed={isSelected}
+                              onClick={() => {
+                                handleOnboardingFieldChange("source", sourceOption);
+                                setOnboardingTouched((current) => ({ ...current, source: true }));
+                              }}
+                            >
+                              {sourceOption}
+                            </button>
+                          );
+                        })}
+                      </div>
                       {onboardingTouched.source && onboardingErrors.source ? (
                         <small className="field-error">{onboardingErrors.source}</small>
                       ) : null}
-                    </label>
+                    </div>
                   </div>
                 </div>
               ) : null}

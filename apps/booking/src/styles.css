@@ -871,6 +871,40 @@ button {
   gap: 8px;
 }
 
+.source-options {
+  display: grid;
+  gap: 8px;
+}
+
+.source-option {
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.source-option:hover {
+  border-color: rgba(79, 70, 229, 0.32);
+  background: rgba(79, 70, 229, 0.06);
+}
+
+.source-option.is-selected {
+  border-color: rgba(79, 70, 229, 0.56);
+  background: rgba(79, 70, 229, 0.12);
+  color: #3730a3;
+}
+
+.source-option:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
 .field-error {
   font-size: 0.68rem;
   color: var(--danger);
@@ -947,7 +981,8 @@ button {
 .variant-link:focus-visible,
 .date-chip:focus-visible,
 .field input:focus-visible,
-.field select:focus-visible {
+.field select:focus-visible,
+.source-option:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
 }
