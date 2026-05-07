@@ -929,6 +929,31 @@ function BookingApp() {
     showCalendar
   ]);
 
+  useEffect(() => {
+    if (identifyState.status !== "success") {
+      return;
+    }
+
+    if (nextAppointment || decision || hasActiveHold) {
+      return;
+    }
+
+    if (!selectedServiceId || !isPhoneLengthValid) {
+      return;
+    }
+
+    setDecision("book_now");
+    void loadAvailability(selectedDateKey, true);
+  }, [
+    decision,
+    hasActiveHold,
+    identifyState.status,
+    isPhoneLengthValid,
+    nextAppointment,
+    selectedDateKey,
+    selectedServiceId
+  ]);
+
   function resetFromIdentifyDownstream() {
     setDecision("");
     setAvailabilityState({
@@ -1086,11 +1111,6 @@ function BookingApp() {
 
   async function handleDecisionReserveAnother() {
     setDecision("book_another");
-    await loadAvailability(selectedDateKey, true);
-  }
-
-  async function handleDecisionContinue() {
-    setDecision("book_now");
     await loadAvailability(selectedDateKey, true);
   }
 
@@ -1548,9 +1568,9 @@ function BookingApp() {
                 </div>
               </>
             ) : (
-              <button type="button" className="btn btn-primary" onClick={handleDecisionContinue} disabled={hasActiveHold}>
-                Ver horarios disponibles
-              </button>
+              <p className="feedback feedback-info" role="status">
+                Validamos tu WhatsApp y buscamos horarios disponibles.
+              </p>
             )}
           </div>
         ) : null}
@@ -1560,7 +1580,7 @@ function BookingApp() {
         <section className="surface" aria-labelledby="availability-title">
           <h2 id="availability-title">Horarios disponibles</h2>
           <p className="supporting">
-            Solo se muestran despues de identificar WhatsApp y confirmar que deseas avanzar con la reserva.
+            Validamos tu WhatsApp y buscamos horarios disponibles. Si cambias datos clave, recalculamos la disponibilidad.
           </p>
 
           <div className="availability-head">
@@ -1668,7 +1688,7 @@ function BookingApp() {
           {availabilityState.status === "loading" ? (
             <p className="inline-state" role="status">
               <CircleNotch size={18} className="spin" aria-hidden="true" />
-              Cargando horarios...
+              Buscando horarios disponibles...
             </p>
           ) : null}
 
@@ -1689,7 +1709,7 @@ function BookingApp() {
           {availabilityState.status === "success" ? (
             <>
               {slotGroups.morning.length === 0 && slotGroups.afternoon.length === 0 ? (
-                <p className="feedback feedback-info">No hay horarios disponibles para la fecha seleccionada.</p>
+                <p className="feedback feedback-info">No hay horarios para esta fecha. Prueba otra fecha.</p>
               ) : null}
 
               {slotGroups.morning.length > 0 ? (
