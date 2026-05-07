@@ -1,0 +1,7 @@
+ALTER TABLE clients
+  ADD COLUMN first_name VARCHAR(90) NULL AFTER full_name,
+  ADD COLUMN last_name VARCHAR(90) NULL AFTER first_name,
+  ADD COLUMN age TINYINT UNSIGNED NULL AFTER last_name,
+  ADD COLUMN city VARCHAR(120) NULL AFTER age,
+  ADD COLUMN source VARCHAR(120) NULL AFTER city,
+  ADD COLUMN onboarding_completed_at TIMESTAMP NULL AFTER source;

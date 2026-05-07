@@ -165,7 +165,8 @@ function createPublicBookingRouter({ getPool = getSharedPool } = {}) {
         payload: {
           tenantSlug: req.body.tenantSlug,
           phoneE164: req.body.phoneE164,
-          holdToken: req.body.holdToken
+          holdToken: req.body.holdToken,
+          client: req.body.client
         },
         now: req.body.now || new Date()
       });

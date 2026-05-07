@@ -167,7 +167,17 @@ class FakeBookingConnection {
 
       if (!client) return [[]];
 
-      return [[{ id: client.id, fullName: client.fullName, phoneE164: client.phoneE164 }]];
+      return [[{
+        id: client.id,
+        fullName: client.fullName,
+        firstName: client.firstName || null,
+        lastName: client.lastName || null,
+        age: client.age ?? null,
+        city: client.city || null,
+        source: client.source || null,
+        onboardingCompletedAt: client.onboardingCompletedAt || null,
+        phoneE164: client.phoneE164
+      }]];
     }
 
     if (normalizedSql.includes("INSERT INTO clients")) {
@@ -188,6 +198,12 @@ class FakeBookingConnection {
         id: this.clientIdSequence,
         centerId,
         fullName,
+        firstName: null,
+        lastName: null,
+        age: null,
+        city: null,
+        source: null,
+        onboardingCompletedAt: null,
         phoneE164: phone,
         isActive: 1
       };
@@ -588,11 +604,36 @@ class FakeBookingConnection {
         endsAt: appointment.endsAt,
         status: appointment.status,
         createdAt: appointment.createdAt,
+        firstName: client ? client.firstName || null : null,
+        lastName: client ? client.lastName || null : null,
+        age: client ? (client.age ?? null) : null,
+        city: client ? client.city || null : null,
+        source: client ? client.source || null : null,
+        onboardingCompletedAt: client ? client.onboardingCompletedAt || null : null,
         phoneE164: client ? client.phoneE164 : "",
         serviceName: service ? service.name : "",
         therapistName: therapist ? therapist.displayName : "",
         roomName: room ? room.name : ""
       }]];
+    }
+
+    if (normalizedSql.includes("UPDATE clients") && normalizedSql.includes("onboarding_completed_at = COALESCE(onboarding_completed_at, CURRENT_TIMESTAMP)")) {
+      const [fullName, firstName, lastName, age, city, source, clientId, centerId] = params;
+      const client = this.state.clients.find((entry) => entry.id === clientId && entry.centerId === centerId);
+
+      if (!client) {
+        return [{ affectedRows: 0 }];
+      }
+
+      client.fullName = fullName;
+      client.firstName = firstName;
+      client.lastName = lastName;
+      client.age = age;
+      client.city = city;
+      client.source = source;
+      client.onboardingCompletedAt = client.onboardingCompletedAt || new Date(this.now);
+
+      return [{ affectedRows: 1 }];
     }
 
     if (normalizedSql.includes("UPDATE appointments") && normalizedSql.includes("SET status = 'confirmed'")) {
@@ -1063,7 +1104,7 @@ test("hold expirado libera claims y permite nuevo hold", async () => {
   assert.equal(connection.state.claims.some((claim) => claim.appointmentId === secondHold.appointmentId), true);
 });
 
-test("confirm crea confirmed + claims en una transaccion", async () => {
+test("confirm cliente nuevo con onboarding valido crea confirmed + claims en una transaccion", async () => {
   const connection = new FakeBookingConnection(createFixture());
 
   const holdResult = await hold({
@@ -1086,15 +1127,191 @@ test("confirm crea confirmed + claims en una transaccion", async () => {
     payload: {
       tenantSlug: "luna-mandala",
       phoneE164: "71234567",
-      holdToken: holdResult.holdToken
+      holdToken: holdResult.holdToken,
+      client: {
+        firstName: "Ana",
+        lastName: "Rojas",
+        age: 32,
+        city: "La Paz",
+        source: "Instagram"
+      }
     },
     now: "2026-05-11T08:02:00-04:00"
   });
 
   assert.equal(confirmResult.responseBody.status, "confirmed");
   assert.equal(connection.state.appointments[0].status, "confirmed");
+  assert.equal(connection.state.clients[0].firstName, "Ana");
+  assert.equal(connection.state.clients[0].lastName, "Rojas");
+  assert.equal(connection.state.clients[0].age, 32);
+  assert.equal(connection.state.clients[0].city, "La Paz");
+  assert.equal(connection.state.clients[0].source, "Instagram");
+  assert.ok(connection.state.clients[0].onboardingCompletedAt);
   assert.ok(connection.state.claims.length > 0);
   assert.equal(connection.beginCount - beginsBeforeConfirm, 1);
+});
+
+test("confirm cliente nuevo sin onboarding falla 422", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  const holdResult = await hold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    startsAt: "2026-05-11T09:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  await assert.rejects(
+    confirm({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "71234567",
+      holdToken: holdResult.holdToken,
+      idempotencyKey: "idem-no-onboarding",
+      payload: {
+        tenantSlug: "luna-mandala",
+        phoneE164: "71234567",
+        holdToken: holdResult.holdToken
+      },
+      now: "2026-05-11T08:02:00-04:00"
+    }),
+    (error) => error instanceof PublicBookingError && error.status === 422 && error.code === "ONBOARDING_REQUIRED"
+  );
+});
+
+test("confirm cliente existente con onboarding completo no exige payload", async () => {
+  const fixture = createFixture({
+    clients: [
+      {
+        id: 501,
+        centerId: 1,
+        phoneE164: "71234567",
+        fullName: "Ana Rojas",
+        firstName: "Ana",
+        lastName: "Rojas",
+        age: 32,
+        city: "La Paz",
+        source: "Instagram",
+        onboardingCompletedAt: new Date("2026-05-01T10:00:00-04:00"),
+        isActive: 1
+      }
+    ]
+  });
+
+  const connection = new FakeBookingConnection(fixture);
+
+  const holdResult = await hold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    startsAt: "2026-05-11T09:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  const result = await confirm({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    holdToken: holdResult.holdToken,
+    idempotencyKey: "idem-existing-complete",
+    payload: {
+      tenantSlug: "luna-mandala",
+      phoneE164: "71234567",
+      holdToken: holdResult.holdToken
+    },
+    now: "2026-05-11T08:02:00-04:00"
+  });
+
+  assert.equal(result.responseBody.status, "confirmed");
+  assert.equal(connection.state.clients[0].firstName, "Ana");
+});
+
+test("confirm cliente existente con onboarding incompleto exige onboarding", async () => {
+  const fixture = createFixture({
+    clients: [
+      {
+        id: 501,
+        centerId: 1,
+        phoneE164: "71234567",
+        fullName: "Cliente 71234567",
+        firstName: null,
+        lastName: null,
+        age: null,
+        city: null,
+        source: null,
+        onboardingCompletedAt: null,
+        isActive: 1
+      }
+    ]
+  });
+
+  const connection = new FakeBookingConnection(fixture);
+
+  const holdResult = await hold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    startsAt: "2026-05-11T09:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  await assert.rejects(
+    confirm({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "71234567",
+      holdToken: holdResult.holdToken,
+      idempotencyKey: "idem-existing-incomplete",
+      payload: {
+        tenantSlug: "luna-mandala",
+        phoneE164: "71234567",
+        holdToken: holdResult.holdToken
+      },
+      now: "2026-05-11T08:02:00-04:00"
+    }),
+    (error) => error instanceof PublicBookingError && error.status === 422 && error.code === "ONBOARDING_REQUIRED"
+  );
+});
+
+test("confirm falla con age fuera de 18..75", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  const holdResult = await hold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    startsAt: "2026-05-11T09:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  await assert.rejects(
+    confirm({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "71234567",
+      holdToken: holdResult.holdToken,
+      idempotencyKey: "idem-age-invalid",
+      payload: {
+        tenantSlug: "luna-mandala",
+        phoneE164: "71234567",
+        holdToken: holdResult.holdToken,
+        client: {
+          firstName: "Ana",
+          lastName: "Rojas",
+          age: 16,
+          city: "La Paz",
+          source: "Instagram"
+        }
+      },
+      now: "2026-05-11T08:02:00-04:00"
+    }),
+    (error) => error instanceof PublicBookingError && error.status === 422 && error.code === "ONBOARDING_INVALID_AGE"
+  );
 });
 
 test("confirm con colision devuelve 409 SLOT_NOT_AVAILABLE", async () => {
@@ -1128,7 +1345,14 @@ test("confirm con colision devuelve 409 SLOT_NOT_AVAILABLE", async () => {
       payload: {
         tenantSlug: "luna-mandala",
         phoneE164: "71234567",
-        holdToken: holdResult.holdToken
+        holdToken: holdResult.holdToken,
+        client: {
+          firstName: "Ana",
+          lastName: "Rojas",
+          age: 32,
+          city: "La Paz",
+          source: "Instagram"
+        }
       },
       now: "2026-05-11T08:02:00-04:00"
     }),
@@ -1151,7 +1375,14 @@ test("idempotency replay devuelve la respuesta anterior", async () => {
   const payload = {
     tenantSlug: "luna-mandala",
     phoneE164: "71234567",
-    holdToken: holdResult.holdToken
+    holdToken: holdResult.holdToken,
+    client: {
+      firstName: "Ana",
+      lastName: "Rojas",
+      age: 32,
+      city: "La Paz",
+      source: "Instagram"
+    }
   };
 
   const first = await confirm({

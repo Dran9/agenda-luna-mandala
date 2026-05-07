@@ -58,9 +58,97 @@ function normalizeTherapistId(therapistId) {
   return normalizeNumericId(therapistId, "therapistId");
 }
 
+function normalizeRequiredOnboardingText(value, fieldName) {
+  const normalized = String(value || "").trim();
+
+  if (!normalized) {
+    throw new PublicBookingError({
+      status: 422,
+      code: "ONBOARDING_REQUIRED",
+      message: `${fieldName} es obligatorio`,
+      details: { field: fieldName }
+    });
+  }
+
+  return normalized;
+}
+
+function normalizeOnboardingAge(value) {
+  const age = Number.parseInt(value, 10);
+
+  if (!Number.isInteger(age)) {
+    throw new PublicBookingError({
+      status: 422,
+      code: "ONBOARDING_REQUIRED",
+      message: "age es obligatorio",
+      details: { field: "age" }
+    });
+  }
+
+  if (age < 18 || age > 75) {
+    throw new PublicBookingError({
+      status: 422,
+      code: "ONBOARDING_INVALID_AGE",
+      message: "age debe estar entre 18 y 75",
+      details: { field: "age", min: 18, max: 75 }
+    });
+  }
+
+  return age;
+}
+
+function isClientOnboardingComplete(client) {
+  if (!client) {
+    return false;
+  }
+
+  const hasFirstName = String(client.firstName || "").trim().length > 0;
+  const hasLastName = String(client.lastName || "").trim().length > 0;
+  const hasCity = String(client.city || "").trim().length > 0;
+  const hasSource = String(client.source || "").trim().length > 0;
+  const age = Number.parseInt(client.age, 10);
+  const hasAge = Number.isInteger(age) && age >= 18 && age <= 75;
+  const hasTimestamp = Boolean(client.onboardingCompletedAt);
+
+  return hasFirstName && hasLastName && hasCity && hasSource && hasAge && hasTimestamp;
+}
+
+function normalizeOnboardingPayload(payload) {
+  const rawClient = payload && typeof payload === "object" ? payload.client : null;
+
+  if (!rawClient || typeof rawClient !== "object") {
+    return null;
+  }
+
+  const firstName = normalizeRequiredOnboardingText(rawClient.firstName, "firstName");
+  const lastName = normalizeRequiredOnboardingText(rawClient.lastName, "lastName");
+  const age = normalizeOnboardingAge(rawClient.age);
+  const city = normalizeRequiredOnboardingText(rawClient.city, "city");
+  const source = normalizeRequiredOnboardingText(rawClient.source, "source");
+  const fullName = `${firstName} ${lastName}`.replace(/\s+/g, " ").trim();
+
+  return {
+    firstName,
+    lastName,
+    age,
+    city,
+    source,
+    fullName
+  };
+}
+
 async function findOrCreateClient({ connection, centerId, phoneE164 }) {
   const [existingRows] = await connection.query(
-    `SELECT id, full_name AS fullName, whatsapp_e164 AS phoneE164
+    `SELECT
+      id,
+      full_name AS fullName,
+      first_name AS firstName,
+      last_name AS lastName,
+      age,
+      city,
+      source,
+      onboarding_completed_at AS onboardingCompletedAt,
+      whatsapp_e164 AS phoneE164
      FROM clients
      WHERE center_id = ?
        AND whatsapp_e164 = ?
@@ -73,6 +161,12 @@ async function findOrCreateClient({ connection, centerId, phoneE164 }) {
     return {
       id: Number(existingRows[0].id),
       fullName: existingRows[0].fullName,
+      firstName: existingRows[0].firstName,
+      lastName: existingRows[0].lastName,
+      age: existingRows[0].age === null ? null : Number(existingRows[0].age),
+      city: existingRows[0].city,
+      source: existingRows[0].source,
+      onboardingCompletedAt: existingRows[0].onboardingCompletedAt,
       phoneE164: existingRows[0].phoneE164,
       created: false
     };
@@ -94,6 +188,12 @@ async function findOrCreateClient({ connection, centerId, phoneE164 }) {
     return {
       id: Number(insertResult.insertId),
       fullName: defaultName,
+      firstName: null,
+      lastName: null,
+      age: null,
+      city: null,
+      source: null,
+      onboardingCompletedAt: null,
       phoneE164,
       created: true
     };
@@ -105,7 +205,16 @@ async function findOrCreateClient({ connection, centerId, phoneE164 }) {
     }
 
     const [rowsAfterDuplicate] = await connection.query(
-      `SELECT id, full_name AS fullName, whatsapp_e164 AS phoneE164
+      `SELECT
+        id,
+        full_name AS fullName,
+        first_name AS firstName,
+        last_name AS lastName,
+        age,
+        city,
+        source,
+        onboarding_completed_at AS onboardingCompletedAt,
+        whatsapp_e164 AS phoneE164
        FROM clients
        WHERE center_id = ?
          AND whatsapp_e164 = ?
@@ -121,6 +230,12 @@ async function findOrCreateClient({ connection, centerId, phoneE164 }) {
     return {
       id: Number(rowsAfterDuplicate[0].id),
       fullName: rowsAfterDuplicate[0].fullName,
+      firstName: rowsAfterDuplicate[0].firstName,
+      lastName: rowsAfterDuplicate[0].lastName,
+      age: rowsAfterDuplicate[0].age === null ? null : Number(rowsAfterDuplicate[0].age),
+      city: rowsAfterDuplicate[0].city,
+      source: rowsAfterDuplicate[0].source,
+      onboardingCompletedAt: rowsAfterDuplicate[0].onboardingCompletedAt,
       phoneE164: rowsAfterDuplicate[0].phoneE164,
       created: false
     };
@@ -544,6 +659,12 @@ async function confirmHoldAppointment({
         a.ends_at AS endsAt,
         a.status,
         a.created_at AS createdAt,
+        c.first_name AS firstName,
+        c.last_name AS lastName,
+        c.age,
+        c.city,
+        c.source,
+        c.onboarding_completed_at AS onboardingCompletedAt,
         c.whatsapp_e164 AS phoneE164,
         s.name AS serviceName,
         COALESCE(t.display_name, t.full_name) AS therapistName,
@@ -594,6 +715,49 @@ async function confirmHoldAppointment({
         code: "HOLD_EXPIRED",
         message: "El hold expiro"
       });
+    }
+
+    const onboardingComplete = isClientOnboardingComplete(hold);
+
+    if (!onboardingComplete) {
+      const onboarding = normalizeOnboardingPayload(payload);
+
+      if (!onboarding) {
+        throw new PublicBookingError({
+          status: 422,
+          code: "ONBOARDING_REQUIRED",
+          message: "Debes completar onboarding antes de confirmar la cita",
+          details: {
+            requiredFields: ["firstName", "lastName", "age", "city", "source"]
+          }
+        });
+      }
+
+      await connection.query(
+        `UPDATE clients
+         SET
+           full_name = ?,
+           first_name = ?,
+           last_name = ?,
+           age = ?,
+           city = ?,
+           source = ?,
+           onboarding_completed_at = COALESCE(onboarding_completed_at, CURRENT_TIMESTAMP),
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?
+           AND center_id = ?
+         LIMIT 1`,
+        [
+          onboarding.fullName,
+          onboarding.firstName,
+          onboarding.lastName,
+          onboarding.age,
+          onboarding.city,
+          onboarding.source,
+          Number(hold.clientId),
+          Number(hold.centerId)
+        ]
+      );
     }
 
     const [updateResult] = await connection.query(
