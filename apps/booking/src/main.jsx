@@ -1681,8 +1681,36 @@ function BookingApp() {
 
           {hasActiveHold ? (
             <p className="hold-lock-note">
-              Fecha, servicio, terapeuta, telefono y zona horaria bloqueados mientras el hold esta activo.
+              Horario reservado temporalmente. Confirma la cita antes de que expire.
             </p>
+          ) : null}
+
+          {holdState ? (
+            <div className="feedback feedback-warning" role="status">
+              <div className="hold-header">
+                <strong>Hold activo</strong>
+                <span>
+                  <ClockCountdown size={16} aria-hidden="true" />
+                  Expira en {toMinutesAndSeconds(holdSecondsLeft)}
+                </span>
+              </div>
+              <span>
+                {formatDateTime(holdState.startsAt, selectedTimezone)} · {holdState.therapistName} · {holdState.roomName}
+              </span>
+              <p className="hold-note">
+                Servicio, terapeuta, telefono, fecha y zona horaria quedan bloqueados para proteger este horario.
+              </p>
+              <button type="button" className="btn btn-primary" onClick={handleConfirm} disabled={confirmState.status === "loading"}>
+                {confirmState.status === "loading" ? (
+                  <>
+                    <CircleNotch size={18} className="spin" aria-hidden="true" />
+                    Confirmando...
+                  </>
+                ) : (
+                  "Confirmar cita"
+                )}
+              </button>
+            </div>
           ) : null}
 
           {availabilityState.status === "loading" ? (
@@ -1706,7 +1734,7 @@ function BookingApp() {
             </div>
           ) : null}
 
-          {availabilityState.status === "success" ? (
+          {availabilityState.status === "success" && !hasActiveHold ? (
             <>
               {slotGroups.morning.length === 0 && slotGroups.afternoon.length === 0 ? (
                 <p className="feedback feedback-info">No hay horarios para esta fecha. Prueba otra fecha.</p>
@@ -1786,34 +1814,6 @@ function BookingApp() {
                 </div>
               ) : null}
             </>
-          ) : null}
-
-          {holdState ? (
-            <div className="feedback feedback-warning" role="status">
-              <div className="hold-header">
-                <strong>Hold activo</strong>
-                <span>
-                  <ClockCountdown size={16} aria-hidden="true" />
-                  Expira en {toMinutesAndSeconds(holdSecondsLeft)}
-                </span>
-              </div>
-              <span>
-                {formatDateTime(holdState.startsAt, selectedTimezone)} · {holdState.therapistName} · {holdState.roomName}
-              </span>
-              <p className="hold-note">
-                Mientras el hold esta activo no puedes elegir otro horario ni cambiar campos clave. Confirma o espera su expiracion.
-              </p>
-              <button type="button" className="btn btn-primary" onClick={handleConfirm} disabled={confirmState.status === "loading"}>
-                {confirmState.status === "loading" ? (
-                  <>
-                    <CircleNotch size={18} className="spin" aria-hidden="true" />
-                    Confirmando...
-                  </>
-                ) : (
-                  "Confirmar cita"
-                )}
-              </button>
-            </div>
           ) : null}
 
           {confirmState.status === "error" ? (
