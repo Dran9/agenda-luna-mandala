@@ -54,7 +54,8 @@ h1,
 h2,
 p,
 ul,
-form {
+form,
+button {
   margin: 0;
 }
 
@@ -283,6 +284,190 @@ form {
   cursor: not-allowed;
 }
 
+.timezone-picker {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+.timezone-trigger {
+  min-height: 52px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.timezone-trigger:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.timezone-trigger-main {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.timezone-flag {
+  font-size: 1rem;
+}
+
+.timezone-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.timezone-copy strong {
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.timezone-copy span {
+  font-size: 0.69rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timezone-trigger-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.timezone-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.timezone-search {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--muted);
+}
+
+.timezone-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+.timezone-list {
+  max-height: 250px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.timezone-group {
+  display: grid;
+  gap: 4px;
+}
+
+.timezone-group-title {
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--subtle);
+  font-weight: 600;
+}
+
+.timezone-option-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.timezone-option {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.timezone-option:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+.timezone-option:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.timezone-option.is-active {
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+}
+
+.timezone-option-main {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timezone-option-side {
+  font-size: 0.69rem;
+  color: var(--muted);
+}
+
+.timezone-empty {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.timezone-help {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.phone-helper {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.phone-helper.is-invalid {
+  color: var(--danger);
+}
+
 .btn {
   min-height: 40px;
   border-radius: var(--r-md);
@@ -375,6 +560,28 @@ form {
   padding-bottom: 2px;
 }
 
+.availability-head {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.availability-timezone {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.availability-timezone small {
+  font-size: 0.69rem;
+  color: var(--subtle);
+}
+
+.btn-calendar-toggle {
+  min-height: 38px;
+}
+
 .date-chip {
   min-height: 46px;
   border: 1px solid var(--border);
@@ -407,6 +614,104 @@ form {
   font-size: 0.74rem;
   color: var(--warning);
   margin-top: -4px;
+}
+
+.calendar-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.calendar-head p {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.icon-btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.calendar-weekday {
+  min-height: 26px;
+  font-size: 0.66rem;
+  color: var(--subtle);
+  display: grid;
+  place-items: center;
+}
+
+.calendar-day {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.calendar-day.is-selected {
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  font-weight: 600;
+}
+
+.calendar-day.is-outside {
+  opacity: 0.48;
+}
+
+.calendar-day:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.calendar-day.is-available {
+  border-color: rgba(180, 83, 9, 0.35);
+  color: var(--warning);
+}
+
+.calendar-day.is-empty,
+.calendar-day.is-error,
+.calendar-day.is-checking,
+.calendar-day.is-unknown {
+  border-style: dashed;
+  color: var(--subtle);
+}
+
+.calendar-hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .slot-group {
@@ -519,12 +824,28 @@ form {
 .service-item:focus-visible,
 .slot-item:focus-visible,
 .btn:focus-visible,
+.icon-btn:focus-visible,
+.timezone-trigger:focus-visible,
+.timezone-option:focus-visible,
+.calendar-day:focus-visible,
 .variant-link:focus-visible,
 .date-chip:focus-visible,
 .field input:focus-visible,
 .field select:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 @keyframes spin {
@@ -545,6 +866,11 @@ form {
   .support-row,
   .actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .availability-head {
+    grid-template-columns: 1fr auto;
+    align-items: center;
   }
 
   .date-strip {

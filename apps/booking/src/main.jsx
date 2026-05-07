@@ -2,9 +2,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   CalendarCheck,
+  CaretDown,
+  CaretLeft,
+  CaretRight,
   CheckCircle,
   CircleNotch,
   ClockCountdown,
+  MagnifyingGlass,
   Sparkle,
   WarningCircle,
   WhatsappLogo
@@ -20,8 +24,173 @@ const SCREEN_TYPES = {
 const DEFAULT_TENANT_SLUG = "demo";
 const DEFAULT_SUPPORT_WHATSAPP = "59170000000";
 const DEFAULT_API_BASE_URL = "/api";
-const PHONE_MIN_LENGTH = 8;
+const DEFAULT_TIMEZONE = "America/La_Paz";
 const BUSINESS_DAYS_TO_SHOW = 5;
+const CALENDAR_SPAN_DAYS = 180;
+const WEEKDAY_LABELS = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"];
+
+const COUNTRY_TIMEZONE_OPTIONS = [
+  {
+    region: "Sudamerica",
+    country: "Bolivia",
+    flag: "🇧🇴",
+    timezone: "America/La_Paz",
+    dialCode: "+591",
+    digitsMin: 8,
+    digitsMax: 8,
+    example: "71234567"
+  },
+  {
+    region: "Sudamerica",
+    country: "Argentina",
+    flag: "🇦🇷",
+    timezone: "America/Argentina/Buenos_Aires",
+    dialCode: "+54",
+    digitsMin: 10,
+    digitsMax: 11,
+    example: "1123456789"
+  },
+  {
+    region: "Sudamerica",
+    country: "Chile",
+    flag: "🇨🇱",
+    timezone: "America/Santiago",
+    dialCode: "+56",
+    digitsMin: 9,
+    digitsMax: 9,
+    example: "912345678"
+  },
+  {
+    region: "Sudamerica",
+    country: "Peru",
+    flag: "🇵🇪",
+    timezone: "America/Lima",
+    dialCode: "+51",
+    digitsMin: 9,
+    digitsMax: 9,
+    example: "912345678"
+  },
+  {
+    region: "Sudamerica",
+    country: "Colombia",
+    flag: "🇨🇴",
+    timezone: "America/Bogota",
+    dialCode: "+57",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "3012345678"
+  },
+  {
+    region: "Sudamerica",
+    country: "Uruguay",
+    flag: "🇺🇾",
+    timezone: "America/Montevideo",
+    dialCode: "+598",
+    digitsMin: 8,
+    digitsMax: 8,
+    example: "91234567"
+  },
+  {
+    region: "Sudamerica",
+    country: "Brasil",
+    flag: "🇧🇷",
+    timezone: "America/Sao_Paulo",
+    dialCode: "+55",
+    digitsMin: 10,
+    digitsMax: 11,
+    example: "11912345678"
+  },
+  {
+    region: "Norteamerica",
+    country: "Mexico",
+    flag: "🇲🇽",
+    timezone: "America/Mexico_City",
+    dialCode: "+52",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "5512345678"
+  },
+  {
+    region: "Norteamerica",
+    country: "USA Este",
+    flag: "🇺🇸",
+    timezone: "America/New_York",
+    dialCode: "+1",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "3051234567"
+  },
+  {
+    region: "Norteamerica",
+    country: "USA Centro",
+    flag: "🇺🇸",
+    timezone: "America/Chicago",
+    dialCode: "+1",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "3121234567"
+  },
+  {
+    region: "Norteamerica",
+    country: "USA Pacifico",
+    flag: "🇺🇸",
+    timezone: "America/Los_Angeles",
+    dialCode: "+1",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "4151234567"
+  },
+  {
+    region: "Norteamerica",
+    country: "Canada Este",
+    flag: "🇨🇦",
+    timezone: "America/Toronto",
+    dialCode: "+1",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "4161234567"
+  },
+  {
+    region: "Europa",
+    country: "Espana",
+    flag: "🇪🇸",
+    timezone: "Europe/Madrid",
+    dialCode: "+34",
+    digitsMin: 9,
+    digitsMax: 9,
+    example: "612345678"
+  },
+  {
+    region: "Europa",
+    country: "Francia",
+    flag: "🇫🇷",
+    timezone: "Europe/Paris",
+    dialCode: "+33",
+    digitsMin: 8,
+    digitsMax: 11,
+    example: "612345678"
+  },
+  {
+    region: "Europa",
+    country: "Italia",
+    flag: "🇮🇹",
+    timezone: "Europe/Rome",
+    dialCode: "+39",
+    digitsMin: 8,
+    digitsMax: 11,
+    example: "3123456789"
+  },
+  {
+    region: "Europa",
+    country: "Alemania",
+    flag: "🇩🇪",
+    timezone: "Europe/Berlin",
+    dialCode: "+49",
+    digitsMin: 10,
+    digitsMax: 11,
+    example: "15123456789"
+  }
+];
 
 function resolveScreenType(rawValue) {
   if (!rawValue) {
@@ -60,34 +229,178 @@ function createVariantHref(tenantSlug, screenType) {
   return `/?${params.toString()}`;
 }
 
-function toDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+function normalizePhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function toDateKeyFromDateUtc(date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
-function buildBusinessDateStrip(count = BUSINESS_DAYS_TO_SHOW) {
+function parseDateKey(dateKey) {
+  const [year, month, day] = String(dateKey).split("-").map((part) => Number.parseInt(part, 10));
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+function addDaysToDateKey(dateKey, daysToAdd) {
+  const parsed = parseDateKey(dateKey);
+  if (!parsed) {
+    return dateKey;
+  }
+
+  parsed.setUTCDate(parsed.getUTCDate() + daysToAdd);
+  return toDateKeyFromDateUtc(parsed);
+}
+
+function formatDateKeyInTimezone(date, timezone) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const parts = formatter.formatToParts(date);
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  if (!year || !month || !day) {
+    return toDateKeyFromDateUtc(date);
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
+function isBusinessDateKey(dateKey) {
+  const parsed = parseDateKey(dateKey);
+  if (!parsed) {
+    return false;
+  }
+
+  const day = parsed.getUTCDay();
+  return day >= 1 && day <= 5;
+}
+
+function nextBusinessDateKey(timezone) {
+  let key = formatDateKeyInTimezone(new Date(), timezone);
+  key = addDaysToDateKey(key, 1);
+
+  while (!isBusinessDateKey(key)) {
+    key = addDaysToDateKey(key, 1);
+  }
+
+  return key;
+}
+
+function buildBusinessDateRange(startDateKey, count = BUSINESS_DAYS_TO_SHOW) {
   const days = [];
-  const cursor = new Date();
-  cursor.setHours(0, 0, 0, 0);
-  cursor.setDate(cursor.getDate() + 1);
+  let cursor = startDateKey;
 
   while (days.length < count) {
-    const weekday = cursor.getDay();
-    if (weekday >= 1 && weekday <= 5) {
-      const key = toDateKey(cursor);
-      days.push({
-        key,
-        dayLabel: cursor.toLocaleDateString("es-BO", { weekday: "short" }),
-        dateLabel: cursor.toLocaleDateString("es-BO", { day: "2-digit", month: "short" })
-      });
+    if (isBusinessDateKey(cursor)) {
+      days.push(cursor);
     }
 
-    cursor.setDate(cursor.getDate() + 1);
+    cursor = addDaysToDateKey(cursor, 1);
   }
 
   return days;
+}
+
+function formatDateChip(dateKey, timezone) {
+  const parsed = parseDateKey(dateKey);
+  if (!parsed) {
+    return {
+      dayLabel: "--",
+      dateLabel: "--"
+    };
+  }
+
+  return {
+    dayLabel: parsed.toLocaleDateString("es-BO", {
+      timeZone: timezone,
+      weekday: "short"
+    }),
+    dateLabel: parsed.toLocaleDateString("es-BO", {
+      timeZone: timezone,
+      day: "2-digit",
+      month: "short"
+    })
+  };
+}
+
+function shiftMonthKey(monthKey, delta) {
+  const [yearRaw, monthRaw] = String(monthKey || "").split("-");
+  const year = Number.parseInt(yearRaw, 10);
+  const month = Number.parseInt(monthRaw, 10);
+
+  if (!year || !month) {
+    const now = new Date();
+    return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+
+  const shifted = new Date(Date.UTC(year, month - 1 + delta, 1, 12, 0, 0));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonthLabel(monthKey, timezone) {
+  const [yearRaw, monthRaw] = String(monthKey || "").split("-");
+  const year = Number.parseInt(yearRaw, 10);
+  const month = Number.parseInt(monthRaw, 10);
+
+  if (!year || !month) {
+    return "--";
+  }
+
+  const monthDate = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+  return monthDate.toLocaleDateString("es-BO", {
+    timeZone: timezone,
+    month: "long",
+    year: "numeric"
+  });
+}
+
+function buildCalendarGrid(monthKey, minDateKey, maxDateKey) {
+  const [yearRaw, monthRaw] = String(monthKey || "").split("-");
+  const year = Number.parseInt(yearRaw, 10);
+  const month = Number.parseInt(monthRaw, 10);
+
+  if (!year || !month) {
+    return [];
+  }
+
+  const firstOfMonth = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+  const mondayOffset = (firstOfMonth.getUTCDay() + 6) % 7;
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setUTCDate(gridStart.getUTCDate() - mondayOffset);
+
+  const cells = [];
+  for (let index = 0; index < 42; index += 1) {
+    const dayDate = new Date(gridStart);
+    dayDate.setUTCDate(gridStart.getUTCDate() + index);
+    const dateKey = toDateKeyFromDateUtc(dayDate);
+    const inCurrentMonth = dayDate.getUTCMonth() === month - 1;
+    const isBusiness = isBusinessDateKey(dateKey);
+    const withinRange = dateKey >= minDateKey && dateKey <= maxDateKey;
+
+    cells.push({
+      dateKey,
+      dayNumber: dayDate.getUTCDate(),
+      inCurrentMonth,
+      disabled: !inCurrentMonth || !isBusiness || !withinRange
+    });
+  }
+
+  return cells;
 }
 
 function createIdempotencyKey() {
@@ -102,35 +415,83 @@ function buildWhatsappHref(phone, message) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 
-function normalizePhone(value) {
-  return String(value || "").replace(/\D/g, "");
-}
-
-function formatTime(dateLike) {
+function formatTime(dateLike, timezone) {
   const date = new Date(dateLike);
   if (Number.isNaN(date.getTime())) {
     return "--:--";
   }
 
   return date.toLocaleTimeString("es-BO", {
+    timeZone: timezone,
     hour: "2-digit",
     minute: "2-digit"
   });
 }
 
-function formatDateTime(dateLike) {
+function formatDateTime(dateLike, timezone) {
   const date = new Date(dateLike);
   if (Number.isNaN(date.getTime())) {
     return "--";
   }
 
   return date.toLocaleString("es-BO", {
+    timeZone: timezone,
     weekday: "long",
     day: "2-digit",
     month: "long",
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function getHourInTimezone(dateLike, timezone) {
+  const date = new Date(dateLike);
+  if (Number.isNaN(date.getTime())) {
+    return -1;
+  }
+
+  const hourFormatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    hour: "2-digit",
+    hour12: false
+  });
+
+  return Number.parseInt(hourFormatter.format(date), 10);
+}
+
+function formatTimezoneShort(dateLike, timezone) {
+  const date = new Date(dateLike);
+  if (Number.isNaN(date.getTime())) {
+    return timezone;
+  }
+
+  const parts = new Intl.DateTimeFormat("es-BO", {
+    timeZone: timezone,
+    timeZoneName: "short"
+  }).formatToParts(date);
+
+  return parts.find((part) => part.type === "timeZoneName")?.value || timezone;
+}
+
+function formatTimezoneLocalClock(timezone) {
+  return new Date().toLocaleTimeString("es-BO", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatDigitsRule(option) {
+  if (option.digitsMin === option.digitsMax) {
+    return `${option.digitsMin} digitos`;
+  }
+
+  return `${option.digitsMin}-${option.digitsMax} digitos`;
+}
+
+function isPhoneValidByTimezone(phoneDigits, timezoneOption) {
+  const length = phoneDigits.length;
+  return length >= timezoneOption.digitsMin && length <= timezoneOption.digitsMax;
 }
 
 function toMinutesAndSeconds(totalSeconds) {
@@ -169,7 +530,7 @@ async function requestJson(url, options = {}) {
 
   try {
     response = await fetch(url, options);
-  } catch (error) {
+  } catch (_error) {
     const networkError = new Error("NETWORK_ERROR");
     networkError.isNetworkError = true;
     throw networkError;
@@ -193,27 +554,32 @@ async function requestJson(url, options = {}) {
   return payload;
 }
 
-function filterAndGroupSlots(slots = []) {
+function filterAndGroupSlots(slots = [], timezone) {
   const now = Date.now();
-  const futureSlots = slots.filter((slot) => {
-    const startsAt = new Date(slot.startsAt);
-    if (Number.isNaN(startsAt.getTime())) {
-      return false;
-    }
+  const futureSlots = slots
+    .filter((slot) => {
+      const startsAt = new Date(slot.startsAt);
+      if (Number.isNaN(startsAt.getTime())) {
+        return false;
+      }
 
-    const hour = startsAt.getHours();
-    return startsAt.getTime() > now && hour >= 7 && hour < 20;
-  });
+      if (startsAt.getTime() <= now) {
+        return false;
+      }
+
+      const hour = getHourInTimezone(slot.startsAt, timezone);
+      return hour >= 7 && hour < 20;
+    })
+    .sort((left, right) => new Date(left.startsAt) - new Date(right.startsAt));
 
   return {
-    morning: futureSlots.filter((slot) => new Date(slot.startsAt).getHours() < 13),
-    afternoon: futureSlots.filter((slot) => new Date(slot.startsAt).getHours() >= 13)
+    morning: futureSlots.filter((slot) => getHourInTimezone(slot.startsAt, timezone) < 13),
+    afternoon: futureSlots.filter((slot) => getHourInTimezone(slot.startsAt, timezone) >= 13)
   };
 }
 
 function BookingApp() {
   const config = useMemo(readInitialConfig, []);
-  const businessDays = useMemo(() => buildBusinessDateStrip(), []);
 
   const [catalogState, setCatalogState] = useState({
     status: "loading",
@@ -230,7 +596,17 @@ function BookingApp() {
     error: null
   });
   const [decision, setDecision] = useState("");
-  const [selectedDateKey, setSelectedDateKey] = useState(businessDays[0]?.key || "");
+
+  const [selectedTimezone, setSelectedTimezone] = useState(DEFAULT_TIMEZONE);
+  const [timezoneSearch, setTimezoneSearch] = useState("");
+  const [timezonePickerOpen, setTimezonePickerOpen] = useState(false);
+  const [timezonePinnedByUser, setTimezonePinnedByUser] = useState(false);
+
+  const [stripStartDateKey, setStripStartDateKey] = useState(nextBusinessDateKey(DEFAULT_TIMEZONE));
+  const [selectedDateKey, setSelectedDateKey] = useState(nextBusinessDateKey(DEFAULT_TIMEZONE));
+  const [calendarMonthKey, setCalendarMonthKey] = useState(nextBusinessDateKey(DEFAULT_TIMEZONE).slice(0, 7));
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarDateStatus, setCalendarDateStatus] = useState({});
 
   const [availabilityState, setAvailabilityState] = useState({
     status: "idle",
@@ -246,14 +622,79 @@ function BookingApp() {
     error: null
   });
   const [idempotencyKey, setIdempotencyKey] = useState("");
+  const [nowTick, setNowTick] = useState(Date.now());
 
   const catalog = catalogState.data;
   const services = catalog?.services || [];
-  const selectedService = services.find((service) => service.id === selectedServiceId) || null;
   const compatibleTherapists = (catalog?.therapists || []).filter((therapist) => therapist.serviceIds.includes(selectedServiceId));
   const nextAppointment = identifyState.data?.nextAppointment || null;
 
-  const slotGroups = useMemo(() => filterAndGroupSlots(availabilityState.data?.slots || []), [availabilityState.data]);
+  const selectedTimezoneOption = useMemo(
+    () =>
+      COUNTRY_TIMEZONE_OPTIONS.find((option) => option.timezone === selectedTimezone)
+      || COUNTRY_TIMEZONE_OPTIONS[0],
+    [selectedTimezone]
+  );
+
+  const phoneDigits = normalizePhone(phoneInput);
+  const isPhoneLengthValid = isPhoneValidByTimezone(phoneDigits, selectedTimezoneOption);
+  const phoneHelper = `${selectedTimezoneOption.flag} ${selectedTimezoneOption.country}: ${formatDigitsRule(selectedTimezoneOption)} · ingresaste ${phoneDigits.length}.`;
+
+  const minSelectableDateKey = useMemo(() => nextBusinessDateKey(selectedTimezone), [selectedTimezone]);
+  const maxSelectableDateKey = useMemo(() => addDaysToDateKey(minSelectableDateKey, CALENDAR_SPAN_DAYS), [minSelectableDateKey]);
+
+  const visibleDateKeys = useMemo(
+    () => buildBusinessDateRange(stripStartDateKey, BUSINESS_DAYS_TO_SHOW),
+    [stripStartDateKey]
+  );
+
+  const calendarDays = useMemo(
+    () => buildCalendarGrid(calendarMonthKey, minSelectableDateKey, maxSelectableDateKey),
+    [calendarMonthKey, minSelectableDateKey, maxSelectableDateKey]
+  );
+  const monthBusinessDays = useMemo(
+    () => calendarDays.filter((day) => !day.disabled),
+    [calendarDays]
+  );
+  const monthCheckedDays = useMemo(
+    () => monthBusinessDays.filter((day) => ["available", "empty", "error"].includes(calendarDateStatus[day.dateKey])).length,
+    [calendarDateStatus, monthBusinessDays]
+  );
+  const monthAvailableDays = useMemo(
+    () => monthBusinessDays.filter((day) => calendarDateStatus[day.dateKey] === "available").length,
+    [calendarDateStatus, monthBusinessDays]
+  );
+  const monthCheckingDays = useMemo(
+    () => monthBusinessDays.filter((day) => calendarDateStatus[day.dateKey] === "checking").length,
+    [calendarDateStatus, monthBusinessDays]
+  );
+
+  const filteredTimezoneOptions = useMemo(() => {
+    const query = String(timezoneSearch || "").trim().toLowerCase();
+    if (!query) {
+      return COUNTRY_TIMEZONE_OPTIONS;
+    }
+
+    return COUNTRY_TIMEZONE_OPTIONS.filter((option) => {
+      const searchable = `${option.country} ${option.timezone} ${option.region}`.toLowerCase();
+      return searchable.includes(query);
+    });
+  }, [timezoneSearch]);
+
+  const groupedTimezoneOptions = useMemo(() => {
+    const groups = new Map();
+    for (const option of filteredTimezoneOptions) {
+      const group = groups.get(option.region) || [];
+      group.push(option);
+      groups.set(option.region, group);
+    }
+    return Array.from(groups.entries());
+  }, [filteredTimezoneOptions]);
+
+  const slotGroups = useMemo(
+    () => filterAndGroupSlots(availabilityState.data?.slots || [], selectedTimezone),
+    [availabilityState.data, selectedTimezone]
+  );
 
   const supportGuideHref = useMemo(
     () => buildWhatsappHref(config.supportWhatsapp, "Hola, quisiera orientacion para elegir una terapia en Luna Mandala."),
@@ -263,12 +704,23 @@ function BookingApp() {
     () => buildWhatsappHref(config.supportWhatsapp, "Hola, necesito ayuda para gestionar mi cita."),
     [config.supportWhatsapp]
   );
-
   const supportFromConflictHref = useMemo(
     () => buildWhatsappHref(config.supportWhatsapp, "Hola, necesito apoyo para reagendar o cancelar mi cita en Luna Mandala."),
     [config.supportWhatsapp]
   );
+
   const hasActiveHold = Boolean(holdState) && confirmState.status !== "success";
+  const lockByHold = hasActiveHold;
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowTick(Date.now());
+    }, 30000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     async function loadCatalog() {
@@ -289,9 +741,26 @@ function BookingApp() {
           error: null
         });
 
-        const firstReservableService = (response.services || []).find((service) => service.reservable);
-        if (firstReservableService) {
-          setSelectedServiceId(firstReservableService.id);
+        const reservableServices = (response.services || []).filter((service) => service.reservable);
+        setSelectedServiceId((current) => {
+          if (current && reservableServices.some((service) => service.id === current)) {
+            return current;
+          }
+          return reservableServices[0]?.id || "";
+        });
+
+        if (!timezonePinnedByUser) {
+          const centerTimezone = response?.center?.timezone;
+          const centerTimezoneIsSupported = COUNTRY_TIMEZONE_OPTIONS.some(
+            (option) => option.timezone === centerTimezone
+          );
+          const timezoneToUse = centerTimezoneIsSupported ? centerTimezone : DEFAULT_TIMEZONE;
+          const startKey = nextBusinessDateKey(timezoneToUse);
+
+          setSelectedTimezone(timezoneToUse);
+          setStripStartDateKey(startKey);
+          setSelectedDateKey(startKey);
+          setCalendarMonthKey(startKey.slice(0, 7));
         }
       } catch (error) {
         const mapped = normalizeRequestError(error);
@@ -360,6 +829,106 @@ function BookingApp() {
     });
   }, [confirmState.status, holdSecondsLeft, holdState]);
 
+  useEffect(() => {
+    if (!selectedDateKey) {
+      return;
+    }
+
+    setCalendarMonthKey((current) => {
+      const selectedMonthKey = selectedDateKey.slice(0, 7);
+      return current || selectedMonthKey;
+    });
+  }, [selectedDateKey]);
+
+  useEffect(() => {
+    const selectedIsBusiness = isBusinessDateKey(selectedDateKey);
+    const selectedInRange = selectedDateKey >= minSelectableDateKey && selectedDateKey <= maxSelectableDateKey;
+
+    if (selectedIsBusiness && selectedInRange) {
+      return;
+    }
+
+    setSelectedDateKey(minSelectableDateKey);
+    setStripStartDateKey(minSelectableDateKey);
+    setCalendarMonthKey(minSelectableDateKey.slice(0, 7));
+  }, [maxSelectableDateKey, minSelectableDateKey, selectedDateKey]);
+
+  useEffect(() => {
+    if (!showCalendar || !decision || hasActiveHold) {
+      return undefined;
+    }
+
+    if (identifyState.status !== "success" || !selectedServiceId || !isPhoneLengthValid) {
+      return undefined;
+    }
+
+    const datesToVerify = monthBusinessDays
+      .map((day) => day.dateKey)
+      .filter((dateKey) => !calendarDateStatus[dateKey]);
+
+    if (datesToVerify.length === 0) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function probeMonthDates() {
+      for (const dateKey of datesToVerify) {
+        if (cancelled) {
+          return;
+        }
+
+        setCalendarDateStatus((current) => {
+          if (current[dateKey]) {
+            return current;
+          }
+
+          return {
+            ...current,
+            [dateKey]: "checking"
+          };
+        });
+
+        try {
+          const response = await fetchAvailabilityForDate(dateKey);
+          const hasSlots = Array.isArray(response?.slots) && response.slots.length > 0;
+
+          if (cancelled) {
+            return;
+          }
+
+          setCalendarDateStatus((current) => ({
+            ...current,
+            [dateKey]: hasSlots ? "available" : "empty"
+          }));
+        } catch {
+          if (cancelled) {
+            return;
+          }
+
+          setCalendarDateStatus((current) => ({
+            ...current,
+            [dateKey]: "error"
+          }));
+        }
+      }
+    }
+
+    probeMonthDates();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    decision,
+    hasActiveHold,
+    identifyState.status,
+    isPhoneLengthValid,
+    monthBusinessDays,
+    selectedServiceId,
+    showCalendar
+  ]);
+
   function resetFromIdentifyDownstream() {
     setDecision("");
     setAvailabilityState({
@@ -367,6 +936,7 @@ function BookingApp() {
       data: null,
       error: null
     });
+    setCalendarDateStatus({});
     setHoldState(null);
     setHoldSecondsLeft(0);
     setHoldingSlotStartsAt("");
@@ -376,6 +946,7 @@ function BookingApp() {
       data: null,
       error: null
     });
+    setShowCalendar(false);
   }
 
   async function handleIdentify(event) {
@@ -398,15 +969,14 @@ function BookingApp() {
       return;
     }
 
-    const normalizedPhone = normalizePhone(phoneInput);
-    if (normalizedPhone.length < PHONE_MIN_LENGTH) {
+    if (!isPhoneLengthValid) {
       setIdentifyState({
         status: "error",
         data: null,
         error: {
           status: 422,
           code: "PHONE_INVALID",
-          message: "Ingresa un WhatsApp valido para continuar."
+          message: `WhatsApp invalido para ${selectedTimezoneOption.country}. Usa ${formatDigitsRule(selectedTimezoneOption)}.`
         }
       });
       return;
@@ -427,7 +997,7 @@ function BookingApp() {
         },
         body: JSON.stringify({
           tenantSlug: config.tenantSlug,
-          phoneE164: normalizedPhone
+          phoneE164: phoneDigits
         })
       });
 
@@ -446,8 +1016,25 @@ function BookingApp() {
     }
   }
 
+  async function fetchAvailabilityForDate(dateKey = selectedDateKey) {
+    return requestJson(`${config.apiBaseUrl}/public/booking/availability`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        tenantSlug: config.tenantSlug,
+        phoneE164: phoneDigits,
+        serviceId: selectedServiceId,
+        therapistId: selectedTherapistId || undefined,
+        date: dateKey || undefined,
+        timezone: selectedTimezone
+      })
+    });
+  }
+
   async function loadAvailability(dateKey = selectedDateKey, skipDecisionCheck = false, preserveConfirmState = false) {
-    const phoneValid = normalizePhone(phoneInput).length >= PHONE_MIN_LENGTH;
+    const phoneValid = isPhoneLengthValid;
     const identifyReady = identifyState.status === "success";
     const decisionReady = skipDecisionCheck || Boolean(decision);
 
@@ -471,20 +1058,12 @@ function BookingApp() {
     }
 
     try {
-      const response = await requestJson(`${config.apiBaseUrl}/public/booking/availability`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          tenantSlug: config.tenantSlug,
-          phoneE164: normalizePhone(phoneInput),
-          serviceId: selectedServiceId,
-          therapistId: selectedTherapistId || undefined,
-          date: dateKey || undefined,
-          timezone: catalog?.center?.timezone
-        })
-      });
+      const response = await fetchAvailabilityForDate(dateKey);
+      const hasSlots = Array.isArray(response?.slots) && response.slots.length > 0;
+      setCalendarDateStatus((current) => ({
+        ...current,
+        [dateKey]: hasSlots ? "available" : "empty"
+      }));
 
       setAvailabilityState({
         status: "success",
@@ -493,6 +1072,10 @@ function BookingApp() {
       });
     } catch (error) {
       const mapped = normalizeRequestError(error);
+      setCalendarDateStatus((current) => ({
+        ...current,
+        [dateKey]: "error"
+      }));
       setAvailabilityState({
         status: "error",
         data: null,
@@ -531,7 +1114,7 @@ function BookingApp() {
         },
         body: JSON.stringify({
           tenantSlug: config.tenantSlug,
-          phoneE164: normalizePhone(phoneInput),
+          phoneE164: phoneDigits,
           serviceId: selectedServiceId,
           startsAt: slot.startsAt,
           therapistId: slot.therapistId,
@@ -582,7 +1165,7 @@ function BookingApp() {
         },
         body: JSON.stringify({
           tenantSlug: config.tenantSlug,
-          phoneE164: normalizePhone(phoneInput),
+          phoneE164: phoneDigits,
           holdToken: holdState.holdToken
         })
       });
@@ -596,6 +1179,7 @@ function BookingApp() {
       setHoldState(null);
       setHoldingSlotStartsAt("");
       setIdempotencyKey("");
+      setDecision("");
     } catch (error) {
       const mapped = normalizeRequestError(error);
       setConfirmState({
@@ -625,8 +1209,42 @@ function BookingApp() {
     const service = appointment.serviceName || "Servicio";
     const therapist = appointment.therapistName || "Terapeuta";
     const room = appointment.roomName || "Sala";
-    const dateText = formatDateTime(appointment.startsAt);
+    const dateText = formatDateTime(appointment.startsAt, selectedTimezone);
     return `${service} - ${dateText} con ${therapist} en ${room}`;
+  }
+
+  function handleTimezoneSelect(option) {
+    if (lockByHold) {
+      return;
+    }
+
+    setSelectedTimezone(option.timezone);
+    setTimezonePinnedByUser(true);
+    setTimezonePickerOpen(false);
+    setTimezoneSearch("");
+
+    const nextBusinessDay = nextBusinessDateKey(option.timezone);
+    if (selectedDateKey < nextBusinessDay) {
+      setSelectedDateKey(nextBusinessDay);
+      setStripStartDateKey(nextBusinessDay);
+      setCalendarMonthKey(nextBusinessDay.slice(0, 7));
+    }
+
+    resetFromIdentifyDownstream();
+  }
+
+  async function selectDate(dateKey) {
+    if (lockByHold) {
+      return;
+    }
+
+    setSelectedDateKey(dateKey);
+    setStripStartDateKey(dateKey);
+    setCalendarMonthKey(dateKey.slice(0, 7));
+
+    if (decision) {
+      await loadAvailability(dateKey);
+    }
   }
 
   const activeHoldStartsAt = holdState?.startsAt || "";
@@ -664,7 +1282,7 @@ function BookingApp() {
 
         {config.screenType !== "default" ? (
           <p className="phase-note">
-            En Fase 3B la UI conectada aplica solo al flujo default. Las variantes avanzadas quedan para la siguiente fase.
+            En Fase 3C el flujo premium conectado aplica solo al modo default. Las variantes avanzadas quedan para la siguiente fase.
           </p>
         ) : null}
 
@@ -725,9 +1343,9 @@ function BookingApp() {
                       <button
                         type="button"
                         className={`service-item${isSelected ? " is-selected" : ""}`}
-                        disabled={isDisabled || hasActiveHold}
+                        disabled={isDisabled || lockByHold}
                         onClick={() => {
-                          if (hasActiveHold) {
+                          if (lockByHold) {
                             return;
                           }
                           setSelectedServiceId(service.id);
@@ -760,13 +1378,13 @@ function BookingApp() {
                 <select
                   value={selectedTherapistId}
                   onChange={(event) => {
-                    if (hasActiveHold) {
+                    if (lockByHold) {
                       return;
                     }
                     setSelectedTherapistId(event.target.value);
                     resetFromIdentifyDownstream();
                   }}
-                  disabled={!selectedServiceId || compatibleTherapists.length === 0 || hasActiveHold}
+                  disabled={!selectedServiceId || compatibleTherapists.length === 0 || lockByHold}
                 >
                   <option value="">Recomendado automaticamente</option>
                   {compatibleTherapists.map((therapist) => (
@@ -779,30 +1397,113 @@ function BookingApp() {
             </div>
 
             <div className="step">
-              <p className="step-label">3. WhatsApp</p>
+              <p className="step-label">3. Pais y zona horaria</p>
+              <div className="timezone-picker">
+                <button
+                  type="button"
+                  className="timezone-trigger"
+                  disabled={lockByHold}
+                  onClick={() => setTimezonePickerOpen((current) => !current)}
+                >
+                  <span className="timezone-trigger-main">
+                    <span className="timezone-flag">{selectedTimezoneOption.flag}</span>
+                    <span className="timezone-copy">
+                      <strong>{selectedTimezoneOption.country}</strong>
+                      <span>{selectedTimezoneOption.timezone}</span>
+                    </span>
+                  </span>
+                  <span className="timezone-trigger-side">
+                    <span>{formatTimezoneLocalClock(selectedTimezoneOption.timezone)}</span>
+                    <CaretDown size={16} aria-hidden="true" />
+                  </span>
+                </button>
+
+                {timezonePickerOpen ? (
+                  <div className="timezone-panel">
+                    <label className="timezone-search">
+                      <MagnifyingGlass size={16} aria-hidden="true" />
+                      <input
+                        type="search"
+                        value={timezoneSearch}
+                        onChange={(event) => setTimezoneSearch(event.target.value)}
+                        placeholder="Buscar pais o zona horaria"
+                        disabled={lockByHold}
+                      />
+                    </label>
+
+                    <div className="timezone-list">
+                      {groupedTimezoneOptions.length === 0 ? (
+                        <p className="timezone-empty">Sin resultados para la busqueda actual.</p>
+                      ) : null}
+
+                      {groupedTimezoneOptions.map(([region, options]) => (
+                        <div key={region} className="timezone-group">
+                          <p className="timezone-group-title">{region}</p>
+                          <ul className="timezone-option-list">
+                            {options.map((option) => {
+                              const isActive = option.timezone === selectedTimezone;
+                              return (
+                                <li key={option.timezone}>
+                                  <button
+                                    type="button"
+                                    className={`timezone-option${isActive ? " is-active" : ""}`}
+                                    onClick={() => handleTimezoneSelect(option)}
+                                    disabled={lockByHold}
+                                  >
+                                    <span className="timezone-option-main">
+                                      <span className="timezone-flag">{option.flag}</span>
+                                      <span className="timezone-copy">
+                                        <strong>{option.country}</strong>
+                                        <span>{option.timezone}</span>
+                                      </span>
+                                    </span>
+                                    <span className="timezone-option-side">
+                                      {formatTimezoneLocalClock(option.timezone)}
+                                    </span>
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <p className="timezone-help">Los horarios y recordatorios se mostraran en esta zona horaria.</p>
+            </div>
+
+            <div className="step">
+              <p className="step-label">4. WhatsApp</p>
               <label className="field">
-                <span>Numero WhatsApp</span>
+                <span>Numero WhatsApp ({selectedTimezoneOption.dialCode})</span>
                 <input
                   type="tel"
                   inputMode="numeric"
                   autoComplete="tel"
                   value={phoneInput}
                   onChange={(event) => {
-                    if (hasActiveHold) {
+                    if (lockByHold) {
                       return;
                     }
                     setPhoneInput(normalizePhone(event.target.value));
-                    setIdentifyState((current) => (current.status === "idle" ? current : { status: "idle", data: null, error: null }));
+                    setIdentifyState((current) =>
+                      current.status === "idle" ? current : { status: "idle", data: null, error: null }
+                    );
                     resetFromIdentifyDownstream();
                   }}
-                  disabled={hasActiveHold}
-                  placeholder="59170000000"
+                  disabled={lockByHold}
+                  placeholder={selectedTimezoneOption.example}
                 />
               </label>
+              <p className={`phone-helper${!isPhoneLengthValid && phoneDigits.length > 0 ? " is-invalid" : ""}`}>
+                {phoneHelper}
+              </p>
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={identifyState.status === "loading" || hasActiveHold}
+                disabled={identifyState.status === "loading" || lockByHold}
               >
                 {identifyState.status === "loading" ? (
                   <>
@@ -858,29 +1559,110 @@ function BookingApp() {
       {decision ? (
         <section className="surface" aria-labelledby="availability-title">
           <h2 id="availability-title">Horarios disponibles</h2>
-          <p className="supporting">Solo se muestran despues de identificar WhatsApp y confirmar que deseas avanzar con la reserva.</p>
+          <p className="supporting">
+            Solo se muestran despues de identificar WhatsApp y confirmar que deseas avanzar con la reserva.
+          </p>
+
+          <div className="availability-head">
+            <div className="availability-timezone">
+              <span>{selectedTimezoneOption.flag}</span>
+              <span>{selectedTimezoneOption.country}</span>
+              <small>{selectedTimezoneOption.timezone}</small>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-calendar-toggle"
+              onClick={() => setShowCalendar((current) => !current)}
+              disabled={lockByHold}
+            >
+              {showCalendar ? "Ocultar calendario" : "Ver mas fechas"}
+            </button>
+          </div>
 
           <div className="date-strip" role="tablist" aria-label="Fechas disponibles">
-            {businessDays.map((day) => (
-              <button
-                key={day.key}
-                type="button"
-                className={`date-chip${selectedDateKey === day.key ? " is-selected" : ""}`}
-                disabled={hasActiveHold}
-                onClick={async () => {
-                  setSelectedDateKey(day.key);
-                  if (decision) {
-                    await loadAvailability(day.key);
-                  }
-                }}
-              >
-                <span>{day.dayLabel}</span>
-                <strong>{day.dateLabel}</strong>
-              </button>
-            ))}
+            {visibleDateKeys.map((dateKey) => {
+              const chip = formatDateChip(dateKey, selectedTimezone);
+              return (
+                <button
+                  key={dateKey}
+                  type="button"
+                  className={`date-chip${selectedDateKey === dateKey ? " is-selected" : ""}`}
+                  disabled={lockByHold}
+                  onClick={() => selectDate(dateKey)}
+                >
+                  <span>{chip.dayLabel}</span>
+                  <strong>{chip.dateLabel}</strong>
+                </button>
+              );
+            })}
           </div>
+
+          {showCalendar ? (
+            <div className="calendar-wrap">
+              <div className="calendar-head">
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => setCalendarMonthKey((current) => shiftMonthKey(current, -1))}
+                  disabled={lockByHold}
+                >
+                  <CaretLeft size={18} aria-hidden="true" />
+                </button>
+                <p>{formatMonthLabel(calendarMonthKey, selectedTimezone)}</p>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => setCalendarMonthKey((current) => shiftMonthKey(current, 1))}
+                  disabled={lockByHold}
+                >
+                  <CaretRight size={18} aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="calendar-grid">
+                {WEEKDAY_LABELS.map((label) => (
+                  <span key={label} className="calendar-weekday">
+                    {label}
+                  </span>
+                ))}
+
+                {calendarDays.map((day) => {
+                  const availabilityStatus = calendarDateStatus[day.dateKey] || "unknown";
+                  const canSelect = availabilityStatus === "available";
+                  const isDisabled = day.disabled || lockByHold || !canSelect;
+
+                  return (
+                    <button
+                      key={day.dateKey}
+                      type="button"
+                      className={`calendar-day${selectedDateKey === day.dateKey ? " is-selected" : ""}${day.inCurrentMonth ? "" : " is-outside"} is-${availabilityStatus}`}
+                      disabled={isDisabled}
+                      onClick={() => {
+                        setShowCalendar(false);
+                        selectDate(day.dateKey);
+                      }}
+                    >
+                      {day.dayNumber}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="calendar-hint">
+                {monthCheckingDays > 0
+                  ? `Verificando disponibilidad de ${monthCheckingDays} dia(s) en este mes...`
+                  : monthCheckedDays === monthBusinessDays.length
+                    ? monthAvailableDays > 0
+                      ? `Dias habilitados: ${monthAvailableDays}. Solo esos dias tienen horarios verificados ahora.`
+                      : "No hay dias verificados con horarios para este mes. Prueba otro mes o habla con alguien."
+                    : "Solo habilitamos dias despues de verificar horarios con el servidor."}
+              </p>
+            </div>
+          ) : null}
+
           {hasActiveHold ? (
-            <p className="hold-lock-note">Fecha bloqueada mientras el hold esta activo. Confirma o espera expiracion.</p>
+            <p className="hold-lock-note">
+              Fecha, servicio, terapeuta, telefono y zona horaria bloqueados mientras el hold esta activo.
+            </p>
           ) : null}
 
           {availabilityState.status === "loading" ? (
@@ -917,6 +1699,7 @@ function BookingApp() {
                     {slotGroups.morning.map((slot) => {
                       const isHoldingCurrent = activeHoldStartsAt && slot.startsAt === activeHoldStartsAt;
                       const isLoadingHold = holdingSlotStartsAt === slot.startsAt;
+                      const timezoneShort = formatTimezoneShort(slot.startsAt, selectedTimezone);
 
                       return (
                         <li key={`${slot.startsAt}-${slot.therapistId}-${slot.roomId}`}>
@@ -927,9 +1710,9 @@ function BookingApp() {
                             onClick={() => handleCreateHold(slot)}
                           >
                             <span className="slot-main">
-                              <strong>{formatTime(slot.startsAt)}</strong>
+                              <strong>{formatTime(slot.startsAt, selectedTimezone)}</strong>
                               <span>
-                                {slot.therapistName} · {slot.roomName}
+                                {slot.therapistName} · {slot.roomName} · {timezoneShort}
                               </span>
                             </span>
                             {isLoadingHold ? (
@@ -953,6 +1736,7 @@ function BookingApp() {
                     {slotGroups.afternoon.map((slot) => {
                       const isHoldingCurrent = activeHoldStartsAt && slot.startsAt === activeHoldStartsAt;
                       const isLoadingHold = holdingSlotStartsAt === slot.startsAt;
+                      const timezoneShort = formatTimezoneShort(slot.startsAt, selectedTimezone);
 
                       return (
                         <li key={`${slot.startsAt}-${slot.therapistId}-${slot.roomId}`}>
@@ -963,9 +1747,9 @@ function BookingApp() {
                             onClick={() => handleCreateHold(slot)}
                           >
                             <span className="slot-main">
-                              <strong>{formatTime(slot.startsAt)}</strong>
+                              <strong>{formatTime(slot.startsAt, selectedTimezone)}</strong>
                               <span>
-                                {slot.therapistName} · {slot.roomName}
+                                {slot.therapistName} · {slot.roomName} · {timezoneShort}
                               </span>
                             </span>
                             {isLoadingHold ? (
@@ -994,9 +1778,11 @@ function BookingApp() {
                 </span>
               </div>
               <span>
-                {formatDateTime(holdState.startsAt)} · {holdState.therapistName} · {holdState.roomName}
+                {formatDateTime(holdState.startsAt, selectedTimezone)} · {holdState.therapistName} · {holdState.roomName}
               </span>
-              <p className="hold-note">Mientras el hold esta activo no puedes elegir otro horario. Confirma o espera su expiracion.</p>
+              <p className="hold-note">
+                Mientras el hold esta activo no puedes elegir otro horario ni cambiar campos clave. Confirma o espera su expiracion.
+              </p>
               <button type="button" className="btn btn-primary" onClick={handleConfirm} disabled={confirmState.status === "loading"}>
                 {confirmState.status === "loading" ? (
                   <>
@@ -1036,10 +1822,13 @@ function BookingApp() {
             Tu cita esta confirmada
           </h2>
           <p className="supporting">
-            {formatDateTime(confirmState.data?.appointment?.startsAt)} · {confirmState.data?.appointment?.serviceName} con{" "}
+            {formatDateTime(confirmState.data?.appointment?.startsAt, selectedTimezone)} · {confirmState.data?.appointment?.serviceName} con{" "}
             {confirmState.data?.appointment?.therapistName}
           </p>
           <p className="supporting">Codigo: {confirmState.data?.appointment?.publicCode || "--"}</p>
+          <p className="supporting">
+            Zona horaria elegida: {selectedTimezoneOption.flag} {selectedTimezoneOption.country} ({selectedTimezoneOption.timezone})
+          </p>
           <a className="btn btn-ghost" href={supportManageHref} target="_blank" rel="noreferrer">
             <WhatsappLogo size={18} weight="regular" aria-hidden="true" />
             Hablar con alguien
@@ -1047,6 +1836,9 @@ function BookingApp() {
         </section>
       ) : null}
 
+      <span className="sr-only" aria-hidden="true">
+        {nowTick}
+      </span>
     </main>
   );
 }
