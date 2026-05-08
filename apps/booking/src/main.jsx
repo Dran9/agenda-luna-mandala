@@ -10,6 +10,8 @@ import {
   ClockCountdown,
   MagnifyingGlass,
   Sparkle,
+  Sun,
+  User,
   WarningCircle,
   WhatsappLogo
 } from "@phosphor-icons/react";
@@ -27,7 +29,7 @@ const DEFAULT_API_BASE_URL = "/api";
 const DEFAULT_TIMEZONE = "America/La_Paz";
 const BUSINESS_DAYS_TO_SHOW = 5;
 const CALENDAR_SPAN_DAYS = 180;
-const WEEKDAY_LABELS = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"];
+const WEEKDAY_LABELS = ["Lun", "Mar", "Mie", "Jue", "Vie"];
 const ONBOARDING_FIELDS = ["firstName", "lastName", "age", "city", "source"];
 const ONBOARDING_BANNED_TEXT = new Set(["asdf", "asdfasd", "adsfa", "qwer", "zxcv", "aaaa", "test", "prueba"]);
 const ONBOARDING_CITY_OPTIONS = ["Cochabamba", "Santa Cruz", "La Paz", "Sucre", "Otro"];
@@ -474,25 +476,57 @@ function buildCalendarGrid(monthKey, minDateKey, maxDateKey) {
     return [];
   }
 
-  const firstOfMonth = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
-  const mondayOffset = (firstOfMonth.getUTCDay() + 6) % 7;
-  const gridStart = new Date(firstOfMonth);
-  gridStart.setUTCDate(gridStart.getUTCDate() - mondayOffset);
+  const lastOfMonth = new Date(Date.UTC(year, month, 0, 12, 0, 0));
+  const businessDays = [];
 
-  const cells = [];
-  for (let index = 0; index < 42; index += 1) {
-    const dayDate = new Date(gridStart);
-    dayDate.setUTCDate(gridStart.getUTCDate() + index);
+  for (let dayNumber = 1; dayNumber <= lastOfMonth.getUTCDate(); dayNumber += 1) {
+    const dayDate = new Date(Date.UTC(year, month - 1, dayNumber, 12, 0, 0));
     const dateKey = toDateKeyFromDateUtc(dayDate);
-    const inCurrentMonth = dayDate.getUTCMonth() === month - 1;
     const isBusiness = isBusinessDateKey(dateKey);
-    const withinRange = dateKey >= minDateKey && dateKey <= maxDateKey;
 
-    cells.push({
+    if (!isBusiness) {
+      continue;
+    }
+
+    const withinRange = dateKey >= minDateKey && dateKey <= maxDateKey;
+    businessDays.push({
       dateKey,
-      dayNumber: dayDate.getUTCDate(),
-      inCurrentMonth,
-      disabled: !inCurrentMonth || !isBusiness || !withinRange
+      dayNumber,
+      inCurrentMonth: true,
+      isPlaceholder: false,
+      disabled: !withinRange
+    });
+  }
+
+  if (businessDays.length === 0) {
+    return [];
+  }
+
+  const firstBusinessDate = parseDateKey(businessDays[0].dateKey);
+  const firstBusinessWeekday = firstBusinessDate ? ((firstBusinessDate.getUTCDay() + 6) % 7) : 0;
+  const leadingCells = firstBusinessWeekday;
+  const cells = [];
+
+  for (let index = 0; index < leadingCells; index += 1) {
+    cells.push({
+      dateKey: `placeholder-start-${monthKey}-${index}`,
+      dayNumber: null,
+      inCurrentMonth: false,
+      isPlaceholder: true,
+      disabled: true
+    });
+  }
+
+  cells.push(...businessDays);
+
+  const trailingCells = (5 - (cells.length % 5)) % 5;
+  for (let index = 0; index < trailingCells; index += 1) {
+    cells.push({
+      dateKey: `placeholder-end-${monthKey}-${index}`,
+      dayNumber: null,
+      inCurrentMonth: false,
+      isPlaceholder: true,
+      disabled: true
     });
   }
 
@@ -793,18 +827,6 @@ function BookingApp() {
   const monthBusinessDays = useMemo(
     () => calendarDays.filter((day) => !day.disabled),
     [calendarDays]
-  );
-  const monthCheckedDays = useMemo(
-    () => monthBusinessDays.filter((day) => ["available", "empty", "error"].includes(calendarDateStatus[day.dateKey])).length,
-    [calendarDateStatus, monthBusinessDays]
-  );
-  const monthAvailableDays = useMemo(
-    () => monthBusinessDays.filter((day) => calendarDateStatus[day.dateKey] === "available").length,
-    [calendarDateStatus, monthBusinessDays]
-  );
-  const monthCheckingDays = useMemo(
-    () => monthBusinessDays.filter((day) => calendarDateStatus[day.dateKey] === "checking").length,
-    [calendarDateStatus, monthBusinessDays]
   );
 
   const filteredTimezoneOptions = useMemo(() => {
@@ -1691,12 +1713,7 @@ function BookingApp() {
                             <CheckCircle size={15} weight={isSelected ? "fill" : "regular"} aria-hidden="true" />
                             {service.name}
                           </span>
-                          <span className="service-meta">{service.durationMinutes} min</span>
                         </span>
-                        <span className="service-note">
-                          {service.therapistCount} terapeuta{service.therapistCount === 1 ? "" : "s"} disponible
-                        </span>
-                        {isDisabled ? <span className="service-note">No reservable por ahora</span> : null}
                       </button>
                     </li>
                   );
@@ -1865,34 +1882,26 @@ function BookingApp() {
           </p>
         ) : null}
 
-        {identifyState.status === "success" ? (
+        {identifyState.status === "success" && nextAppointment ? (
           <div className="identify-state">
-            {nextAppointment ? (
-              <>
-                <div className="feedback feedback-warning" role="status">
-                  <strong>Ya tienes cita</strong>
-                  <span>{formatAppointmentSummary(nextAppointment)}</span>
-                </div>
-                <div className="actions">
-                  <a className="btn btn-ghost" href={supportFromConflictHref} target="_blank" rel="noreferrer">
-                    <WhatsappLogo size={18} weight="regular" aria-hidden="true" />
-                    Reagendar/Cancelar (siguiente fase)
-                  </a>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={handleDecisionReserveAnother}
-                    disabled={hasActiveHold}
-                  >
-                    Reservar otra sesion
-                  </button>
-                </div>
-              </>
-            ) : (
-              <p className="feedback feedback-info" role="status">
-                Validamos tu WhatsApp y buscamos horarios disponibles.
-              </p>
-            )}
+            <div className="feedback feedback-warning" role="status">
+              <strong>Ya tienes cita</strong>
+              <span>{formatAppointmentSummary(nextAppointment)}</span>
+            </div>
+            <div className="actions">
+              <a className="btn btn-ghost" href={supportFromConflictHref} target="_blank" rel="noreferrer">
+                <WhatsappLogo size={18} weight="regular" aria-hidden="true" />
+                Reagendar/Cancelar (siguiente fase)
+              </a>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleDecisionReserveAnother}
+                disabled={hasActiveHold}
+              >
+                Reservar otra sesion
+              </button>
+            </div>
           </div>
         ) : null}
       </section>
@@ -1900,9 +1909,6 @@ function BookingApp() {
       {decision ? (
         <section className="surface" aria-labelledby="availability-title">
           <h2 id="availability-title">Horarios disponibles</h2>
-          <p className="supporting">
-            Validamos tu WhatsApp y buscamos horarios disponibles. Si cambias datos clave, recalculamos la disponibilidad.
-          </p>
 
           <div className="availability-head">
             <div className="availability-timezone">
@@ -1910,14 +1916,6 @@ function BookingApp() {
               <span>{selectedTimezoneOption.country}</span>
               <small>{selectedTimezoneOption.timezone}</small>
             </div>
-            <button
-              type="button"
-              className="btn btn-ghost btn-calendar-toggle"
-              onClick={() => setShowCalendar((current) => !current)}
-              disabled={lockByHold}
-            >
-              {showCalendar ? "Ocultar calendario" : "Ver mas fechas"}
-            </button>
           </div>
 
           <div className="date-strip" role="tablist" aria-label="Fechas disponibles">
@@ -1936,10 +1934,21 @@ function BookingApp() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              className={`date-chip date-chip-calendar${showCalendar ? " is-open" : ""}`}
+              onClick={() => setShowCalendar((current) => !current)}
+              disabled={lockByHold}
+              aria-expanded={showCalendar}
+              aria-controls="booking-calendar-panel"
+            >
+              <span>Calendario</span>
+              <strong>{showCalendar ? "Ocultar" : "Ver mas"}</strong>
+            </button>
           </div>
 
           {showCalendar ? (
-            <div className="calendar-wrap">
+            <div className="calendar-wrap" id="booking-calendar-panel">
               <div className="calendar-head">
                 <button
                   type="button"
@@ -1968,6 +1977,10 @@ function BookingApp() {
                 ))}
 
                 {calendarDays.map((day) => {
+                  if (day.isPlaceholder) {
+                    return <span key={day.dateKey} className="calendar-day calendar-day-placeholder" aria-hidden="true" />;
+                  }
+
                   const availabilityStatus = calendarDateStatus[day.dateKey] || "unknown";
                   const canSelect = availabilityStatus === "available";
                   const isDisabled = day.disabled || lockByHold || !canSelect;
@@ -1988,15 +2001,6 @@ function BookingApp() {
                   );
                 })}
               </div>
-              <p className="calendar-hint">
-                {monthCheckingDays > 0
-                  ? `Verificando disponibilidad de ${monthCheckingDays} dia(s) en este mes...`
-                  : monthCheckedDays === monthBusinessDays.length
-                    ? monthAvailableDays > 0
-                      ? `Dias habilitados: ${monthAvailableDays}. Solo esos dias tienen horarios verificados ahora.`
-                      : "No hay dias verificados con horarios para este mes. Prueba otro mes o habla con alguien."
-                    : "Solo habilitamos dias despues de verificar horarios con el servidor."}
-              </p>
             </div>
           ) : null}
 
@@ -2197,12 +2201,14 @@ function BookingApp() {
 
               {slotGroups.morning.length > 0 ? (
                 <div className="slot-group">
-                  <p className="slot-group-title">Manana</p>
+                  <p className="slot-group-title">
+                    <Sun size={16} aria-hidden="true" />
+                    Manana
+                  </p>
                   <ul className="slot-list">
                     {slotGroups.morning.map((slot) => {
                       const isHoldingCurrent = activeHoldStartsAt && slot.startsAt === activeHoldStartsAt;
                       const isLoadingHold = holdingSlotStartsAt === slot.startsAt;
-                      const timezoneShort = formatTimezoneShort(slot.startsAt, selectedTimezone);
 
                       return (
                         <li key={`${slot.startsAt}-${slot.therapistId}-${slot.roomId}`}>
@@ -2214,11 +2220,9 @@ function BookingApp() {
                           >
                             <span className="slot-main">
                               <strong>{formatTime(slot.startsAt, selectedTimezone)}</strong>
-                              <span className="slot-meta-line">
-                                <strong>Terapeuta:</strong> {slot.therapistName}
-                              </span>
-                              <span className="slot-meta-line">
-                                <strong>Sala:</strong> {slot.roomName} · {timezoneShort}
+                              <span className="slot-therapist">
+                                <User size={16} aria-hidden="true" />
+                                <span>{slot.therapistName || "Terapeuta asignado"}</span>
                               </span>
                             </span>
                             {isLoadingHold ? (
@@ -2242,7 +2246,6 @@ function BookingApp() {
                     {slotGroups.afternoon.map((slot) => {
                       const isHoldingCurrent = activeHoldStartsAt && slot.startsAt === activeHoldStartsAt;
                       const isLoadingHold = holdingSlotStartsAt === slot.startsAt;
-                      const timezoneShort = formatTimezoneShort(slot.startsAt, selectedTimezone);
 
                       return (
                         <li key={`${slot.startsAt}-${slot.therapistId}-${slot.roomId}`}>
@@ -2254,11 +2257,9 @@ function BookingApp() {
                           >
                             <span className="slot-main">
                               <strong>{formatTime(slot.startsAt, selectedTimezone)}</strong>
-                              <span className="slot-meta-line">
-                                <strong>Terapeuta:</strong> {slot.therapistName}
-                              </span>
-                              <span className="slot-meta-line">
-                                <strong>Sala:</strong> {slot.roomName} · {timezoneShort}
+                              <span className="slot-therapist">
+                                <User size={16} aria-hidden="true" />
+                                <span>{slot.therapistName || "Terapeuta asignado"}</span>
                               </span>
                             </span>
                             {isLoadingHold ? (

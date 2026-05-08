@@ -245,12 +245,6 @@ button {
   gap: 8px;
 }
 
-.service-meta,
-.service-note {
-  font-size: 0.74rem;
-  color: var(--muted);
-}
-
 .field {
   display: grid;
   gap: 6px;
@@ -565,15 +559,15 @@ button {
 .date-strip {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(92px, 1fr);
+  grid-auto-columns: minmax(112px, 1fr);
   gap: var(--s-2);
   overflow-x: auto;
   padding-bottom: 2px;
 }
 
 .availability-head {
-  display: grid;
-  gap: var(--s-2);
+  display: flex;
+  justify-content: flex-start;
 }
 
 .availability-timezone {
@@ -589,26 +583,25 @@ button {
   color: var(--subtle);
 }
 
-.btn-calendar-toggle {
-  min-height: 38px;
-}
-
 .date-chip {
-  min-height: 46px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.72rem;
+  min-height: 78px;
+  border: 2px solid #ccd6df;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #677188;
+  font-size: 0.76rem;
+  font-weight: 600;
   cursor: pointer;
   display: grid;
   place-content: center;
-  gap: 2px;
+  gap: 4px;
+  padding: 10px 12px;
 }
 
 .date-chip strong {
-  color: var(--ink);
-  font-size: 0.78rem;
+  color: #1f2937;
+  font-size: 1.02rem;
+  line-height: 1;
 }
 
 .date-chip:disabled {
@@ -617,8 +610,27 @@ button {
 }
 
 .date-chip.is-selected {
-  border-color: var(--primary-line);
-  background: var(--primary-soft);
+  border-color: #0f766e;
+  background: #d9ece8;
+  color: #55617a;
+}
+
+.date-chip.is-selected strong {
+  color: #0f615d;
+}
+
+.date-chip-calendar {
+  border-color: #2563eb;
+  background: #ffffff;
+  color: #5f6b84;
+}
+
+.date-chip-calendar strong {
+  color: #0f615d;
+}
+
+.date-chip-calendar.is-open {
+  background: #eff6ff;
 }
 
 .hold-lock-note {
@@ -628,12 +640,12 @@ button {
 }
 
 .calendar-wrap {
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  padding: 10px;
+  border: 1px solid #d4dbe1;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 14px;
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .calendar-head {
@@ -644,18 +656,19 @@ button {
 }
 
 .calendar-head p {
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 1.02rem;
+  font-weight: 700;
   text-transform: capitalize;
+  color: #1f2937;
 }
 
 .icon-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--ink);
+  width: 42px;
+  height: 42px;
+  border: 2px solid #d5dce3;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #4b5563;
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -668,94 +681,100 @@ button {
 
 .calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .calendar-weekday {
-  min-height: 26px;
-  font-size: 0.66rem;
-  color: var(--subtle);
+  min-height: 28px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #657089;
   display: grid;
   place-items: center;
 }
 
 .calendar-day {
-  min-height: 36px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--ink);
-  font-size: 0.76rem;
+  min-height: 54px;
+  border: 2px solid #d4dbe1;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #1f2937;
+  font-size: 1.05rem;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .calendar-day.is-selected {
-  border-color: var(--primary-line);
-  background: var(--primary-soft);
-  color: var(--primary-strong);
+  border-color: #0f766e;
+  background: #d9ece8;
+  color: #0f615d;
   font-weight: 600;
 }
 
-.calendar-day.is-outside {
-  opacity: 0.48;
+.calendar-day.is-outside,
+.calendar-day-placeholder {
+  border: none;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .calendar-day:disabled {
-  opacity: 0.4;
+  opacity: 0.42;
   cursor: not-allowed;
 }
 
 .calendar-day.is-available {
-  border-color: rgba(180, 83, 9, 0.35);
-  color: var(--warning);
+  border-color: #cbd5df;
+  color: #1f2937;
 }
 
 .calendar-day.is-empty,
 .calendar-day.is-error,
 .calendar-day.is-checking,
 .calendar-day.is-unknown {
-  border-style: dashed;
-  color: var(--subtle);
-}
-
-.calendar-hint {
-  font-size: 0.72rem;
-  color: var(--muted);
-  line-height: 1.45;
+  border-style: solid;
+  color: #9ca3af;
 }
 
 .slot-group {
   display: grid;
-  gap: var(--s-2);
+  gap: var(--s-3);
 }
 
 .slot-group-title {
-  font-size: 0.74rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--subtle);
-  font-weight: 600;
+  font-size: 0.98rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #5d6780;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .slot-list {
   list-style: none;
   padding: 0;
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-2);
 }
 
 .slot-item {
   width: 100%;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: transparent;
+  border: 1px solid #d5dde3;
+  border-radius: 14px;
+  background: #ffffff;
   color: inherit;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
-  padding: 10px 12px;
+  padding: 14px 10px;
   display: grid;
-  gap: 4px;
+  gap: 6px;
+  min-height: 112px;
+  align-content: center;
 }
 
 .slot-item:disabled {
@@ -770,24 +789,26 @@ button {
 
 .slot-main {
   display: grid;
-  gap: var(--s-2);
+  gap: 12px;
+  justify-items: center;
 }
 
 .slot-main strong {
-  font-size: 0.84rem;
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
-.slot-main span {
-  font-size: 0.74rem;
-  color: var(--muted);
+.slot-therapist {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
 }
 
-.slot-meta-line strong {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-right: 4px;
-  color: var(--subtle);
+.slot-therapist svg {
+  color: #64748b;
 }
 
 .slot-state {
@@ -796,6 +817,7 @@ button {
   gap: 6px;
   font-size: 0.72rem;
   color: var(--muted);
+  justify-self: center;
 }
 
 .hold-panel {
@@ -1172,13 +1194,8 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .availability-head {
-    grid-template-columns: 1fr auto;
-    align-items: center;
-  }
-
   .date-strip {
-    grid-auto-columns: minmax(108px, 1fr);
+    grid-auto-columns: minmax(122px, 1fr);
   }
 
   .onboarding-grid {
