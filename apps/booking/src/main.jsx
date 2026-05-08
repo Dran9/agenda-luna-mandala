@@ -9,6 +9,7 @@ import {
   CircleNotch,
   ClockCountdown,
   MagnifyingGlass,
+  Moon,
   Sparkle,
   Sun,
   User,
@@ -423,16 +424,30 @@ function formatDateChip(dateKey, timezone) {
     };
   }
 
-  return {
-    dayLabel: parsed.toLocaleDateString("es-BO", {
+  const dayLabel = parsed
+    .toLocaleDateString("es-BO", {
       timeZone: timezone,
       weekday: "short"
-    }),
-    dateLabel: parsed.toLocaleDateString("es-BO", {
+    })
+    .replace(/\./g, "");
+  const monthLabel = parsed
+    .toLocaleDateString("es-BO", {
       timeZone: timezone,
-      day: "2-digit",
       month: "short"
     })
+    .replace(/\./g, "");
+  const dayNumber = parsed.toLocaleDateString("es-BO", {
+    timeZone: timezone,
+    day: "2-digit"
+  });
+  const normalizedDay = dayLabel ? `${dayLabel.slice(0, 1).toUpperCase()}${dayLabel.slice(1).toLowerCase()}` : "--";
+  const normalizedMonth = monthLabel
+    ? `${monthLabel.slice(0, 1).toUpperCase()}${monthLabel.slice(1).toLowerCase()}`
+    : "--";
+
+  return {
+    dayLabel: normalizedDay,
+    dateLabel: `${dayNumber} ${normalizedMonth}`
   };
 }
 
@@ -554,7 +569,8 @@ function formatTime(dateLike, timezone) {
   return date.toLocaleTimeString("es-BO", {
     timeZone: timezone,
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    hour12: false
   });
 }
 
@@ -1929,7 +1945,7 @@ function BookingApp() {
                   disabled={lockByHold}
                   onClick={() => selectDate(dateKey)}
                 >
-                  <span>{chip.dayLabel}</span>
+                  <span className="date-chip-weekday">{chip.dayLabel}</span>
                   <strong>{chip.dateLabel}</strong>
                 </button>
               );
@@ -1942,8 +1958,11 @@ function BookingApp() {
               aria-expanded={showCalendar}
               aria-controls="booking-calendar-panel"
             >
-              <span>Calendario</span>
-              <strong>{showCalendar ? "Ocultar" : "Ver mas"}</strong>
+              <span className="date-chip-calendar-top">
+                <CalendarCheck size={18} weight="regular" aria-hidden="true" />
+                Ver mas
+              </span>
+              <strong>{showCalendar ? "Ocultar" : "Calendario"}</strong>
             </button>
           </div>
 
@@ -2241,7 +2260,10 @@ function BookingApp() {
 
               {slotGroups.afternoon.length > 0 ? (
                 <div className="slot-group">
-                  <p className="slot-group-title">Tarde</p>
+                  <p className="slot-group-title">
+                    <Moon size={16} aria-hidden="true" />
+                    Tarde
+                  </p>
                   <ul className="slot-list">
                     {slotGroups.afternoon.map((slot) => {
                       const isHoldingCurrent = activeHoldStartsAt && slot.startsAt === activeHoldStartsAt;

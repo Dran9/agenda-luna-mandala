@@ -598,9 +598,14 @@ button {
   padding: 10px 12px;
 }
 
+.date-chip-weekday {
+  font-size: 1.14rem;
+  line-height: 1;
+}
+
 .date-chip strong {
   color: #1f2937;
-  font-size: 1.02rem;
+  font-size: 1.53rem;
   line-height: 1;
 }
 
@@ -625,8 +630,18 @@ button {
   color: #5f6b84;
 }
 
+.date-chip-calendar-top {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  line-height: 1;
+}
+
 .date-chip-calendar strong {
   color: #0f615d;
+  font-size: 1.02rem;
 }
 
 .date-chip-calendar.is-open {
@@ -770,10 +785,10 @@ button {
   color: inherit;
   text-align: center;
   cursor: pointer;
-  padding: 14px 10px;
+  padding: 10px 8px;
   display: grid;
-  gap: 6px;
-  min-height: 112px;
+  gap: 4px;
+  min-height: 92px;
   align-content: center;
 }
 
@@ -789,12 +804,12 @@ button {
 
 .slot-main {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   justify-items: center;
 }
 
 .slot-main strong {
-  font-size: 1.1rem;
+  font-size: 1rem;
   line-height: 1;
 }
 
@@ -802,7 +817,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   color: #64748b;
   font-weight: 500;
 }
