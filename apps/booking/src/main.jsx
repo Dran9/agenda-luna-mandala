@@ -1565,9 +1565,8 @@ function BookingApp() {
 
     const service = appointment.serviceName || "Servicio";
     const therapist = appointment.therapistName || "Terapeuta";
-    const room = appointment.roomName || "Sala";
     const dateText = formatDateTime(appointment.startsAt, selectedTimezone);
-    return `${service} - ${dateText} con ${therapist} en ${room}`;
+    return `${service} - ${dateText} con ${therapist}`;
   }
 
   function handleTimezoneSelect(option) {
@@ -1617,7 +1616,6 @@ function BookingApp() {
     if (!confirmedAppointment.startsAt) confirmationMissingFields.push("fecha/hora");
     if (!confirmedAppointment.serviceName) confirmationMissingFields.push("servicio");
     if (!confirmedAppointment.therapistName) confirmationMissingFields.push("terapeuta");
-    if (!confirmedAppointment.roomName) confirmationMissingFields.push("sala");
   }
 
   return (
@@ -1962,7 +1960,9 @@ function BookingApp() {
                 <CalendarCheck size={18} weight="regular" aria-hidden="true" />
                 Ver mas
               </span>
-              <strong>{showCalendar ? "Ocultar" : "Calendario"}</strong>
+              <span className="date-chip-calendar-icon" aria-hidden="true">
+                <CalendarCheck size={22} weight={showCalendar ? "fill" : "regular"} />
+              </span>
             </button>
           </div>
 
@@ -2051,10 +2051,6 @@ function BookingApp() {
                 <li>
                   <strong>Terapeuta asignado</strong>
                   <span>{holdState.therapistName || "Por asignar"}</span>
-                </li>
-                <li>
-                  <strong>Sala</strong>
-                  <span>{holdState.roomName || "--"}</span>
                 </li>
                 <li>
                   <strong>Zona horaria</strong>
@@ -2351,10 +2347,6 @@ function BookingApp() {
             <li>
               <strong>Terapeuta</strong>
               <span>{confirmedAppointment.therapistName || "--"}</span>
-            </li>
-            <li>
-              <strong>Sala</strong>
-              <span>{confirmedAppointment.roomName || "--"}</span>
             </li>
             <li>
               <strong>WhatsApp</strong>
