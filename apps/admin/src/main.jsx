@@ -218,6 +218,37 @@ function sortByStartsAt(items) {
   });
 }
 
+function summarizeClaims(claims) {
+  const groups = new Map();
+
+  for (const claim of claims) {
+    const key = [
+      claim.resourceType || "resource",
+      claim.resourceId || "unknown",
+      claim.resourceName || ""
+    ].join("|");
+    const existing = groups.get(key) || {
+      resourceType: claim.resourceType,
+      resourceName: claim.resourceName || claim.resourceId || "-",
+      count: 0
+    };
+
+    existing.count += 1;
+    groups.set(key, existing);
+  }
+
+  return Array.from(groups.values()).sort((left, right) => {
+    const leftRank = left.resourceType === "therapist" ? 0 : 1;
+    const rightRank = right.resourceType === "therapist" ? 0 : 1;
+
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+
+    return String(left.resourceName).localeCompare(String(right.resourceName));
+  });
+}
+
 function StatusChip({ status }) {
   const meta = STATUS_META[status] || { label: status || "-", className: "status-pending" };
 
@@ -387,6 +418,37 @@ function DrawerSection({ title, children }) {
   );
 }
 
+function ClaimSummaryList({ claims, appointment, timezone }) {
+  const claimSummaries = summarizeClaims(claims);
+  const rangeLabel = `${formatClock(appointment.startsAt, timezone)} - ${formatClock(appointment.endsAt, timezone)}`;
+
+  if (!claimSummaries.length) {
+    return <p className="empty-state compact">Sin recursos bloqueados.</p>;
+  }
+
+  return (
+    <div className="claim-summary">
+      <p className="claim-summary-note">
+        {claims.length} bloqueos por minuto activos, resumidos por recurso.
+      </p>
+      <ul className="claim-summary-list">
+        {claimSummaries.map((claim) => (
+          <li key={`${claim.resourceType}-${claim.resourceName}`}>
+            <div>
+              <span className="claim-resource-type">
+                {claim.resourceType === "therapist" ? "Terapeuta" : "Sala"}
+              </span>
+              <strong>{claim.resourceName}</strong>
+            </div>
+            <span>{rangeLabel}</span>
+            <span>{claim.count} min</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function AppointmentDrawer({
   open,
   detail,
@@ -492,19 +554,8 @@ function AppointmentDrawer({
               </dl>
             </DrawerSection>
 
-            <DrawerSection title="Claims activos">
-              {claims.length ? (
-                <ul className="drawer-list">
-                  {claims.map((claim) => (
-                    <li key={claim.id}>
-                      <span>{claim.resourceType}: {claim.resourceName || claim.resourceId}</span>
-                      <span>{formatDateTime(claim.claimTime, timezone)}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="empty-state compact">Sin claims activos.</p>
-              )}
+            <DrawerSection title="Recursos bloqueados">
+              <ClaimSummaryList claims={claims} appointment={appointment} timezone={timezone} />
             </DrawerSection>
 
             <DrawerSection title="Pagos">

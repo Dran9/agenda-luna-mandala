@@ -892,6 +892,55 @@ select {
   font-size: 0.7rem;
 }
 
+.claim-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.claim-summary-note {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.claim-summary-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.claim-summary-list li {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.72rem;
+}
+
+.claim-summary-list div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.claim-summary-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claim-resource-type {
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .payments-summary {
   border-top: 1px dashed var(--border);
   padding-top: 8px;
@@ -1087,6 +1136,11 @@ select {
 
   .drawer-list li {
     flex-direction: column;
+  }
+
+  .claim-summary-list li {
+    grid-template-columns: 1fr;
+    align-items: start;
   }
 }
 
