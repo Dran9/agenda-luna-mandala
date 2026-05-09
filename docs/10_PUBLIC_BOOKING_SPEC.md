@@ -212,6 +212,33 @@ Regla dura: ningun horario aparece antes de identificar WhatsApp.
 7. Guardar `holdToken` y `expiresAt`.
 8. Mientras exista hold activo, bloquear nueva seleccion o exigir liberar/expirar el hold anterior.
 
+### Round-Robin Operativo (Fuente De Verdad)
+
+Para reserva publica sin terapeuta especifico, la seleccion de terapeuta debe ser round-robin real por servicio.
+
+Reglas:
+
+1. Estado persistido por `center_id + service_id` en `round_robin_state.last_therapist_id`.
+2. La seleccion para booking automatico rota al siguiente terapeuta disponible segun orden estable de IDs.
+3. Si el ultimo fue Carla y Carla + Daniel estan disponibles en el siguiente slot, debe salir Daniel.
+4. Si un terapeuta no esta disponible en ese slot, se salta; no reinicia el ciclo.
+5. Si el cliente elige `therapistId` explicito, no aplicar round-robin automatico.
+6. El hold/cita real debe persistir el terapeuta elegido como nuevo `last_therapist_id`.
+
+Consistencia preview vs mutacion:
+
+- La disponibilidad publica (preview) debe simular hacia adelante desde `last_therapist_id` persistido para los slots listados.
+- La creacion real de hold debe usar la misma regla efectiva de seleccion para no contradecir lo mostrado.
+- Si preview y hold divergen, es bug critico de negocio.
+
+Tests obligatorios para mantener contrato:
+
+- Con `lastTherapistId=Carla` y candidatos Carla+Daniel disponibles, el selector devuelve Daniel.
+- En disponibilidad publica, slot siguiente con ambos libres muestra Daniel (no Carla).
+- En hold real del mismo escenario, se asigna Daniel y se persiste estado.
+- Con `therapistId` explicito, se respeta terapeuta solicitado.
+- Si el siguiente en linea no esta disponible, se salta al proximo disponible.
+
 ### Presentacion Visual De Fechas Y Horarios
 
 La disponibilidad no debe sentirse como una lista tecnica. Debe ser una decision guiada, clara y mobile-first.

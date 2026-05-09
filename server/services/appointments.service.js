@@ -4,7 +4,10 @@ const { addMinutes, toDate } = require("../utils/dates");
 const { findAvailablePairsForSlot } = require("./availability.service");
 const { createAppointmentClaims, releaseAppointmentClaims } = require("./claims.service");
 const { acquireIdempotencyKey, persistIdempotencyResponse } = require("./idempotency.service");
-const { chooseTherapistForService } = require("./roundRobin.service");
+const {
+  chooseTherapistForService,
+  persistRoundRobinState
+} = require("./roundRobin.service");
 const {
   PublicBookingError,
   SlotOccupiedError,
@@ -343,6 +346,10 @@ async function findOrCreateClient({ connection, centerId, phoneE164 }) {
 }
 
 function pickSpecificPair({ availablePairs, therapistId, roomId }) {
+  if (!therapistId && !roomId) {
+    return null;
+  }
+
   return availablePairs.find((pair) => {
     const therapistOk = therapistId ? Number(pair.therapistId) === therapistId : true;
     const roomOk = roomId ? Number(pair.roomId) === roomId : true;
@@ -616,6 +623,7 @@ async function createHoldAppointment({
       });
     }
 
+    const selectedWithSpecificPair = Boolean(specificPair);
     const selectedPair = specificPair || (await pickBestPair({
       connection,
       centerId: normalizedCenterId,
@@ -671,6 +679,15 @@ async function createHoldAppointment({
         status: "pending"
       }
     });
+
+    if (selectedWithSpecificPair) {
+      await persistRoundRobinState({
+        connection,
+        centerId: normalizedCenterId,
+        serviceId: normalizedServiceId,
+        therapistId: Number(selectedPair.therapistId)
+      });
+    }
 
     const [appointmentRows] = await connection.query(
       `SELECT id, created_at AS createdAt

@@ -904,6 +904,73 @@ function createRescheduleFixture(overrides = {}) {
   });
 }
 
+function createDualTherapistFixture(overrides = {}) {
+  const fixture = createFixture();
+  fixture.therapists = [
+    { id: 100, centerId: 1, displayName: "Carla Bustamante", isActive: 1 },
+    { id: 101, centerId: 1, displayName: "Daniel MacLean", isActive: 1 }
+  ];
+  fixture.therapistServices = [
+    { centerId: 1, therapistId: 100, serviceId: 10, isActive: 1 },
+    { centerId: 1, therapistId: 101, serviceId: 10, isActive: 1 }
+  ];
+  fixture.rooms = [
+    { id: 200, centerId: 1, name: "Sala Luna", isActive: 1 },
+    { id: 201, centerId: 1, name: "Sala Sol", isActive: 1 }
+  ];
+  fixture.serviceRooms = [
+    { centerId: 1, serviceId: 10, roomId: 200, isActive: 1 },
+    { centerId: 1, serviceId: 10, roomId: 201, isActive: 1 }
+  ];
+  fixture.resourceSchedules = [
+    {
+      centerId: 1,
+      resourceType: "therapist",
+      resourceId: 100,
+      weekday: 1,
+      startTime: "08:00:00",
+      endTime: "12:00:00",
+      slotMinutes: 60,
+      isActive: 1
+    },
+    {
+      centerId: 1,
+      resourceType: "therapist",
+      resourceId: 101,
+      weekday: 1,
+      startTime: "08:00:00",
+      endTime: "12:00:00",
+      slotMinutes: 60,
+      isActive: 1
+    },
+    {
+      centerId: 1,
+      resourceType: "room",
+      resourceId: 200,
+      weekday: 1,
+      startTime: "08:00:00",
+      endTime: "12:00:00",
+      slotMinutes: 60,
+      isActive: 1
+    },
+    {
+      centerId: 1,
+      resourceType: "room",
+      resourceId: 201,
+      weekday: 1,
+      startTime: "08:00:00",
+      endTime: "12:00:00",
+      slotMinutes: 60,
+      isActive: 1
+    }
+  ];
+
+  return {
+    ...fixture,
+    ...overrides
+  };
+}
+
 test("catalog filtra servicios y terapeutas inactivos", async () => {
   const connection = new FakeBookingConnection(createFixture());
 
@@ -1238,65 +1305,7 @@ test("availability no devuelve slots ocupados por claim", async () => {
 });
 
 test("availability sin terapeuta elegido proyecta terapeutas en secuencia round-robin", async () => {
-  const fixture = createFixture();
-  fixture.therapists = [
-    { id: 100, centerId: 1, displayName: "Ana", isActive: 1 },
-    { id: 101, centerId: 1, displayName: "Bea", isActive: 1 }
-  ];
-  fixture.therapistServices = [
-    { centerId: 1, therapistId: 100, serviceId: 10, isActive: 1 },
-    { centerId: 1, therapistId: 101, serviceId: 10, isActive: 1 }
-  ];
-  fixture.rooms = [
-    { id: 200, centerId: 1, name: "Sala Luna", isActive: 1 },
-    { id: 201, centerId: 1, name: "Sala Sol", isActive: 1 }
-  ];
-  fixture.serviceRooms = [
-    { centerId: 1, serviceId: 10, roomId: 200, isActive: 1 },
-    { centerId: 1, serviceId: 10, roomId: 201, isActive: 1 }
-  ];
-  fixture.resourceSchedules = [
-    {
-      centerId: 1,
-      resourceType: "therapist",
-      resourceId: 100,
-      weekday: 1,
-      startTime: "08:00:00",
-      endTime: "12:00:00",
-      slotMinutes: 60,
-      isActive: 1
-    },
-    {
-      centerId: 1,
-      resourceType: "therapist",
-      resourceId: 101,
-      weekday: 1,
-      startTime: "08:00:00",
-      endTime: "12:00:00",
-      slotMinutes: 60,
-      isActive: 1
-    },
-    {
-      centerId: 1,
-      resourceType: "room",
-      resourceId: 200,
-      weekday: 1,
-      startTime: "08:00:00",
-      endTime: "12:00:00",
-      slotMinutes: 60,
-      isActive: 1
-    },
-    {
-      centerId: 1,
-      resourceType: "room",
-      resourceId: 201,
-      weekday: 1,
-      startTime: "08:00:00",
-      endTime: "12:00:00",
-      slotMinutes: 60,
-      isActive: 1
-    }
-  ];
+  const fixture = createDualTherapistFixture();
   fixture.roundRobinState = [{ centerId: 1, serviceId: 10, lastTherapistId: 100 }];
   const connection = new FakeBookingConnection(fixture);
 
@@ -1313,6 +1322,70 @@ test("availability sin terapeuta elegido proyecta terapeutas en secuencia round-
 
   assert.ok(result.slots.length >= 2);
   assert.notEqual(result.slots[0].therapistId, result.slots[1].therapistId);
+});
+
+test("availability publica: si Carla fue la ultima, el slot 9:00 muestra Daniel cuando ambos estan libres", async () => {
+  const fixture = createDualTherapistFixture({
+    claims: [
+      {
+        centerId: 1,
+        appointmentId: 991,
+        resourceType: "therapist",
+        resourceId: 100,
+        claimTime: "2026-05-11 08:00:00"
+      }
+    ],
+    roundRobinState: [{ centerId: 1, serviceId: 10, lastTherapistId: 100 }]
+  });
+  const connection = new FakeBookingConnection(fixture);
+
+  const result = await getAvailability({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    date: "2026-05-11",
+    timezone: "America/La_Paz",
+    stepMinutes: 60,
+    now: "2026-05-11T08:30:00-04:00"
+  });
+
+  assert.ok(result.slots.length > 0);
+  assert.equal(result.slots[0].startsAt, "2026-05-11T13:00:00.000Z");
+  assert.equal(result.slots[0].therapistId, "101");
+  assert.equal(result.slots[0].therapistName, "Daniel MacLean");
+});
+
+test("availability publica: si Daniel no esta disponible, salta al siguiente disponible", async () => {
+  const fixture = createDualTherapistFixture({
+    claims: [
+      {
+        centerId: 1,
+        appointmentId: 992,
+        resourceType: "therapist",
+        resourceId: 101,
+        claimTime: "2026-05-11 09:00:00"
+      }
+    ],
+    roundRobinState: [{ centerId: 1, serviceId: 10, lastTherapistId: 100 }]
+  });
+  const connection = new FakeBookingConnection(fixture);
+
+  const result = await getAvailability({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    date: "2026-05-11",
+    timezone: "America/La_Paz",
+    stepMinutes: 60,
+    now: "2026-05-11T08:30:00-04:00"
+  });
+
+  assert.ok(result.slots.length > 0);
+  assert.equal(result.slots[0].startsAt, "2026-05-11T13:00:00.000Z");
+  assert.equal(result.slots[0].therapistId, "100");
+  assert.equal(result.slots[0].therapistName, "Carla Bustamante");
 });
 
 test("availability rechaza telefono local invalido de Bolivia", async () => {
@@ -1354,6 +1427,54 @@ test("hold crea cita pending con token y calcula endsAt", async () => {
   assert.equal(connection.state.appointments.length, 1);
   assert.equal(connection.state.appointments[0].status, "pending");
   assert.ok(connection.state.claims.length > 0);
+});
+
+test("hold automatico: con Carla como ultima, asigna Daniel y persiste round_robin_state", async () => {
+  const connection = new FakeBookingConnection(createDualTherapistFixture({
+    claims: [
+      {
+        centerId: 1,
+        appointmentId: 993,
+        resourceType: "therapist",
+        resourceId: 100,
+        claimTime: "2026-05-11 08:00:00"
+      }
+    ],
+    roundRobinState: [{ centerId: 1, serviceId: 10, lastTherapistId: 100 }]
+  }));
+
+  const result = await hold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    startsAt: "2026-05-11T09:00:00-04:00",
+    now: "2026-05-11T08:30:00-04:00"
+  });
+
+  assert.equal(result.therapistId, "101");
+  assert.equal(connection.state.roundRobinState[0].lastTherapistId, 101);
+});
+
+test("hold con therapistId explicito respeta terapeuta solicitado y sincroniza round_robin_state", async () => {
+  const fixture = createDualTherapistFixture({
+    roundRobinState: [{ centerId: 1, serviceId: 10, lastTherapistId: 101 }]
+  });
+  const connection = new FakeBookingConnection(fixture);
+
+  const result = await hold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    startsAt: "2026-05-11T09:00:00-04:00",
+    therapistId: 100,
+    roomId: 200,
+    now: "2026-05-11T08:30:00-04:00"
+  });
+
+  assert.equal(result.therapistId, "100");
+  assert.equal(connection.state.roundRobinState[0].lastTherapistId, 100);
 });
 
 test("hold rechaza telefono local invalido de Bolivia", async () => {

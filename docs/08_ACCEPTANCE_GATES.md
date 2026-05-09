@@ -46,6 +46,9 @@ curl -s http://127.0.0.1:3000/api/health
 - Nueva cita manual funciona.
 - Detalle de cita funciona.
 - Estado de cita respeta state machine.
+- Refresh de Control no desmonta pantalla cuando ya hay datos.
+- Con scroll avanzado y drawer abierto, refresh no salta al inicio ni cierra contexto.
+- Existe boton manual de actualizar y feedback no disruptivo de ultima actualizacion.
 
 ## Gate Reserva Publica
 
@@ -70,6 +73,8 @@ curl -s http://127.0.0.1:3000/api/health
 - `Hablar con alguien` abre WhatsApp siempre.
 - Mutaciones usan `idempotencyKey`.
 - Guia WhatsApp.
+- Round-robin publico rota por servicio entre terapeutas disponibles usando `round_robin_state`.
+- Preview de disponibilidad y hold real no se contradicen en terapeuta sugerido/asignado.
 
 ## Gate Visual
 

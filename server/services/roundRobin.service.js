@@ -24,36 +24,31 @@ function pickTherapistCandidate({ candidates, loadMap = new Map(), lastTherapist
     return null;
   }
 
-  const decorated = normalizedCandidates.map((candidate) => ({
-    ...candidate,
-    claimCount: loadMap.get(candidate.therapistId) || 0
-  }));
-
-  decorated.sort((left, right) => {
-    if (left.claimCount !== right.claimCount) {
-      return left.claimCount - right.claimCount;
+  const candidatesById = new Map();
+  for (const candidate of normalizedCandidates) {
+    if (!Number.isInteger(candidate.therapistId) || candidate.therapistId <= 0) {
+      continue;
     }
+    if (!candidatesById.has(candidate.therapistId)) {
+      candidatesById.set(candidate.therapistId, candidate);
+    }
+  }
 
-    return left.therapistId - right.therapistId;
-  });
+  const sortedIds = Array.from(candidatesById.keys()).sort((left, right) => left - right);
 
-  const bestLoad = decorated[0].claimCount;
-  const bestCandidates = decorated.filter((candidate) => candidate.claimCount === bestLoad);
-
-  if (bestCandidates.length === 1) {
-    return bestCandidates[0];
+  if (sortedIds.length === 0) {
+    return null;
   }
 
   const normalizedLastId = lastTherapistId === null ? null : Number(lastTherapistId);
 
   if (!normalizedLastId || Number.isNaN(normalizedLastId)) {
-    return bestCandidates[0];
+    return candidatesById.get(sortedIds[0]) || null;
   }
 
-  const sortedIds = bestCandidates.map((candidate) => candidate.therapistId).sort((a, b) => a - b);
   const nextId = sortedIds.find((id) => id > normalizedLastId) || sortedIds[0];
 
-  return bestCandidates.find((candidate) => candidate.therapistId === nextId) || bestCandidates[0];
+  return candidatesById.get(nextId) || null;
 }
 
 async function fetchLastTherapistId({ connection, centerId, serviceId }) {
@@ -123,15 +118,10 @@ async function chooseTherapistForService({
     throw new ValidationError("No hay terapeutas candidatos para round-robin");
   }
 
-  const therapistIds = candidates.map((candidate) => Number(candidate.therapistId));
-  const [lastTherapistId, loadMap] = await Promise.all([
-    fetchLastTherapistId({ connection, centerId, serviceId }),
-    fetchClaimLoadByTherapist({ connection, centerId, therapistIds, windowStart, windowEnd })
-  ]);
+  const lastTherapistId = await fetchLastTherapistId({ connection, centerId, serviceId });
 
   const selected = pickTherapistCandidate({
     candidates,
-    loadMap,
     lastTherapistId
   });
 

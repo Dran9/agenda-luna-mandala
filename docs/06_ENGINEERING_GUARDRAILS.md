@@ -51,6 +51,30 @@ Escala de tests:
 - Rutas criticas: integration tests contra DB de prueba, no remota.
 - UI: build + QA visual.
 
+## Patron UI: Refresh No Disruptivo (Control/Admin)
+
+Para cockpits operativos, el refresh no puede desmontar la pantalla.
+
+Reglas duras:
+
+- Nunca usar `location.reload` ni navegacion forzada para refrescar datos.
+- Separar `initial loading` de `background refresh`.
+- Si ya existe payload en memoria, mantenerlo renderizado durante refetch.
+- Si falla un refetch y ya habia payload valido, no limpiar la vista; mostrar aviso no bloqueante.
+- Preservar estado de navegacion local: tab activa, drawer abierto, item seleccionado, filtros y busqueda.
+- Refetch de drawer: si ya habia detalle cargado, no vaciarlo ni mostrar overlay global.
+- Auto-refresh recomendado: 30-60 segundos, silencioso.
+- Debe existir boton manual `Actualizar` y un indicador discreto de estado (ej. "Datos actualizados HH:mm").
+
+Checklist tecnico minimo:
+
+1. Estado separado: `isLoading` (primer carga) + `isRefreshing` (fondo).
+2. Render condicional por "hay datos" y no por "loading global".
+3. Error de refetch con cache: mensaje suave + ultima carga valida.
+4. Smoke: hacer scroll, abrir drawer, disparar refresh y confirmar cero salto de scroll y cero cierre de contexto.
+
+Este patron aplica a `Control` y cualquier vista interna de lectura continua.
+
 ## Manejo De DB Remota
 
 Prohibido sin confirmacion explicita:
@@ -74,6 +98,7 @@ Permitido con cuidado:
 - auth;
 - migraciones;
 - claims;
+- round-robin publico;
 - state machine de citas;
 - pagos/OCR;
 - WhatsApp live;
@@ -88,4 +113,3 @@ Permitido con cuidado:
 4. Preservar rama rota.
 5. Hacer forense.
 6. Reintroducir en PRs pequenos.
-

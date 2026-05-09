@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   CalendarCheck,
@@ -55,8 +55,8 @@ const ACTION_LABELS = {
   no_show: "Marcar no show"
 };
 const TERMINAL_ACTIONS = new Set(["completed", "cancelled", "no_show"]);
-const CONTROL_AUTO_REFRESH_MS = 15000;
-const CLIENTS_AUTO_REFRESH_MS = 20000;
+const CONTROL_AUTO_REFRESH_MS = 45000;
+const CLIENTS_AUTO_REFRESH_MS = 60000;
 
 const ADMIN_TOKEN_KEY = "agenda-admin-token";
 const ADMIN_PROFILE_KEY = "agenda-admin-profile";
@@ -926,6 +926,8 @@ function AdminApp() {
   const [limit, setLimit] = useState(20);
   const [refreshTick, setRefreshTick] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const [error, setError] = useState("");
   const [payload, setPayload] = useState(null);
 
@@ -950,6 +952,7 @@ function AdminApp() {
   });
   const [clientsRefreshTick, setClientsRefreshTick] = useState(0);
   const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientsRefreshing, setClientsRefreshing] = useState(false);
   const [clientsError, setClientsError] = useState("");
   const [clientsPayload, setClientsPayload] = useState(null);
   const [clientDrawerOpen, setClientDrawerOpen] = useState(false);
@@ -957,6 +960,26 @@ function AdminApp() {
   const [clientDetailLoading, setClientDetailLoading] = useState(false);
   const [clientDetailError, setClientDetailError] = useState("");
   const [clientDetailPayload, setClientDetailPayload] = useState(null);
+  const payloadRef = useRef(null);
+  const clientsPayloadRef = useRef(null);
+  const detailPayloadRef = useRef(null);
+  const clientDetailPayloadRef = useRef(null);
+
+  useEffect(() => {
+    payloadRef.current = payload;
+  }, [payload]);
+
+  useEffect(() => {
+    clientsPayloadRef.current = clientsPayload;
+  }, [clientsPayload]);
+
+  useEffect(() => {
+    detailPayloadRef.current = detailPayload;
+  }, [detailPayload]);
+
+  useEffect(() => {
+    clientDetailPayloadRef.current = clientDetailPayload;
+  }, [clientDetailPayload]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -972,13 +995,18 @@ function AdminApp() {
     setAuthToken("");
     setAuthAdmin(null);
     setPayload(null);
+    setIsLoading(false);
+    setIsRefreshing(false);
     setDrawerOpen(false);
     setSelectedAppointmentId(null);
     setDetailPayload(null);
     setClientsPayload(null);
+    setClientsLoading(false);
+    setClientsRefreshing(false);
     setClientDrawerOpen(false);
     setSelectedClientId(null);
     setClientDetailPayload(null);
+    setLastRefreshedAt(null);
     setAuthError("Sesion expirada o token invalido. Inicia sesion nuevamente.");
   }, []);
 
@@ -1049,11 +1077,20 @@ function AdminApp() {
       if (!authToken || activeSection !== "control") {
         setPayload(null);
         setIsLoading(false);
+        setIsRefreshing(false);
+        setLastRefreshedAt(null);
         setError("");
         return;
       }
 
-      setIsLoading(true);
+      const hasCachedPayload = Boolean(payloadRef.current);
+
+      if (hasCachedPayload) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+
       setError("");
 
       try {
@@ -1077,15 +1114,19 @@ function AdminApp() {
         }
 
         setPayload(nextPayload);
+        setLastRefreshedAt(new Date().toISOString());
       } catch (fetchError) {
         if (fetchError.name === "AbortError") {
           return;
         }
 
-        setPayload(null);
+        if (!hasCachedPayload) {
+          setPayload(null);
+        }
         setError(fetchError.message || "No se pudo cargar el tablero de admin.");
       } finally {
         setIsLoading(false);
+        setIsRefreshing(false);
       }
     }
 
@@ -1103,11 +1144,19 @@ function AdminApp() {
       if (!authToken || activeSection !== "clientes") {
         setClientsPayload(null);
         setClientsLoading(false);
+        setClientsRefreshing(false);
         setClientsError("");
         return;
       }
 
-      setClientsLoading(true);
+      const hasCachedPayload = Boolean(clientsPayloadRef.current);
+
+      if (hasCachedPayload) {
+        setClientsRefreshing(true);
+      } else {
+        setClientsLoading(true);
+      }
+
       setClientsError("");
 
       try {
@@ -1137,10 +1186,13 @@ function AdminApp() {
           return;
         }
 
-        setClientsPayload(null);
+        if (!hasCachedPayload) {
+          setClientsPayload(null);
+        }
         setClientsError(fetchError.message || "No se pudo cargar el listado de clientes.");
       } finally {
         setClientsLoading(false);
+        setClientsRefreshing(false);
       }
     }
 
@@ -1183,7 +1235,11 @@ function AdminApp() {
     const controller = new AbortController();
 
     async function loadDetail() {
-      setDetailLoading(true);
+      const hasCachedDetail = Boolean(detailPayloadRef.current);
+
+      if (!hasCachedDetail) {
+        setDetailLoading(true);
+      }
       setDetailError("");
 
       try {
@@ -1199,8 +1255,10 @@ function AdminApp() {
           return;
         }
 
-        setDetailPayload(null);
-        setDetailError(fetchError.message || "No se pudo cargar el detalle de la cita.");
+        if (!hasCachedDetail) {
+          setDetailPayload(null);
+          setDetailError(fetchError.message || "No se pudo cargar el detalle de la cita.");
+        }
       } finally {
         setDetailLoading(false);
       }
@@ -1221,7 +1279,11 @@ function AdminApp() {
     const controller = new AbortController();
 
     async function loadClientDetail() {
-      setClientDetailLoading(true);
+      const hasCachedDetail = Boolean(clientDetailPayloadRef.current);
+
+      if (!hasCachedDetail) {
+        setClientDetailLoading(true);
+      }
       setClientDetailError("");
 
       try {
@@ -1237,8 +1299,10 @@ function AdminApp() {
           return;
         }
 
-        setClientDetailPayload(null);
-        setClientDetailError(fetchError.message || "No se pudo cargar la ficha del cliente.");
+        if (!hasCachedDetail) {
+          setClientDetailPayload(null);
+          setClientDetailError(fetchError.message || "No se pudo cargar la ficha del cliente.");
+        }
       } finally {
         setClientDetailLoading(false);
       }
@@ -1256,6 +1320,9 @@ function AdminApp() {
   const clientsGeneratedAtLabel = clientsPayload
     ? formatDateTime(clientsPayload.generatedAt, timezone)
     : "-";
+  const controlRefreshLabel = lastRefreshedAt
+    ? `Datos actualizados ${formatClock(lastRefreshedAt, timezone)}`
+    : "Sin actualizar";
 
   const summary = useMemo(() => {
     return (
@@ -1406,6 +1473,8 @@ function AdminApp() {
     setAuthToken("");
     setAuthAdmin(null);
     setPayload(null);
+    setIsLoading(false);
+    setIsRefreshing(false);
     setLoginPassword("");
     setError("");
     setAuthError("");
@@ -1416,11 +1485,14 @@ function AdminApp() {
     setMutationError("");
     setRoomMutationError("");
     setClientsPayload(null);
+    setClientsLoading(false);
+    setClientsRefreshing(false);
     setClientsError("");
     setClientDrawerOpen(false);
     setSelectedClientId(null);
     setClientDetailPayload(null);
     setClientDetailError("");
+    setLastRefreshedAt(null);
     setActiveSection("control");
   }
 
@@ -1533,6 +1605,8 @@ function AdminApp() {
   const sectionTitle = activeSection === "clientes" ? "Clientes" : "Control";
   const sectionCenterName =
     payload?.center?.displayName || clientsPayload?.center?.displayName || "-";
+  const hasControlData = Boolean(payload);
+  const hasClientsData = Boolean(clientsPayload);
   const canOpenSection = (sectionId) => sectionId === "control" || sectionId === "clientes";
   const isControlSection = activeSection === "control";
   const isClientsSection = activeSection === "clientes";
@@ -1628,6 +1702,25 @@ function AdminApp() {
                   <span>Incluir proximas</span>
                 </label>
 
+                <button
+                  type="button"
+                  className="refresh-button"
+                  onClick={() => setRefreshTick((value) => value + 1)}
+                  disabled={isLoading || isRefreshing}
+                >
+                  {isLoading || isRefreshing ? "Actualizando..." : "Actualizar"}
+                </button>
+
+                <p
+                  className={`refresh-indicator${error ? " is-error" : ""}`}
+                  aria-live="polite"
+                >
+                  {isRefreshing
+                    ? "Actualizando datos..."
+                    : error
+                      ? "Error en ultima actualizacion"
+                      : controlRefreshLabel}
+                </p>
               </>
             ) : null}
 
@@ -1713,10 +1806,13 @@ function AdminApp() {
                     })}
                   </section>
 
-                  {isLoading ? <p className="feedback">Cargando tablero...</p> : null}
-                  {!isLoading && error ? <p className="feedback error">{error}</p> : null}
+                  {isLoading && !hasControlData ? <p className="feedback">Cargando tablero...</p> : null}
+                  {error && !hasControlData ? <p className="feedback error">{error}</p> : null}
+                  {error && hasControlData ? (
+                    <p className="feedback error">No se pudo actualizar el tablero. Mostrando ultima carga valida.</p>
+                  ) : null}
 
-                  {!isLoading && !error && payload ? (
+                  {hasControlData ? (
                     <>
                       {activeTab === "today" ? (
                         <>
@@ -1932,10 +2028,18 @@ function AdminApp() {
                     </p>
                   </section>
 
-                  {clientsLoading ? <p className="feedback">Cargando clientes...</p> : null}
-                  {!clientsLoading && clientsError ? <p className="feedback error">{clientsError}</p> : null}
+                  {clientsLoading && !hasClientsData ? <p className="feedback">Cargando clientes...</p> : null}
+                  {clientsError && !hasClientsData ? (
+                    <p className="feedback error">{clientsError}</p>
+                  ) : null}
+                  {clientsError && hasClientsData ? (
+                    <p className="feedback error">No se pudo actualizar clientes. Mostrando ultima carga valida.</p>
+                  ) : null}
+                  {clientsRefreshing ? (
+                    <p className="feedback subtle">Actualizando clientes en segundo plano...</p>
+                  ) : null}
 
-                  {!clientsLoading && !clientsError && clientsPayload ? (
+                  {hasClientsData ? (
                     <section className="panel" aria-label="Listado de clientes">
                       <div className="panel-heading">
                         <h2>Clientes</h2>

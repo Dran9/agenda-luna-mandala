@@ -57,16 +57,14 @@ const CANDIDATES = [
   { therapistId: 13, therapistName: "Carla" }
 ];
 
-test("roundRobin: elige terapeuta con menor carga", () => {
-  const loadMap = new Map([
-    [11, 8],
-    [12, 1],
-    [13, 4]
-  ]);
-
+test("roundRobin: booking publico rota al siguiente terapeuta disponible (RR estricto)", () => {
   const selected = pickTherapistCandidate({
     candidates: CANDIDATES,
-    loadMap,
+    loadMap: new Map([
+      [11, 0],
+      [12, 99],
+      [13, 99]
+    ]),
     lastTherapistId: 11
   });
 
@@ -103,6 +101,18 @@ test("roundRobin: wrap al inicio cuando lastTherapistId es el mayor", () => {
   });
 
   assert.equal(selected.therapistId, 11);
+});
+
+test("roundRobin: con Carla como ultima, el siguiente disponible es Daniel", () => {
+  const selected = pickTherapistCandidate({
+    candidates: [
+      { therapistId: 201, therapistName: "Carla Bustamante" },
+      { therapistId: 202, therapistName: "Daniel MacLean" }
+    ],
+    lastTherapistId: 201
+  });
+
+  assert.equal(selected.therapistId, 202);
 });
 
 test("roundRobin: chooseTherapistForService persiste el estado", async () => {

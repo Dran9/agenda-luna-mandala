@@ -297,6 +297,29 @@ select {
   cursor: pointer;
 }
 
+.refresh-button:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.refresh-indicator {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.refresh-indicator.is-error {
+  border-color: rgba(220, 38, 38, 0.35);
+  color: var(--danger);
+}
+
 .logout-button {
   min-height: 40px;
   border: 1px solid var(--border);
@@ -459,6 +482,11 @@ select {
 .feedback.error {
   border-color: rgba(220, 38, 38, 0.35);
   color: var(--danger);
+}
+
+.feedback.subtle {
+  border-style: dashed;
+  color: var(--muted);
 }
 
 .summary-grid {
