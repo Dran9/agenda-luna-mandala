@@ -6,7 +6,9 @@ const {
   getAvailability,
   getCatalog,
   hold,
-  identify
+  identify,
+  rescheduleConfirm,
+  rescheduleHold
 } = require("../server/services/publicBooking.service");
 const { PublicBookingError } = require("../server/services/errors");
 const { addMinutes, formatDateTimeForDbLocal } = require("../server/utils/dates");
@@ -239,6 +241,7 @@ class FakeBookingConnection {
           return {
             id: appointment.id,
             serviceId: appointment.serviceId,
+            therapistId: appointment.therapistId,
             serviceName: service ? service.name : "",
             startsAt: appointment.startsAt,
             endsAt: appointment.endsAt,
@@ -578,6 +581,45 @@ class FakeBookingConnection {
       return [{ affectedRows: row ? 1 : 0 }];
     }
 
+    if (normalizedSql.includes("FROM appointments a") && normalizedSql.includes("a.id = ?") && normalizedSql.includes("LIMIT 1")) {
+      const [centerId, appointmentId] = params;
+      const appointment = this.state.appointments.find(
+        (entry) => entry.centerId === centerId && entry.id === appointmentId
+      );
+
+      if (!appointment) return [[]];
+
+      const client = this.state.clients.find((entry) => entry.id === appointment.clientId);
+      const service = this.state.services.find((entry) => entry.id === appointment.serviceId);
+      const therapist = this.state.therapists.find((entry) => entry.id === appointment.therapistId);
+      const room = this.state.rooms.find((entry) => entry.id === appointment.roomId);
+
+      return [[{
+        appointmentId: appointment.id,
+        publicCode: appointment.publicCode,
+        managementToken: appointment.managementToken,
+        centerId: appointment.centerId,
+        clientId: appointment.clientId,
+        serviceId: appointment.serviceId,
+        therapistId: appointment.therapistId,
+        roomId: appointment.roomId,
+        startsAt: appointment.startsAt,
+        endsAt: appointment.endsAt,
+        status: appointment.status,
+        createdAt: appointment.createdAt,
+        firstName: client ? client.firstName || null : null,
+        lastName: client ? client.lastName || null : null,
+        age: client ? (client.age ?? null) : null,
+        city: client ? client.city || null : null,
+        source: client ? client.source || null : null,
+        onboardingCompletedAt: client ? client.onboardingCompletedAt || null : null,
+        phoneE164: client ? client.phoneE164 : "",
+        serviceName: service ? service.name : "",
+        therapistName: therapist ? therapist.displayName : "",
+        roomName: room ? room.name : ""
+      }]];
+    }
+
     if (normalizedSql.includes("FROM appointments a") && normalizedSql.includes("a.hold_token = ?") && normalizedSql.includes("FOR UPDATE")) {
       const [centerId, holdToken] = params;
       const appointment = this.state.appointments.find(
@@ -646,6 +688,20 @@ class FakeBookingConnection {
 
       appointment.status = "confirmed";
       appointment.holdToken = null;
+      return [{ affectedRows: 1 }];
+    }
+
+    if (normalizedSql.includes("UPDATE appointments") && normalizedSql.includes("cancellation_reason = 'rescheduled'")) {
+      const [_cancelledAt, appointmentId] = params;
+      const appointment = this.state.appointments.find(
+        (entry) => entry.id === appointmentId && (entry.status === "pending" || entry.status === "confirmed")
+      );
+
+      if (!appointment) return [{ affectedRows: 0 }];
+
+      appointment.status = "cancelled";
+      appointment.cancellationReason = "rescheduled";
+      appointment.cancelledAt = new Date(this.now);
       return [{ affectedRows: 1 }];
     }
 
@@ -804,6 +860,50 @@ function createFixture(overrides = {}) {
   };
 }
 
+function createRescheduleFixture(overrides = {}) {
+  return createFixture({
+    clients: [
+      {
+        id: 501,
+        centerId: 1,
+        phoneE164: "71234567",
+        fullName: "Ana Rojas",
+        firstName: "Ana",
+        lastName: "Rojas",
+        age: 32,
+        city: "La Paz",
+        source: "Redes sociales",
+        onboardingCompletedAt: new Date("2026-05-01T10:00:00-04:00"),
+        isActive: 1
+      }
+    ],
+    appointments: [
+      {
+        id: 900,
+        centerId: 1,
+        clientId: 501,
+        serviceId: 10,
+        therapistId: 100,
+        roomId: 200,
+        status: "confirmed",
+        startsAt: new Date("2026-05-11T11:00:00-04:00"),
+        endsAt: new Date("2026-05-11T12:00:00-04:00"),
+        managementToken: "mgmt-900",
+        publicCode: "PUB-900",
+        holdToken: null,
+        createdAt: new Date("2026-05-11T07:00:00-04:00")
+      }
+    ],
+    claims: [
+      { centerId: 1, appointmentId: 900, resourceType: "therapist", resourceId: 100, claimTime: "2026-05-11 11:00:00" },
+      { centerId: 1, appointmentId: 900, resourceType: "therapist", resourceId: 100, claimTime: "2026-05-11 11:01:00" },
+      { centerId: 1, appointmentId: 900, resourceType: "room", resourceId: 200, claimTime: "2026-05-11 11:00:00" },
+      { centerId: 1, appointmentId: 900, resourceType: "room", resourceId: 200, claimTime: "2026-05-11 11:01:00" }
+    ],
+    ...overrides
+  });
+}
+
 test("catalog filtra servicios y terapeutas inactivos", async () => {
   const connection = new FakeBookingConnection(createFixture());
 
@@ -924,6 +1024,8 @@ test("identify si devuelve confirmed futura con managementToken", async () => {
 
   assert.equal(result.status, "existing");
   assert.equal(result.appointments.length, 1);
+  assert.equal(result.appointments[0].serviceId, "10");
+  assert.equal(result.appointments[0].therapistId, "100");
   assert.equal(result.appointments[0].managementToken, "mgmt-token");
 });
 
@@ -1344,6 +1446,239 @@ test("hold expirado libera claims y permite nuevo hold", async () => {
   assert.equal(secondHold.status, "pending");
   assert.equal(connection.state.claims.some((claim) => claim.appointmentId === firstHold.appointmentId), false);
   assert.equal(connection.state.claims.some((claim) => claim.appointmentId === secondHold.appointmentId), true);
+});
+
+test("reschedule/hold falla con cita inexistente", async () => {
+  const connection = new FakeBookingConnection(createFixture());
+
+  await assert.rejects(
+    rescheduleHold({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "71234567",
+      appointmentId: 9999,
+      managementToken: "mgmt-missing",
+      startsAt: "2026-05-11T13:00:00-04:00",
+      now: "2026-05-11T08:00:00-04:00"
+    }),
+    (error) => error instanceof PublicBookingError && error.status === 404 && error.code === "APPOINTMENT_NOT_FOUND"
+  );
+});
+
+test("reschedule/hold falla con managementToken invalido", async () => {
+  const connection = new FakeBookingConnection(createRescheduleFixture());
+
+  await assert.rejects(
+    rescheduleHold({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "71234567",
+      appointmentId: 900,
+      managementToken: "mgmt-wrong",
+      startsAt: "2026-05-11T13:00:00-04:00",
+      now: "2026-05-11T08:00:00-04:00"
+    }),
+    (error) => error instanceof PublicBookingError && error.status === 401 && error.code === "MANAGEMENT_TOKEN_INVALID"
+  );
+});
+
+test("reschedule/hold mantiene mismo terapeuta y no toca la cita original", async () => {
+  const connection = new FakeBookingConnection(createRescheduleFixture());
+
+  const result = await rescheduleHold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    appointmentId: 900,
+    managementToken: "mgmt-900",
+    startsAt: "2026-05-11T13:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  const original = connection.state.appointments.find((entry) => entry.id === 900);
+  const newHold = connection.state.appointments.find((entry) => entry.id === result.appointmentId);
+
+  assert.equal(result.status, "pending");
+  assert.equal(result.therapistId, "100");
+  assert.equal(result.previousAppointment.id, "900");
+  assert.equal(result.previousAppointment.therapistId, "100");
+  assert.equal(original.status, "confirmed");
+  assert.equal(newHold.status, "pending");
+});
+
+test("reschedule/hold respeta conflictos de slot y devuelve 409", async () => {
+  const fixture = createRescheduleFixture({
+    claims: [
+      { centerId: 1, appointmentId: 900, resourceType: "therapist", resourceId: 100, claimTime: "2026-05-11 11:00:00" },
+      { centerId: 1, appointmentId: 900, resourceType: "room", resourceId: 200, claimTime: "2026-05-11 11:00:00" },
+      { centerId: 1, appointmentId: 7000, resourceType: "therapist", resourceId: 100, claimTime: "2026-05-11 13:00:00" },
+      { centerId: 1, appointmentId: 7000, resourceType: "room", resourceId: 200, claimTime: "2026-05-11 13:00:00" }
+    ]
+  });
+  const connection = new FakeBookingConnection(fixture);
+
+  await assert.rejects(
+    rescheduleHold({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "71234567",
+      appointmentId: 900,
+      managementToken: "mgmt-900",
+      startsAt: "2026-05-11T13:00:00-04:00",
+      now: "2026-05-11T08:00:00-04:00"
+    }),
+    (error) => error instanceof PublicBookingError && error.status === 409 && error.code === "SLOT_NOT_AVAILABLE"
+  );
+});
+
+test("reschedule/confirm confirma nuevo hold y cancela original liberando claims", async () => {
+  const connection = new FakeBookingConnection(createRescheduleFixture());
+
+  const holdResult = await rescheduleHold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    appointmentId: 900,
+    managementToken: "mgmt-900",
+    startsAt: "2026-05-11T13:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  const result = await rescheduleConfirm({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    appointmentId: 900,
+    managementToken: "mgmt-900",
+    holdToken: holdResult.holdToken,
+    idempotencyKey: "idem-reschedule-confirm-1",
+    payload: {
+      tenantSlug: "luna-mandala",
+      phoneE164: "71234567",
+      appointmentId: 900,
+      managementToken: "mgmt-900",
+      holdToken: holdResult.holdToken
+    },
+    now: "2026-05-11T08:02:00-04:00"
+  });
+
+  const original = connection.state.appointments.find((entry) => entry.id === 900);
+  const moved = connection.state.appointments.find((entry) => entry.id === holdResult.appointmentId);
+
+  assert.equal(result.responseBody.status, "rescheduled");
+  assert.equal(result.responseBody.previousAppointment.id, "900");
+  assert.equal(result.responseBody.appointment.id, String(holdResult.appointmentId));
+  assert.equal(original.status, "cancelled");
+  assert.equal(original.cancellationReason, "rescheduled");
+  assert.equal(moved.status, "confirmed");
+  assert.equal(moved.holdToken, null);
+  assert.equal(connection.state.claims.some((claim) => claim.appointmentId === 900), false);
+  assert.equal(connection.state.claims.some((claim) => claim.appointmentId === holdResult.appointmentId), true);
+  assert.deepEqual(
+    result.responseBody.notificationEvents.map((entry) => entry.type),
+    ["center.reschedule.confirmed", "client.reschedule.confirmed", "therapist.reschedule.confirmed"]
+  );
+});
+
+test("reschedule/confirm hace rollback y conserva original si falla confirmacion final", async () => {
+  const connection = new FakeBookingConnection(createRescheduleFixture());
+
+  const holdResult = await rescheduleHold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    appointmentId: 900,
+    managementToken: "mgmt-900",
+    startsAt: "2026-05-11T13:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  connection.state.claims = connection.state.claims.filter((entry) => entry.appointmentId !== holdResult.appointmentId);
+  connection.state.claims.push({
+    centerId: 1,
+    appointmentId: 7777,
+    resourceType: "therapist",
+    resourceId: 100,
+    claimTime: "2026-05-11 13:00:00"
+  });
+
+  await assert.rejects(
+    rescheduleConfirm({
+      connection,
+      tenantSlug: "luna-mandala",
+      phoneE164: "71234567",
+      appointmentId: 900,
+      managementToken: "mgmt-900",
+      holdToken: holdResult.holdToken,
+      idempotencyKey: "idem-reschedule-confirm-rollback",
+      payload: {
+        tenantSlug: "luna-mandala",
+        phoneE164: "71234567",
+        appointmentId: 900,
+        managementToken: "mgmt-900",
+        holdToken: holdResult.holdToken
+      },
+      now: "2026-05-11T08:02:00-04:00"
+    }),
+    (error) => error instanceof PublicBookingError && error.status === 409 && error.code === "SLOT_NOT_AVAILABLE"
+  );
+
+  const original = connection.state.appointments.find((entry) => entry.id === 900);
+  const moved = connection.state.appointments.find((entry) => entry.id === holdResult.appointmentId);
+
+  assert.equal(original.status, "confirmed");
+  assert.equal(connection.state.claims.some((claim) => claim.appointmentId === 900), true);
+  assert.equal(moved.status, "pending");
+  assert.equal(moved.holdToken, holdResult.holdToken);
+});
+
+test("reschedule/confirm respeta idempotencia", async () => {
+  const connection = new FakeBookingConnection(createRescheduleFixture());
+
+  const holdResult = await rescheduleHold({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    appointmentId: 900,
+    managementToken: "mgmt-900",
+    startsAt: "2026-05-11T13:00:00-04:00",
+    now: "2026-05-11T08:00:00-04:00"
+  });
+
+  const payload = {
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    appointmentId: 900,
+    managementToken: "mgmt-900",
+    holdToken: holdResult.holdToken
+  };
+
+  const first = await rescheduleConfirm({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    appointmentId: 900,
+    managementToken: "mgmt-900",
+    holdToken: holdResult.holdToken,
+    idempotencyKey: "idem-reschedule-replay",
+    payload,
+    now: "2026-05-11T08:02:00-04:00"
+  });
+
+  const second = await rescheduleConfirm({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    appointmentId: 900,
+    managementToken: "mgmt-900",
+    holdToken: holdResult.holdToken,
+    idempotencyKey: "idem-reschedule-replay",
+    payload,
+    now: "2026-05-11T08:02:30-04:00"
+  });
+
+  assert.equal(first.responseBody.status, "rescheduled");
+  assert.equal(second.responseBody.replayed, true);
 });
 
 test("confirm cliente nuevo con onboarding valido crea confirmed + claims en una transaccion", async () => {

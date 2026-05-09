@@ -6,7 +6,9 @@ const {
   getAvailability,
   getCatalog,
   hold,
-  identify
+  identify,
+  rescheduleConfirm,
+  rescheduleHold
 } = require("../services/publicBooking.service");
 const {
   PublicBookingError,
@@ -178,6 +180,57 @@ function createPublicBookingRouter({ getPool = getSharedPool } = {}) {
           phoneE164: req.body.phoneE164,
           holdToken: req.body.holdToken,
           client: req.body.client
+        },
+        now: req.body.now || new Date()
+      });
+
+      res.status(result.responseCode).json(result.responseBody);
+    });
+  });
+
+  router.post("/reschedule/hold", async (req, res) => {
+    await withConnection(res, async (connection) => {
+      const result = await rescheduleHold({
+        connection,
+        tenantSlug: req.body.tenantSlug,
+        phoneE164: req.body.phoneE164,
+        appointmentId: req.body.appointmentId,
+        managementToken: req.body.managementToken,
+        startsAt: req.body.startsAt,
+        roomId: req.body.roomId,
+        now: req.body.now || new Date()
+      });
+
+      res.status(201).json(result);
+    });
+  });
+
+  router.post("/reschedule/confirm", async (req, res) => {
+    await withConnection(res, async (connection) => {
+      const idempotencyKey = req.get("Idempotency-Key");
+
+      if (!idempotencyKey) {
+        throw new PublicBookingError({
+          status: 400,
+          code: "IDEMPOTENCY_KEY_REQUIRED",
+          message: "Idempotency-Key es obligatorio"
+        });
+      }
+
+      const result = await rescheduleConfirm({
+        connection,
+        tenantSlug: req.body.tenantSlug,
+        phoneE164: req.body.phoneE164,
+        appointmentId: req.body.appointmentId,
+        managementToken: req.body.managementToken,
+        holdToken: req.body.holdToken,
+        idempotencyKey,
+        payload: {
+          tenantSlug: req.body.tenantSlug,
+          phoneE164: req.body.phoneE164,
+          appointmentId: req.body.appointmentId,
+          managementToken: req.body.managementToken,
+          holdToken: req.body.holdToken
         },
         now: req.body.now || new Date()
       });

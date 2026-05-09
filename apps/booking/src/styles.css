@@ -39,7 +39,7 @@
 }
 
 html {
-  font-size: 18px;
+  font-size: 20px;
 }
 
 body {
@@ -279,7 +279,7 @@ button {
 }
 
 .phone-input {
-  font-size: 24px !important;
+  font-size: 26px !important;
   line-height: 1.15;
   letter-spacing: 0;
 }
@@ -517,6 +517,11 @@ button {
 .identify-state {
   display: grid;
   gap: var(--s-2);
+}
+
+.identify-existing-question {
+  font-weight: 600;
+  color: #92400e;
 }
 
 .actions {
@@ -908,6 +913,33 @@ button {
   font-size: 0.72rem;
   color: rgba(124, 45, 18, 0.78);
   margin-top: -2px;
+}
+
+.dual-appointment-note {
+  border: 1px solid rgba(180, 83, 9, 0.24);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.dual-appointment-note strong {
+  font-size: 0.74rem;
+  color: #7c2d12;
+}
+
+.dual-appointment-note ol {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.dual-appointment-note li {
+  font-size: 0.74rem;
+  color: #7c2d12;
+  line-height: 1.35;
 }
 
 .hold-summary {

@@ -3,6 +3,7 @@ const { listAvailableSlots } = require("./availability.service");
 const {
   createHoldAppointment,
   confirmHoldAppointment,
+  confirmRescheduleAppointment,
   pickPublicAvailabilityPair,
   releaseExpiredHolds
 } = require("./appointments.service");
@@ -102,6 +103,37 @@ function parseInteger(value, fallback) {
     return fallback;
   }
   return parsed;
+}
+
+function normalizeAppointmentId(value) {
+  const parsed = parseInteger(value, NaN);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new ValidationError("appointmentId invalido", {
+      field: "appointmentId",
+      value
+    });
+  }
+
+  return parsed;
+}
+
+function normalizeManagementToken(value) {
+  const token = String(value || "").trim();
+
+  if (!token) {
+    throw new ValidationError("managementToken es requerido", {
+      field: "managementToken"
+    });
+  }
+
+  return token;
+}
+
+function areEquivalentPhones(leftPhone, rightPhone) {
+  const leftCandidates = new Set(buildPhoneLookupCandidates(leftPhone));
+  const rightCandidates = buildPhoneLookupCandidates(rightPhone);
+  return rightCandidates.some((candidate) => leftCandidates.has(candidate));
 }
 
 function isClientOnboardingComplete(client) {
@@ -435,6 +467,7 @@ async function identify({ connection, tenantSlug, phoneE164, now = new Date() })
     `SELECT
       a.id,
       a.service_id AS serviceId,
+      a.therapist_id AS therapistId,
       s.name AS serviceName,
       a.starts_at AS startsAt,
       a.ends_at AS endsAt,
@@ -456,6 +489,7 @@ async function identify({ connection, tenantSlug, phoneE164, now = new Date() })
   const appointments = appointmentRows.map((row) => ({
     id: String(row.id),
     serviceId: String(row.serviceId),
+    therapistId: String(row.therapistId),
     serviceName: row.serviceName,
     startsAt: toDate(row.startsAt).toISOString(),
     endsAt: toDate(row.endsAt).toISOString(),
@@ -549,6 +583,102 @@ async function getAvailability({
   };
 }
 
+async function loadManagedAppointment({
+  connection,
+  centerId,
+  appointmentId
+}) {
+  const [rows] = await connection.query(
+    `SELECT
+      a.id AS appointmentId,
+      a.public_code AS publicCode,
+      a.management_token AS managementToken,
+      a.center_id AS centerId,
+      a.client_id AS clientId,
+      a.service_id AS serviceId,
+      a.therapist_id AS therapistId,
+      a.room_id AS roomId,
+      a.starts_at AS startsAt,
+      a.ends_at AS endsAt,
+      a.status,
+      c.whatsapp_e164 AS phoneE164,
+      s.name AS serviceName,
+      COALESCE(t.display_name, t.full_name) AS therapistName,
+      r.name AS roomName
+     FROM appointments a
+     INNER JOIN clients c ON c.id = a.client_id
+     INNER JOIN services s ON s.id = a.service_id
+     INNER JOIN therapists t ON t.id = a.therapist_id
+     INNER JOIN rooms r ON r.id = a.room_id
+     WHERE a.center_id = ?
+       AND a.id = ?
+     LIMIT 1`,
+    [centerId, appointmentId]
+  );
+
+  if (rows.length === 0) {
+    throw new PublicBookingError({
+      status: 404,
+      code: "APPOINTMENT_NOT_FOUND",
+      message: "No se encontro la cita indicada"
+    });
+  }
+
+  return rows[0];
+}
+
+function assertReschedulableAppointment({ appointment, managementToken, phoneE164, now = new Date() }) {
+  if (appointment.managementToken !== managementToken) {
+    throw new PublicBookingError({
+      status: 401,
+      code: "MANAGEMENT_TOKEN_INVALID",
+      message: "managementToken invalido para esta cita"
+    });
+  }
+
+  if (!areEquivalentPhones(appointment.phoneE164, phoneE164)) {
+    throw new PublicBookingError({
+      status: 409,
+      code: "APPOINTMENT_PHONE_MISMATCH",
+      message: "La cita no pertenece al telefono enviado"
+    });
+  }
+
+  const status = String(appointment.status || "").toLowerCase();
+  if (!(status === "pending" || status === "confirmed")) {
+    throw new PublicBookingError({
+      status: 409,
+      code: "APPOINTMENT_NOT_RESCHEDULABLE",
+      message: "La cita ya no se puede reagendar"
+    });
+  }
+
+  if (toDate(appointment.startsAt).getTime() <= toDate(now).getTime()) {
+    throw new PublicBookingError({
+      status: 409,
+      code: "APPOINTMENT_NOT_RESCHEDULABLE",
+      message: "La cita ya no se puede reagendar por horario"
+    });
+  }
+}
+
+function mapAppointmentSummary(appointment) {
+  return {
+    id: String(appointment.appointmentId),
+    status: String(appointment.status || ""),
+    publicCode: appointment.publicCode,
+    managementToken: appointment.managementToken,
+    serviceId: String(appointment.serviceId),
+    serviceName: appointment.serviceName,
+    therapistId: String(appointment.therapistId),
+    therapistName: appointment.therapistName,
+    roomId: String(appointment.roomId),
+    roomName: appointment.roomName,
+    startsAt: toDate(appointment.startsAt).toISOString(),
+    endsAt: toDate(appointment.endsAt).toISOString()
+  };
+}
+
 async function hold({
   connection,
   tenantSlug,
@@ -610,6 +740,103 @@ async function confirm({
   };
 }
 
+async function rescheduleHold({
+  connection,
+  tenantSlug,
+  phoneE164,
+  appointmentId,
+  managementToken,
+  startsAt,
+  roomId,
+  now = new Date()
+}) {
+  const center = await resolveCenter(connection, tenantSlug);
+  const normalizedPhone = normalizePhoneE164(phoneE164);
+  const normalizedAppointmentId = normalizeAppointmentId(appointmentId);
+  const normalizedManagementToken = normalizeManagementToken(managementToken);
+
+  await releaseExpiredHolds({
+    connection,
+    centerId: center.id,
+    now
+  });
+
+  const originalAppointment = await loadManagedAppointment({
+    connection,
+    centerId: center.id,
+    appointmentId: normalizedAppointmentId
+  });
+
+  assertReschedulableAppointment({
+    appointment: originalAppointment,
+    managementToken: normalizedManagementToken,
+    phoneE164: normalizedPhone,
+    now
+  });
+
+  const holdResult = await createHoldAppointment({
+    connection,
+    centerId: center.id,
+    serviceId: Number(originalAppointment.serviceId),
+    phoneE164: normalizedPhone,
+    startsAt,
+    therapistId: Number(originalAppointment.therapistId),
+    roomId,
+    now
+  });
+
+  if (String(holdResult.therapistId) !== String(originalAppointment.therapistId)) {
+    throw new PublicBookingError({
+      status: 409,
+      code: "SLOT_NOT_AVAILABLE",
+      message: "No hay horario compatible con el terapeuta original"
+    });
+  }
+
+  return {
+    ...holdResult,
+    center,
+    previousAppointment: mapAppointmentSummary(originalAppointment)
+  };
+}
+
+async function rescheduleConfirm({
+  connection,
+  tenantSlug,
+  phoneE164,
+  appointmentId,
+  managementToken,
+  holdToken,
+  idempotencyKey,
+  payload,
+  now = new Date()
+}) {
+  const center = await resolveCenter(connection, tenantSlug);
+  const normalizedPhone = normalizePhoneE164(phoneE164);
+  const normalizedAppointmentId = normalizeAppointmentId(appointmentId);
+  const normalizedManagementToken = normalizeManagementToken(managementToken);
+
+  const confirmResult = await confirmRescheduleAppointment({
+    connection,
+    centerId: center.id,
+    appointmentId: normalizedAppointmentId,
+    managementToken: normalizedManagementToken,
+    holdToken,
+    phoneE164: normalizedPhone,
+    idempotencyKey,
+    payload,
+    now
+  });
+
+  return {
+    ...confirmResult,
+    responseBody: {
+      ...confirmResult.responseBody,
+      center
+    }
+  };
+}
+
 module.exports = {
   DEFAULT_TENANT_SLUG,
   normalizeTenantSlug,
@@ -620,5 +847,7 @@ module.exports = {
   identify,
   getAvailability,
   hold,
-  confirm
+  confirm,
+  rescheduleHold,
+  rescheduleConfirm
 };

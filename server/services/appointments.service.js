@@ -26,6 +26,7 @@ const ONBOARDING_KEYBOARD_SMASHES = new Set([
 ]);
 const ONBOARDING_CITY_OPTIONS = ["Cochabamba", "Santa Cruz", "La Paz", "Sucre", "Otro"];
 const ONBOARDING_SOURCE_OPTIONS = ["Referencia de amigos", "Redes sociales", "Otro"];
+const RESCHEDULE_IDEMPOTENCY_SCOPE = "public_booking_reschedule_confirm";
 
 function randomToken(size = 24) {
   return crypto.randomBytes(size).toString("hex");
@@ -160,6 +161,23 @@ function normalizeOnboardingAge(value) {
   }
 
   return age;
+}
+
+function normalizeManagementToken(value) {
+  const token = String(value || "").trim();
+
+  if (!token) {
+    throw new ValidationError("managementToken es requerido", {
+      field: "managementToken"
+    });
+  }
+
+  return token;
+}
+
+function isReschedulableStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  return normalized === "pending" || normalized === "confirmed";
 }
 
 function isClientOnboardingComplete(client) {
@@ -397,6 +415,23 @@ function pickPublicAvailabilityPair({ pairs, therapistId = null }) {
 
 function toIso(value) {
   return toDate(value).toISOString();
+}
+
+function toAppointmentSummary(row) {
+  return {
+    id: String(row.appointmentId),
+    status: String(row.status || ""),
+    publicCode: row.publicCode,
+    managementToken: row.managementToken,
+    serviceId: String(row.serviceId),
+    serviceName: row.serviceName,
+    therapistId: String(row.therapistId),
+    therapistName: row.therapistName,
+    roomId: String(row.roomId),
+    roomName: row.roomName,
+    startsAt: toIso(row.startsAt),
+    endsAt: toIso(row.endsAt)
+  };
 }
 
 async function releaseExpiredHolds({ connection, centerId, now = new Date(), manageTransaction = true }) {
@@ -937,6 +972,358 @@ async function confirmHoldAppointment({
   }
 }
 
+async function confirmRescheduleAppointment({
+  connection,
+  centerId,
+  appointmentId,
+  managementToken,
+  holdToken,
+  phoneE164,
+  idempotencyKey,
+  payload,
+  now = new Date()
+}) {
+  if (!connection) {
+    throw new ValidationError("Se requiere una conexion DB activa");
+  }
+
+  const normalizedCenterId = normalizeNumericId(centerId, "centerId");
+  const normalizedAppointmentId = normalizeNumericId(appointmentId, "appointmentId");
+  const normalizedManagementToken = normalizeManagementToken(managementToken);
+  const normalizedHoldToken = String(holdToken || "").trim();
+
+  if (!normalizedHoldToken) {
+    throw new ValidationError("holdToken es requerido");
+  }
+
+  let startedTransaction = false;
+
+  try {
+    await connection.beginTransaction();
+    startedTransaction = true;
+
+    const idemResult = await acquireIdempotencyKey({
+      connection,
+      centerId: normalizedCenterId,
+      idempotencyKey,
+      payload,
+      scope: RESCHEDULE_IDEMPOTENCY_SCOPE
+    });
+
+    if (idemResult.replayed) {
+      await connection.commit();
+
+      return {
+        responseCode: idemResult.responseCode,
+        responseBody: {
+          ...idemResult.responseBody,
+          replayed: true
+        }
+      };
+    }
+
+    const [originalRows] = await connection.query(
+      `SELECT
+        a.id AS appointmentId,
+        a.public_code AS publicCode,
+        a.management_token AS managementToken,
+        a.center_id AS centerId,
+        a.client_id AS clientId,
+        a.service_id AS serviceId,
+        a.therapist_id AS therapistId,
+        a.room_id AS roomId,
+        a.starts_at AS startsAt,
+        a.ends_at AS endsAt,
+        a.status,
+        c.whatsapp_e164 AS phoneE164,
+        s.name AS serviceName,
+        COALESCE(t.display_name, t.full_name) AS therapistName,
+        r.name AS roomName
+       FROM appointments a
+       INNER JOIN clients c ON c.id = a.client_id
+       INNER JOIN services s ON s.id = a.service_id
+       INNER JOIN therapists t ON t.id = a.therapist_id
+       INNER JOIN rooms r ON r.id = a.room_id
+       WHERE a.center_id = ?
+         AND a.id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [normalizedCenterId, normalizedAppointmentId]
+    );
+
+    if (originalRows.length === 0) {
+      throw new PublicBookingError({
+        status: 404,
+        code: "APPOINTMENT_NOT_FOUND",
+        message: "No se encontro la cita a reagendar"
+      });
+    }
+
+    const original = originalRows[0];
+
+    if (original.managementToken !== normalizedManagementToken) {
+      throw new PublicBookingError({
+        status: 401,
+        code: "MANAGEMENT_TOKEN_INVALID",
+        message: "managementToken invalido para esta cita"
+      });
+    }
+
+    if (!areEquivalentPhones(original.phoneE164, phoneE164)) {
+      throw new PublicBookingError({
+        status: 409,
+        code: "APPOINTMENT_PHONE_MISMATCH",
+        message: "La cita no pertenece al telefono enviado"
+      });
+    }
+
+    if (!isReschedulableStatus(original.status)) {
+      throw new PublicBookingError({
+        status: 409,
+        code: "APPOINTMENT_NOT_RESCHEDULABLE",
+        message: "La cita ya no se puede reagendar"
+      });
+    }
+
+    if (toDate(original.startsAt).getTime() <= toDate(now).getTime()) {
+      throw new PublicBookingError({
+        status: 409,
+        code: "APPOINTMENT_NOT_RESCHEDULABLE",
+        message: "La cita ya no se puede reagendar por horario"
+      });
+    }
+
+    const [holdRows] = await connection.query(
+      `SELECT
+        a.id AS appointmentId,
+        a.public_code AS publicCode,
+        a.management_token AS managementToken,
+        a.center_id AS centerId,
+        a.client_id AS clientId,
+        a.service_id AS serviceId,
+        a.therapist_id AS therapistId,
+        a.room_id AS roomId,
+        a.starts_at AS startsAt,
+        a.ends_at AS endsAt,
+        a.status,
+        a.created_at AS createdAt,
+        c.whatsapp_e164 AS phoneE164,
+        s.name AS serviceName,
+        COALESCE(t.display_name, t.full_name) AS therapistName,
+        r.name AS roomName
+       FROM appointments a
+       INNER JOIN clients c ON c.id = a.client_id
+       INNER JOIN services s ON s.id = a.service_id
+       INNER JOIN therapists t ON t.id = a.therapist_id
+       INNER JOIN rooms r ON r.id = a.room_id
+       WHERE a.center_id = ?
+         AND a.hold_token = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [normalizedCenterId, normalizedHoldToken]
+    );
+
+    if (holdRows.length === 0) {
+      throw new PublicBookingError({
+        status: 404,
+        code: "HOLD_NOT_FOUND",
+        message: "No se encontro hold activo"
+      });
+    }
+
+    const hold = holdRows[0];
+
+    if (Number(hold.appointmentId) === Number(original.appointmentId)) {
+      throw new PublicBookingError({
+        status: 409,
+        code: "RESCHEDULE_HOLD_INVALID",
+        message: "El hold no es valido para reagendar"
+      });
+    }
+
+    if (!areEquivalentPhones(hold.phoneE164, phoneE164)) {
+      throw new PublicBookingError({
+        status: 409,
+        code: "HOLD_PHONE_MISMATCH",
+        message: "El hold no pertenece al telefono enviado"
+      });
+    }
+
+    if (Number(hold.clientId) !== Number(original.clientId)) {
+      throw new PublicBookingError({
+        status: 409,
+        code: "RESCHEDULE_CLIENT_MISMATCH",
+        message: "El hold no pertenece al mismo cliente"
+      });
+    }
+
+    if (Number(hold.serviceId) !== Number(original.serviceId)) {
+      throw new PublicBookingError({
+        status: 409,
+        code: "RESCHEDULE_SERVICE_MISMATCH",
+        message: "El hold no coincide con el servicio original"
+      });
+    }
+
+    if (Number(hold.therapistId) !== Number(original.therapistId)) {
+      throw new PublicBookingError({
+        status: 409,
+        code: "RESCHEDULE_THERAPIST_MISMATCH",
+        message: "El hold no coincide con el terapeuta original"
+      });
+    }
+
+    if (hold.status !== "pending") {
+      throw new PublicBookingError({
+        status: 409,
+        code: "HOLD_NOT_PENDING",
+        message: "El hold ya no esta en estado pendiente"
+      });
+    }
+
+    const holdExpiresAt = computeHoldExpiresAt(hold.createdAt);
+    if (toDate(now) >= holdExpiresAt) {
+      throw new PublicBookingError({
+        status: 410,
+        code: "HOLD_EXPIRED",
+        message: "El hold expiro"
+      });
+    }
+
+    await releaseAppointmentClaims({
+      connection,
+      appointmentId: Number(original.appointmentId),
+      manageTransaction: false
+    });
+
+    const [cancelOriginalResult] = await connection.query(
+      `UPDATE appointments
+       SET
+         status = 'cancelled',
+         cancellation_reason = 'rescheduled',
+         cancelled_at = ?,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?
+         AND status IN ('pending', 'confirmed')`,
+      [now, Number(original.appointmentId)]
+    );
+
+    if (Number(cancelOriginalResult.affectedRows || 0) !== 1) {
+      throw new PublicBookingError({
+        status: 409,
+        code: "APPOINTMENT_NOT_RESCHEDULABLE",
+        message: "La cita original no se pudo reagendar"
+      });
+    }
+
+    const [confirmHoldResult] = await connection.query(
+      `UPDATE appointments
+       SET
+         status = 'confirmed',
+         hold_token = NULL,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?
+         AND status = 'pending'`,
+      [Number(hold.appointmentId)]
+    );
+
+    if (Number(confirmHoldResult.affectedRows || 0) !== 1) {
+      throw new PublicBookingError({
+        status: 409,
+        code: "SLOT_NOT_AVAILABLE",
+        message: "No se pudo confirmar el nuevo horario"
+      });
+    }
+
+    const [holdClaimRows] = await connection.query(
+      `SELECT COUNT(*) AS claimCount
+       FROM appointment_resource_claims
+       WHERE appointment_id = ?`,
+      [Number(hold.appointmentId)]
+    );
+
+    if (Number(holdClaimRows[0]?.claimCount || 0) === 0) {
+      try {
+        await createAppointmentClaims({
+          connection,
+          manageTransaction: false,
+          appointment: {
+            centerId: Number(hold.centerId),
+            appointmentId: Number(hold.appointmentId),
+            therapistId: Number(hold.therapistId),
+            roomId: Number(hold.roomId),
+            startsAt: hold.startsAt,
+            endsAt: hold.endsAt,
+            status: "confirmed"
+          }
+        });
+      } catch (error) {
+        if (error instanceof SlotOccupiedError || error.code === "SLOT_OCCUPIED") {
+          throw new PublicBookingError({
+            status: 409,
+            code: "SLOT_NOT_AVAILABLE",
+            message: "El slot ya no esta disponible"
+          });
+        }
+
+        throw error;
+      }
+    }
+
+    const responseBody = {
+      replayed: false,
+      status: "rescheduled",
+      previousAppointment: toAppointmentSummary({
+        ...original,
+        status: "cancelled"
+      }),
+      appointment: toAppointmentSummary(hold),
+      notificationEvents: [
+        {
+          type: "center.reschedule.confirmed",
+          channel: "prepared",
+          appointmentId: String(hold.appointmentId),
+          previousAppointmentId: String(original.appointmentId)
+        },
+        {
+          type: "client.reschedule.confirmed",
+          channel: "prepared",
+          appointmentId: String(hold.appointmentId),
+          previousAppointmentId: String(original.appointmentId)
+        },
+        {
+          type: "therapist.reschedule.confirmed",
+          channel: "prepared",
+          appointmentId: String(hold.appointmentId),
+          previousAppointmentId: String(original.appointmentId)
+        }
+      ]
+    };
+
+    await persistIdempotencyResponse({
+      connection,
+      centerId: normalizedCenterId,
+      idempotencyKey,
+      responseCode: 200,
+      responseBody,
+      scope: RESCHEDULE_IDEMPOTENCY_SCOPE
+    });
+
+    await connection.commit();
+
+    return {
+      responseCode: 200,
+      responseBody
+    };
+  } catch (error) {
+    if (startedTransaction) {
+      await connection.rollback();
+    }
+
+    throw error;
+  }
+}
+
 module.exports = {
   HOLD_TTL_SECONDS,
   computeHoldCutoff,
@@ -945,5 +1332,6 @@ module.exports = {
   pickPublicAvailabilityPair,
   releaseExpiredHolds,
   createHoldAppointment,
-  confirmHoldAppointment
+  confirmHoldAppointment,
+  confirmRescheduleAppointment
 };

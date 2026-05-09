@@ -799,6 +799,8 @@ function BookingApp() {
   const selectedService = services.find((service) => service.id === selectedServiceId) || null;
   const selectedTherapist = compatibleTherapists.find((therapist) => therapist.id === selectedTherapistId) || null;
   const nextAppointment = identifyState.data?.nextAppointment || null;
+  const existingClientName = String(identifyState.data?.client?.fullName || "").trim();
+  const clientFirstName = existingClientName ? existingClientName.split(/\s+/)[0] : "";
 
   const selectedTimezoneOption = useMemo(
     () =>
@@ -880,14 +882,12 @@ function BookingApp() {
     () => buildWhatsappHref(config.supportWhatsapp, "Hola, necesito ayuda para gestionar mi cita."),
     [config.supportWhatsapp]
   );
-  const supportFromConflictHref = useMemo(
-    () => buildWhatsappHref(config.supportWhatsapp, "Hola, necesito apoyo para reagendar o cancelar mi cita en Luna Mandala."),
-    [config.supportWhatsapp]
-  );
-
   const hasActiveHold = Boolean(holdState) && confirmState.status !== "success";
   const lockByHold = hasActiveHold;
-  const needsOnboardingForConfirmation = hasActiveHold && requiresOnboarding;
+  const isRescheduleFlow = decision === "reschedule";
+  const isBookAnotherFlow = decision === "book_another";
+  const lockByServiceSelection = isBookAnotherFlow && !selectedServiceId;
+  const needsOnboardingForConfirmation = hasActiveHold && requiresOnboarding && !isRescheduleFlow;
   const canConfirm = Boolean(holdState?.holdToken)
     && confirmState.status !== "loading"
     && (!needsOnboardingForConfirmation || onboardingIsValid);
@@ -1157,8 +1157,34 @@ function BookingApp() {
     selectedServiceId
   ]);
 
-  function resetFromIdentifyDownstream() {
-    setDecision("");
+  useEffect(() => {
+    if (confirmState.status === "success") {
+      return;
+    }
+
+    if (decision !== "book_another") {
+      return;
+    }
+
+    if (identifyState.status !== "success" || !isPhoneValid || !selectedServiceId || hasActiveHold) {
+      return;
+    }
+
+    void loadAvailability(selectedDateKey, true);
+  }, [
+    confirmState.status,
+    decision,
+    hasActiveHold,
+    identifyState.status,
+    isPhoneValid,
+    selectedDateKey,
+    selectedServiceId
+  ]);
+
+  function resetFromIdentifyDownstream({ keepDecision = false } = {}) {
+    if (!keepDecision) {
+      setDecision("");
+    }
     setAvailabilityState({
       status: "idle",
       data: null,
@@ -1260,7 +1286,10 @@ function BookingApp() {
     }
   }
 
-  async function fetchAvailabilityForDate(dateKey = selectedDateKey) {
+  async function fetchAvailabilityForDate(dateKey = selectedDateKey, overrides = {}) {
+    const effectiveServiceId = overrides.serviceId || selectedServiceId;
+    const effectiveTherapistId = overrides.therapistId || selectedTherapistId;
+
     return requestJson(`${config.apiBaseUrl}/public/booking/availability`, {
       method: "POST",
       headers: {
@@ -1269,20 +1298,26 @@ function BookingApp() {
       body: JSON.stringify({
         tenantSlug: config.tenantSlug,
         phoneE164: phoneForApi,
-        serviceId: selectedServiceId,
-        therapistId: selectedTherapistId || undefined,
+        serviceId: effectiveServiceId,
+        therapistId: effectiveTherapistId || undefined,
         date: dateKey || undefined,
         timezone: selectedTimezone
       })
     });
   }
 
-  async function loadAvailability(dateKey = selectedDateKey, skipDecisionCheck = false, preserveConfirmState = false) {
+  async function loadAvailability(
+    dateKey = selectedDateKey,
+    skipDecisionCheck = false,
+    preserveConfirmState = false,
+    overrides = {}
+  ) {
     const phoneValid = isPhoneValid;
     const identifyReady = identifyState.status === "success";
     const decisionReady = skipDecisionCheck || Boolean(decision);
+    const effectiveServiceId = overrides.serviceId || selectedServiceId;
 
-    if (!identifyReady || !phoneValid || !decisionReady || !selectedServiceId || hasActiveHold) {
+    if (!identifyReady || !phoneValid || !decisionReady || !effectiveServiceId || hasActiveHold) {
       return;
     }
 
@@ -1302,7 +1337,7 @@ function BookingApp() {
     }
 
     try {
-      const response = await fetchAvailabilityForDate(dateKey);
+      const response = await fetchAvailabilityForDate(dateKey, overrides);
       const hasSlots = Array.isArray(response?.slots) && response.slots.length > 0;
       setCalendarDateStatus((current) => ({
         ...current,
@@ -1328,9 +1363,40 @@ function BookingApp() {
     }
   }
 
-  async function handleDecisionReserveAnother() {
+  function handleDecisionReserveAnother() {
+    resetFromIdentifyDownstream({ keepDecision: true });
+    setSelectedServiceId("");
+    setSelectedTherapistId("");
     setDecision("book_another");
-    await loadAvailability(selectedDateKey, true);
+  }
+
+  async function handleDecisionReschedule() {
+    if (!nextAppointment?.id || !nextAppointment?.managementToken || !nextAppointment?.serviceId || !nextAppointment?.therapistId) {
+      setAvailabilityState({
+        status: "error",
+        data: null,
+        error: {
+          status: 409,
+          code: "RESCHEDULE_CONTEXT_MISSING",
+          message: "No tenemos datos suficientes para reagendar esta cita."
+        }
+      });
+      return;
+    }
+
+    resetFromIdentifyDownstream({ keepDecision: true });
+    setDecision("reschedule");
+    setSelectedServiceId(nextAppointment.serviceId);
+    setSelectedTherapistId(nextAppointment.therapistId);
+    await loadAvailability(
+      selectedDateKey,
+      true,
+      false,
+      {
+        serviceId: nextAppointment.serviceId,
+        therapistId: nextAppointment.therapistId
+      }
+    );
   }
 
   async function handleCreateHold(slot) {
@@ -1348,7 +1414,10 @@ function BookingApp() {
     });
 
     try {
-      const response = await requestJson(`${config.apiBaseUrl}/public/booking/hold`, {
+      const isReschedule = decision === "reschedule" && nextAppointment;
+      const response = await requestJson(
+        `${config.apiBaseUrl}/public/booking/${isReschedule ? "reschedule/hold" : "hold"}`,
+        {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -1356,10 +1425,19 @@ function BookingApp() {
         body: JSON.stringify({
           tenantSlug: config.tenantSlug,
           phoneE164: phoneForApi,
-          serviceId: selectedServiceId,
-          startsAt: slot.startsAt,
-          therapistId: slot.therapistId,
-          roomId: slot.roomId
+          ...(isReschedule
+            ? {
+                appointmentId: nextAppointment.id,
+                managementToken: nextAppointment.managementToken,
+                startsAt: slot.startsAt,
+                roomId: slot.roomId
+              }
+            : {
+                serviceId: selectedServiceId,
+                startsAt: slot.startsAt,
+                therapistId: slot.therapistId,
+                roomId: slot.roomId
+              })
         })
       });
 
@@ -1430,13 +1508,24 @@ function BookingApp() {
     });
 
     try {
-      const response = await requestJson(`${config.apiBaseUrl}/public/booking/confirm`, {
+      const isReschedule = decision === "reschedule" && nextAppointment;
+      const response = await requestJson(`${config.apiBaseUrl}/public/booking/${isReschedule ? "reschedule/confirm" : "confirm"}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Idempotency-Key": requestKey
         },
-        body: JSON.stringify(requestPayload)
+        body: JSON.stringify(
+          isReschedule
+            ? {
+                tenantSlug: config.tenantSlug,
+                phoneE164: phoneForApi,
+                appointmentId: nextAppointment.id,
+                managementToken: nextAppointment.managementToken,
+                holdToken: holdState.holdToken
+              }
+            : requestPayload
+        )
       });
 
       setConfirmState({
@@ -1565,7 +1654,18 @@ function BookingApp() {
 
     const service = appointment.serviceName || "Servicio";
     const therapist = appointment.therapistName || "Terapeuta";
-    const dateText = formatDateTime(appointment.startsAt, selectedTimezone);
+    const startsAtDate = new Date(appointment.startsAt);
+    const dateText = Number.isNaN(startsAtDate.getTime())
+      ? "--"
+      : startsAtDate.toLocaleString("es-BO", {
+          timeZone: selectedTimezone,
+          weekday: "long",
+          day: "2-digit",
+          month: "long",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true
+        });
     return `${service} - ${dateText} con ${therapist}`;
   }
 
@@ -1608,7 +1708,10 @@ function BookingApp() {
     ? (services.find((service) => service.id === String(holdState.serviceId))?.name || selectedService?.name || "Servicio")
     : "";
   const holdTimezoneShort = holdState ? formatTimezoneShort(holdState.startsAt, selectedTimezone) : selectedTimezone;
+  const confirmationStatus = confirmState.data?.status || "";
+  const isRescheduleConfirmation = confirmationStatus === "rescheduled";
   const confirmedAppointment = confirmState.data?.appointment || {};
+  const previousAppointmentAfterReschedule = confirmState.data?.previousAppointment || null;
   const confirmationMissingFields = [];
 
   if (confirmState.status === "success") {
@@ -1712,14 +1815,15 @@ function BookingApp() {
                       <button
                         type="button"
                         className={`service-item${isSelected ? " is-selected" : ""}`}
-                        disabled={isDisabled || lockByHold}
+                        disabled={isDisabled || lockByHold || isRescheduleFlow}
                         onClick={() => {
-                          if (lockByHold) {
+                          if (lockByHold || isRescheduleFlow) {
                             return;
                           }
+                          const keepDecision = decision === "book_another";
                           setSelectedServiceId(service.id);
                           setSelectedTherapistId("");
-                          resetFromIdentifyDownstream();
+                          resetFromIdentifyDownstream({ keepDecision });
                         }}
                       >
                         <span className="service-main">
@@ -1742,15 +1846,15 @@ function BookingApp() {
                 <select
                   value={selectedTherapistId}
                   onChange={(event) => {
-                    if (lockByHold) {
+                    if (lockByHold || isRescheduleFlow) {
                       return;
                     }
                     setSelectedTherapistId(event.target.value);
                     resetFromIdentifyDownstream();
                   }}
-                  disabled={!selectedServiceId || compatibleTherapists.length === 0 || lockByHold}
+                  disabled={!selectedServiceId || compatibleTherapists.length === 0 || lockByHold || isRescheduleFlow}
                 >
-                  <option value="">Recomendado automaticamente</option>
+                  <option value="">{isRescheduleFlow ? "Fijo por reagendamiento" : "Recomendado automaticamente"}</option>
                   {compatibleTherapists.map((therapist) => (
                     <option key={therapist.id} value={therapist.id}>
                       {therapist.displayName}
@@ -1759,9 +1863,11 @@ function BookingApp() {
                 </select>
               </label>
               <p className="therapist-helper">
-                {selectedTherapist
-                  ? `Seleccionaste a ${selectedTherapist.displayName}.`
-                  : "Terapeuta sugerido automaticamente."}
+                {isRescheduleFlow
+                  ? `Reagendando con ${nextAppointment?.therapistName || selectedTherapist?.displayName || "tu terapeuta original"}.`
+                  : (selectedTherapist
+                    ? `Seleccionaste a ${selectedTherapist.displayName}.`
+                    : "Terapeuta sugerido automaticamente.")}
               </p>
             </div>
 
@@ -1897,23 +2003,28 @@ function BookingApp() {
         ) : null}
 
         {identifyState.status === "success" && nextAppointment ? (
-          <div className="identify-state">
+          <div className="identify-state identify-state-existing">
             <div className="feedback feedback-warning" role="status">
-              <strong>Ya tienes cita</strong>
+              <strong>{clientFirstName ? `${clientFirstName}, ya tienes una cita` : "Ya tienes una cita"}</strong>
               <span>{formatAppointmentSummary(nextAppointment)}</span>
+              <span className="identify-existing-question">¿Que necesitas cambiar?</span>
             </div>
             <div className="actions">
-              <a className="btn btn-ghost" href={supportFromConflictHref} target="_blank" rel="noreferrer">
-                <WhatsappLogo size={18} weight="regular" aria-hidden="true" />
-                Reagendar/Cancelar (siguiente fase)
-              </a>
+              <button
+                type="button"
+                className={`btn ${isRescheduleFlow ? "btn-primary" : "btn-ghost"}`}
+                onClick={handleDecisionReschedule}
+                disabled={hasActiveHold}
+              >
+                Reagendar
+              </button>
               <button
                 type="button"
                 className="btn btn-primary"
                 onClick={handleDecisionReserveAnother}
                 disabled={hasActiveHold}
               >
-                Reservar otra sesion
+                Reservar otra terapia
               </button>
             </div>
           </div>
@@ -1932,6 +2043,10 @@ function BookingApp() {
             </div>
           </div>
 
+          {isBookAnotherFlow && !selectedServiceId ? (
+            <p className="feedback feedback-info">Elige la terapia que quieres reservar para mostrar horarios.</p>
+          ) : null}
+
           <div className="date-strip" role="tablist" aria-label="Fechas disponibles">
             {visibleDateKeys.map((dateKey) => {
               const chip = formatDateChip(dateKey, selectedTimezone);
@@ -1940,7 +2055,7 @@ function BookingApp() {
                   key={dateKey}
                   type="button"
                   className={`date-chip${selectedDateKey === dateKey ? " is-selected" : ""}`}
-                  disabled={lockByHold}
+                  disabled={lockByHold || lockByServiceSelection}
                   onClick={() => selectDate(dateKey)}
                 >
                   <span className="date-chip-weekday">{chip.dayLabel}</span>
@@ -1952,7 +2067,7 @@ function BookingApp() {
               type="button"
               className={`date-chip date-chip-calendar${showCalendar ? " is-open" : ""}`}
               onClick={() => setShowCalendar((current) => !current)}
-              disabled={lockByHold}
+              disabled={lockByHold || lockByServiceSelection}
               aria-expanded={showCalendar}
               aria-controls="booking-calendar-panel"
             >
@@ -1973,7 +2088,7 @@ function BookingApp() {
                   type="button"
                   className="icon-btn"
                   onClick={() => setCalendarMonthKey((current) => shiftMonthKey(current, -1))}
-                  disabled={lockByHold}
+                  disabled={lockByHold || lockByServiceSelection}
                 >
                   <CaretLeft size={18} aria-hidden="true" />
                 </button>
@@ -1982,7 +2097,7 @@ function BookingApp() {
                   type="button"
                   className="icon-btn"
                   onClick={() => setCalendarMonthKey((current) => shiftMonthKey(current, 1))}
-                  disabled={lockByHold}
+                  disabled={lockByHold || lockByServiceSelection}
                 >
                   <CaretRight size={18} aria-hidden="true" />
                 </button>
@@ -2002,7 +2117,7 @@ function BookingApp() {
 
                   const availabilityStatus = calendarDateStatus[day.dateKey] || "unknown";
                   const canSelect = availabilityStatus === "available";
-                  const isDisabled = day.disabled || lockByHold || !canSelect;
+                  const isDisabled = day.disabled || lockByHold || lockByServiceSelection || !canSelect;
 
                   return (
                     <button
@@ -2062,6 +2177,18 @@ function BookingApp() {
               <p className="hold-note">
                 Servicio, terapeuta, telefono, fecha y zona horaria quedan bloqueados para proteger este horario.
               </p>
+
+              {isBookAnotherFlow && nextAppointment ? (
+                <div className="dual-appointment-note" role="status">
+                  <strong>{clientFirstName || "Tendras"}{clientFirstName ? ", tendras entonces 2 citas:" : " entonces 2 citas:"}</strong>
+                  <ol>
+                    <li>{formatAppointmentSummary(nextAppointment)}</li>
+                    <li>
+                      {`${holdServiceName} - ${formatDateTime(holdState.startsAt, selectedTimezone)} con ${holdState.therapistName || "Por asignar"}`}
+                    </li>
+                  </ol>
+                </div>
+              ) : null}
 
               {needsOnboardingForConfirmation ? (
                 <div className="onboarding-panel">
@@ -2181,7 +2308,7 @@ function BookingApp() {
                     Confirmando...
                   </>
                 ) : (
-                  "Confirmar cita"
+                  (isRescheduleFlow ? "Confirmar reagendamiento" : (isBookAnotherFlow ? "Confirmar nueva terapia" : "Confirmar cita"))
                 )}
               </button>
             </div>
@@ -2327,10 +2454,19 @@ function BookingApp() {
           <div className="confirmation-head">
             <h2 className="section-title">
               <CalendarCheck size={20} weight="fill" aria-hidden="true" />
-              Tu cita esta confirmada
+              {isRescheduleConfirmation ? "Tu cita fue reagendada" : "Tu cita esta confirmada"}
             </h2>
-            <p className="confirmation-subtitle">Todo listo. Te esperamos en el horario reservado.</p>
+            <p className="confirmation-subtitle">
+              {isRescheduleConfirmation
+                ? "Listo. Actualizamos tu horario y liberamos la cita anterior."
+                : "Todo listo. Te esperamos en el horario reservado."}
+            </p>
           </div>
+          {isRescheduleConfirmation && previousAppointmentAfterReschedule ? (
+            <p className="confirmation-warning">
+              Cita anterior: {formatAppointmentSummary(previousAppointmentAfterReschedule)}.
+            </p>
+          ) : null}
           <div className="confirmation-code-wrap">
             <span className="confirmation-code-label">Codigo publico</span>
             <strong className="confirmation-code">{confirmedAppointment.publicCode || "--"}</strong>
