@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const { createAdminRouter } = require("../server/routes/admin.route");
 const { AdminAppointmentsError } = require("../server/services/adminAppointments.service");
+const { AdminClientsError } = require("../server/services/adminClients.service");
 const { AdminAuthError, verifyAdminToken } = require("../server/services/adminAuth.service");
 const { ValidationError } = require("../server/services/errors");
 const { signToken } = require("../server/utils/jwt");
@@ -622,4 +623,171 @@ test("POST /api/admin/appointments/:id/status returns 409 on invalid transition"
 
   assert.equal(res.statusCode, 409);
   assert.equal(res.payload.error.code, "APPOINTMENT_STATUS_TRANSITION_INVALID");
+});
+
+test("GET /api/admin/clients without token returns 401", async () => {
+  let requestedConnection = false;
+
+  const pool = {
+    async getConnection() {
+      requestedConnection = true;
+      return {
+        release() {}
+      };
+    }
+  };
+
+  const router = createAdminRouter({
+    getPool: () => pool
+  });
+
+  const handler = getRouteHandler(router, "/clients", "get");
+  const req = {
+    query: {},
+    get() {
+      return undefined;
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.payload.error.code, "ADMIN_TOKEN_REQUIRED");
+  assert.equal(requestedConnection, false);
+});
+
+test("GET /api/admin/clients with token returns clients payload", async () => {
+  const connection = {
+    released: false,
+    release() {
+      this.released = true;
+    }
+  };
+
+  let receivedArgs = null;
+
+  const router = createAdminRouter({
+    getPool: () => ({
+      async getConnection() {
+        return connection;
+      }
+    }),
+    verifyToken: () => ({ adminId: 7, centerId: 2, email: "owner@luna.com", role: "owner" }),
+    listClients: async (args) => {
+      receivedArgs = args;
+      return {
+        generatedAt: "2026-05-09T00:00:00.000Z",
+        center: { id: 2, slug: "luna", displayName: "Luna", timezone: "America/La_Paz" },
+        filters: { q: "ana", onboarding: "all", limit: 20 },
+        clients: []
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/clients", "get");
+  const req = {
+    query: { q: "ana", onboarding: "all", limit: "20" },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(connection.released, true);
+  assert.equal(receivedArgs.q, "ana");
+  assert.equal(receivedArgs.onboarding, "all");
+  assert.equal(receivedArgs.limit, "20");
+  assert.equal(receivedArgs.now instanceof Date, true);
+  assert.equal(receivedArgs.adminSession.centerId, 2);
+  assert.equal(Array.isArray(res.payload.clients), true);
+});
+
+test("GET /api/admin/clients/:id with token returns client detail", async () => {
+  const connection = {
+    released: false,
+    release() {
+      this.released = true;
+    }
+  };
+
+  let receivedArgs = null;
+
+  const router = createAdminRouter({
+    getPool: () => ({
+      async getConnection() {
+        return connection;
+      }
+    }),
+    verifyToken: () => ({ adminId: 7, centerId: 2, email: "owner@luna.com", role: "owner" }),
+    getClientById: async (args) => {
+      receivedArgs = args;
+      return {
+        generatedAt: "2026-05-09T00:00:00.000Z",
+        center: { id: 2, slug: "luna", displayName: "Luna", timezone: "America/La_Paz" },
+        client: { id: 12, fullName: "Ana Luna" },
+        appointmentsHistory: [],
+        payments: []
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/clients/:id", "get");
+  const req = {
+    params: { id: "12" },
+    query: {},
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(connection.released, true);
+  assert.equal(receivedArgs.clientId, "12");
+  assert.equal(receivedArgs.now instanceof Date, true);
+  assert.equal(receivedArgs.adminSession.centerId, 2);
+  assert.equal(res.payload.client.id, 12);
+});
+
+test("GET /api/admin/clients/:id returns 404 for missing client", async () => {
+  const connection = {
+    release() {}
+  };
+
+  const router = createAdminRouter({
+    getPool: () => ({
+      async getConnection() {
+        return connection;
+      }
+    }),
+    verifyToken: () => ({ adminId: 7, centerId: 2, email: "owner@luna.com", role: "owner" }),
+    getClientById: async () => {
+      throw new AdminClientsError({
+        status: 404,
+        code: "CLIENT_NOT_FOUND",
+        message: "Cliente no encontrado"
+      });
+    }
+  });
+
+  const handler = getRouteHandler(router, "/clients/:id", "get");
+  const req = {
+    params: { id: "9999" },
+    query: {},
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 404);
+  assert.equal(res.payload.error.code, "CLIENT_NOT_FOUND");
 });

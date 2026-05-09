@@ -177,6 +177,18 @@ function buildQuery({ includeUpcoming, limit }) {
   return params.toString();
 }
 
+function buildClientsQuery({ q, onboarding, limit }) {
+  const params = new URLSearchParams();
+  params.set("onboarding", onboarding || "all");
+  params.set("limit", String(limit || 20));
+
+  if (String(q || "").trim()) {
+    params.set("q", String(q).trim());
+  }
+
+  return params.toString();
+}
+
 function getErrorMessage(payload) {
   if (!payload || typeof payload !== "object") {
     return "No se pudo completar la solicitud de admin.";
@@ -617,6 +629,222 @@ function AppointmentDrawer({
   );
 }
 
+function ClientTable({ clients, timezone, onSelect }) {
+  if (!clients.length) {
+    return <p className="empty-state">No hay clientes para este filtro.</p>;
+  }
+
+  return (
+    <>
+      <div className="table-wrap" role="region" aria-label="Tabla de clientes">
+        <table className="appointments-table clients-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>WhatsApp</th>
+              <th>Onboarding</th>
+              <th>Total citas</th>
+              <th>Pending</th>
+              <th>Confirmed</th>
+              <th>Completed</th>
+              <th>Cancelled</th>
+              <th>No show</th>
+              <th>Proxima cita</th>
+              <th>Ultima cita</th>
+            </tr>
+          </thead>
+          <tbody>
+            {clients.map((client) => (
+              <tr key={client.id}>
+                <td>
+                  <button
+                    type="button"
+                    className="table-open"
+                    onClick={() => onSelect(client.id)}
+                    title="Abrir ficha cliente"
+                  >
+                    {client.fullName || "Sin nombre"}
+                  </button>
+                </td>
+                <td>{client.whatsapp || "-"}</td>
+                <td>{client.onboardingComplete ? "Completo" : "Incompleto"}</td>
+                <td>{client.stats?.totalAppointments || 0}</td>
+                <td>{client.stats?.pendingCount || 0}</td>
+                <td>{client.stats?.confirmedCount || 0}</td>
+                <td>{client.stats?.completedCount || 0}</td>
+                <td>{client.stats?.cancelledCount || 0}</td>
+                <td>{client.stats?.noShowCount || 0}</td>
+                <td>
+                  {client.nextAppointment ? formatDateTime(client.nextAppointment.startsAt, timezone) : "-"}
+                </td>
+                <td>
+                  {client.lastAppointment ? formatDateTime(client.lastAppointment.startsAt, timezone) : "-"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <ul className="appointments-cards" aria-label="Lista de clientes mobile">
+        {clients.map((client) => (
+          <li key={`client-mobile-${client.id}`} className="appointment-card">
+            <button type="button" className="card-open" onClick={() => onSelect(client.id)}>
+              <span className="appointment-title">{client.fullName || "Sin nombre"}</span>
+              <StatusChip status={client.onboardingComplete ? "confirmed" : "pending"} />
+            </button>
+            <p className="appointment-line">WhatsApp: {client.whatsapp || "-"}</p>
+            <p className="appointment-line">Total citas: {client.stats?.totalAppointments || 0}</p>
+            <p className="appointment-line">
+              Proxima: {client.nextAppointment ? formatDateTime(client.nextAppointment.startsAt, timezone) : "-"}
+            </p>
+            <p className="appointment-line">
+              Ultima: {client.lastAppointment ? formatDateTime(client.lastAppointment.startsAt, timezone) : "-"}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function ClientDrawer({ open, detail, loading, error, timezone, onClose }) {
+  if (!open) {
+    return null;
+  }
+
+  const client = detail?.client || null;
+  const history = detail?.appointmentsHistory || [];
+  const payments = detail?.payments || [];
+  const whatsappDigits = sanitizePhoneForWa(client?.whatsapp);
+
+  return (
+    <div className="drawer-overlay" role="presentation" onClick={onClose}>
+      <aside
+        className="drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Detalle de cliente"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="drawer-header">
+          <div>
+            <p className="drawer-kicker">Ficha cliente</p>
+            <h2>{client?.fullName || "Cliente"}</h2>
+          </div>
+          <button type="button" className="drawer-close" onClick={onClose} aria-label="Cerrar cliente">
+            <X size={18} weight="bold" />
+          </button>
+        </header>
+
+        {loading ? (
+          <p className="feedback drawer-feedback">Cargando cliente...</p>
+        ) : null}
+
+        {!loading && error ? <p className="feedback error drawer-feedback">{error}</p> : null}
+
+        {!loading && !error && client ? (
+          <div className="drawer-body">
+            <DrawerSection title="Datos">
+              <dl className="drawer-grid">
+                <dt>Nombre</dt>
+                <dd>{client.fullName || "-"}</dd>
+                <dt>WhatsApp</dt>
+                <dd>
+                  {client.whatsapp || "-"}
+                  {whatsappDigits ? (
+                    <a href={`https://wa.me/${whatsappDigits}`} target="_blank" rel="noreferrer" className="drawer-link">
+                      Abrir chat
+                    </a>
+                  ) : null}
+                </dd>
+                <dt>First name</dt>
+                <dd>{client.firstName || "-"}</dd>
+                <dt>Last name</dt>
+                <dd>{client.lastName || "-"}</dd>
+                <dt>Edad</dt>
+                <dd>{client.age ?? "-"}</dd>
+                <dt>Ciudad</dt>
+                <dd>{client.city || "-"}</dd>
+                <dt>Fuente</dt>
+                <dd>{client.source || "-"}</dd>
+                <dt>Onboarding</dt>
+                <dd>{client.onboardingComplete ? "Completo" : "Incompleto"}</dd>
+                <dt>Onboarding at</dt>
+                <dd>{formatDateTime(client.onboardingCompletedAt, timezone)}</dd>
+                <dt>Creado</dt>
+                <dd>{formatDateTime(client.createdAt, timezone)}</dd>
+              </dl>
+            </DrawerSection>
+
+            <DrawerSection title="Stats citas">
+              <ul className="client-stats-list">
+                <li><span>Total</span><strong>{client.stats?.totalAppointments || 0}</strong></li>
+                <li><span>Pending</span><strong>{client.stats?.pendingCount || 0}</strong></li>
+                <li><span>Confirmed</span><strong>{client.stats?.confirmedCount || 0}</strong></li>
+                <li><span>Completed</span><strong>{client.stats?.completedCount || 0}</strong></li>
+                <li><span>Cancelled</span><strong>{client.stats?.cancelledCount || 0}</strong></li>
+                <li><span>No show</span><strong>{client.stats?.noShowCount || 0}</strong></li>
+              </ul>
+            </DrawerSection>
+
+            <DrawerSection title="Proxima / Ultima cita">
+              <ul className="drawer-list">
+                <li>
+                  <span>Proxima</span>
+                  <span>
+                    {client.nextAppointment ? formatDateTime(client.nextAppointment.startsAt, timezone) : "-"}
+                  </span>
+                </li>
+                <li>
+                  <span>Ultima</span>
+                  <span>
+                    {client.lastAppointment ? formatDateTime(client.lastAppointment.startsAt, timezone) : "-"}
+                  </span>
+                </li>
+              </ul>
+            </DrawerSection>
+
+            <DrawerSection title="Historial citas">
+              {history.length ? (
+                <ul className="drawer-list">
+                  {history.map((appointment) => (
+                    <li key={appointment.id}>
+                      <span>
+                        {appointment.serviceName || "-"} · {appointment.status}
+                      </span>
+                      <span>{formatDateTime(appointment.startsAt, timezone)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="empty-state compact">Sin historial de citas.</p>
+              )}
+            </DrawerSection>
+
+            <DrawerSection title="Pagos">
+              {payments.length ? (
+                <ul className="drawer-list">
+                  {payments.map((payment) => (
+                    <li key={payment.id}>
+                      <span>
+                        {payment.status} · {payment.amount} {payment.currencyCode}
+                      </span>
+                      <span>{formatDateTime(payment.createdAt, timezone)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="empty-state compact">Sin pagos registrados.</p>
+              )}
+            </DrawerSection>
+          </div>
+        ) : null}
+      </aside>
+    </div>
+  );
+}
+
 function AdminApp() {
   const [theme, setTheme] = useState(readTheme);
   const [authToken, setAuthToken] = useState(readStoredToken);
@@ -625,6 +853,7 @@ function AdminApp() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [activeSection, setActiveSection] = useState("control");
 
   const [activeTab, setActiveTab] = useState("today");
   const [includeUpcoming, setIncludeUpcoming] = useState(true);
@@ -641,6 +870,25 @@ function AdminApp() {
   const [detailPayload, setDetailPayload] = useState(null);
   const [mutationLoading, setMutationLoading] = useState(false);
   const [mutationError, setMutationError] = useState("");
+  const [clientsDraft, setClientsDraft] = useState({
+    q: "",
+    onboarding: "all",
+    limit: 20
+  });
+  const [clientsFilters, setClientsFilters] = useState({
+    q: "",
+    onboarding: "all",
+    limit: 20
+  });
+  const [clientsRefreshTick, setClientsRefreshTick] = useState(0);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientsError, setClientsError] = useState("");
+  const [clientsPayload, setClientsPayload] = useState(null);
+  const [clientDrawerOpen, setClientDrawerOpen] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [clientDetailLoading, setClientDetailLoading] = useState(false);
+  const [clientDetailError, setClientDetailError] = useState("");
+  const [clientDetailPayload, setClientDetailPayload] = useState(null);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -659,6 +907,10 @@ function AdminApp() {
     setDrawerOpen(false);
     setSelectedAppointmentId(null);
     setDetailPayload(null);
+    setClientsPayload(null);
+    setClientDrawerOpen(false);
+    setSelectedClientId(null);
+    setClientDetailPayload(null);
     setAuthError("Sesion expirada o token invalido. Inicia sesion nuevamente.");
   }, []);
 
@@ -692,11 +944,41 @@ function AdminApp() {
     [authToken, handleUnauthorized]
   );
 
+  const fetchClientDetail = useCallback(
+    async (clientId, { signal } = {}) => {
+      if (!authToken || !clientId) {
+        return null;
+      }
+
+      const response = await fetch(`/api/admin/clients/${clientId}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${authToken}`
+        },
+        signal
+      });
+
+      const nextPayload = await response.json();
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return null;
+      }
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(nextPayload));
+      }
+
+      return nextPayload;
+    },
+    [authToken, handleUnauthorized]
+  );
+
   useEffect(() => {
     const controller = new AbortController();
 
     async function loadDashboard() {
-      if (!authToken) {
+      if (!authToken || activeSection !== "control") {
         setPayload(null);
         setIsLoading(false);
         setError("");
@@ -744,10 +1026,65 @@ function AdminApp() {
     return () => {
       controller.abort();
     };
-  }, [authToken, includeUpcoming, limit, refreshTick, handleUnauthorized]);
+  }, [authToken, activeSection, includeUpcoming, limit, refreshTick, handleUnauthorized]);
 
   useEffect(() => {
-    if (!drawerOpen || !selectedAppointmentId || !authToken) {
+    const controller = new AbortController();
+
+    async function loadClients() {
+      if (!authToken || activeSection !== "clientes") {
+        setClientsPayload(null);
+        setClientsLoading(false);
+        setClientsError("");
+        return;
+      }
+
+      setClientsLoading(true);
+      setClientsError("");
+
+      try {
+        const query = buildClientsQuery(clientsFilters);
+        const response = await fetch(`/api/admin/clients?${query}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${authToken}`
+          },
+          signal: controller.signal
+        });
+
+        const nextPayload = await response.json();
+
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(getErrorMessage(nextPayload));
+        }
+
+        setClientsPayload(nextPayload);
+      } catch (fetchError) {
+        if (fetchError.name === "AbortError") {
+          return;
+        }
+
+        setClientsPayload(null);
+        setClientsError(fetchError.message || "No se pudo cargar el listado de clientes.");
+      } finally {
+        setClientsLoading(false);
+      }
+    }
+
+    loadClients();
+
+    return () => {
+      controller.abort();
+    };
+  }, [authToken, activeSection, clientsFilters, clientsRefreshTick, handleUnauthorized]);
+
+  useEffect(() => {
+    if (activeSection !== "control" || !drawerOpen || !selectedAppointmentId || !authToken) {
       return;
     }
 
@@ -782,10 +1119,51 @@ function AdminApp() {
     return () => {
       controller.abort();
     };
-  }, [drawerOpen, selectedAppointmentId, authToken, fetchAppointmentDetail]);
+  }, [activeSection, drawerOpen, selectedAppointmentId, authToken, fetchAppointmentDetail]);
 
-  const timezone = payload?.center?.timezone || "America/La_Paz";
+  useEffect(() => {
+    if (activeSection !== "clientes" || !clientDrawerOpen || !selectedClientId || !authToken) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function loadClientDetail() {
+      setClientDetailLoading(true);
+      setClientDetailError("");
+
+      try {
+        const nextPayload = await fetchClientDetail(selectedClientId, {
+          signal: controller.signal
+        });
+
+        if (nextPayload) {
+          setClientDetailPayload(nextPayload);
+        }
+      } catch (fetchError) {
+        if (fetchError.name === "AbortError") {
+          return;
+        }
+
+        setClientDetailPayload(null);
+        setClientDetailError(fetchError.message || "No se pudo cargar la ficha del cliente.");
+      } finally {
+        setClientDetailLoading(false);
+      }
+    }
+
+    loadClientDetail();
+
+    return () => {
+      controller.abort();
+    };
+  }, [activeSection, clientDrawerOpen, selectedClientId, authToken, fetchClientDetail]);
+
+  const timezone = payload?.center?.timezone || clientsPayload?.center?.timezone || "America/La_Paz";
   const generatedAtLabel = payload ? formatDateTime(payload.generatedAt, timezone) : "-";
+  const clientsGeneratedAtLabel = clientsPayload
+    ? formatDateTime(clientsPayload.generatedAt, timezone)
+    : "-";
 
   const summary = useMemo(() => {
     return (
@@ -832,6 +1210,25 @@ function AdminApp() {
     ];
   }, [listAppointments]);
 
+  const listedClients = clientsPayload?.clients || [];
+
+  const activateSection = useCallback((sectionId) => {
+    if (sectionId !== "control" && sectionId !== "clientes") {
+      return;
+    }
+
+    setActiveSection(sectionId);
+    setDrawerOpen(false);
+    setSelectedAppointmentId(null);
+    setDetailPayload(null);
+    setDetailError("");
+    setMutationError("");
+    setClientDrawerOpen(false);
+    setSelectedClientId(null);
+    setClientDetailPayload(null);
+    setClientDetailError("");
+  }, []);
+
   const openDrawer = useCallback((appointmentId) => {
     setSelectedAppointmentId(appointmentId);
     setDrawerOpen(true);
@@ -847,6 +1244,20 @@ function AdminApp() {
     setDetailError("");
     setMutationLoading(false);
     setMutationError("");
+  }, []);
+
+  const openClientDrawer = useCallback((clientId) => {
+    setSelectedClientId(clientId);
+    setClientDrawerOpen(true);
+    setClientDetailPayload(null);
+    setClientDetailError("");
+  }, []);
+
+  const closeClientDrawer = useCallback(() => {
+    setClientDrawerOpen(false);
+    setSelectedClientId(null);
+    setClientDetailPayload(null);
+    setClientDetailError("");
   }, []);
 
   async function handleLogin(event) {
@@ -886,6 +1297,7 @@ function AdminApp() {
       setLoginPassword("");
       setError("");
       setRefreshTick((value) => value + 1);
+      setClientsRefreshTick((value) => value + 1);
     } catch (loginRequestError) {
       setAuthError(loginRequestError.message || "No se pudo iniciar sesion");
     } finally {
@@ -906,6 +1318,13 @@ function AdminApp() {
     setDetailPayload(null);
     setDetailError("");
     setMutationError("");
+    setClientsPayload(null);
+    setClientsError("");
+    setClientDrawerOpen(false);
+    setSelectedClientId(null);
+    setClientDetailPayload(null);
+    setClientDetailError("");
+    setActiveSection("control");
   }
 
   async function handleStatusChange(nextStatus) {
@@ -956,6 +1375,33 @@ function AdminApp() {
     }
   }
 
+  function handleClientSearchSubmit(event) {
+    event.preventDefault();
+    setClientsFilters({
+      q: clientsDraft.q,
+      onboarding: clientsDraft.onboarding,
+      limit: Number(clientsDraft.limit) || 20
+    });
+  }
+
+  function handleClientFiltersReset() {
+    const next = {
+      q: "",
+      onboarding: "all",
+      limit: 20
+    };
+    setClientsDraft(next);
+    setClientsFilters(next);
+    setClientsRefreshTick((value) => value + 1);
+  }
+
+  const sectionTitle = activeSection === "clientes" ? "Clientes" : "Control";
+  const sectionCenterName =
+    payload?.center?.displayName || clientsPayload?.center?.displayName || "-";
+  const canOpenSection = (sectionId) => sectionId === "control" || sectionId === "clientes";
+  const isControlSection = activeSection === "control";
+  const isClientsSection = activeSection === "clientes";
+
   return (
     <div className="admin-shell">
       <aside className="sidebar">
@@ -966,13 +1412,29 @@ function AdminApp() {
         <nav className="sidebar-nav" aria-label="Menu Admin">
           {MENU.map((item) => {
             const MenuIcon = item.Icon;
-            const isActive = item.id === "control";
+            const isActive = item.id === activeSection;
+
+            if (canOpenSection(item.id)) {
+              return (
+                <button
+                  type="button"
+                  className={`nav-item nav-item-button${isActive ? " is-active" : ""}`}
+                  key={item.id}
+                  onClick={() => activateSection(item.id)}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  <MenuIcon size={20} weight={isActive ? "fill" : "regular"} aria-hidden="true" />
+                  <p className="nav-label">{item.label}</p>
+                  <span className={`nav-phase${isActive ? " nav-phase-active" : ""}`}>{item.phase}</span>
+                </button>
+              );
+            }
 
             return (
               <div className={`nav-item${isActive ? " is-active" : ""}`} key={item.id} aria-current={isActive ? "page" : undefined}>
-                <MenuIcon size={20} weight={isActive ? "fill" : "regular"} aria-hidden="true" />
+                <MenuIcon size={20} weight="regular" aria-hidden="true" />
                 <p className="nav-label">{item.label}</p>
-                <span className={`nav-phase${isActive ? " nav-phase-active" : ""}`}>{item.phase}</span>
+                <span className="nav-phase">{item.phase}</span>
               </div>
             );
           })}
@@ -992,8 +1454,8 @@ function AdminApp() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Agenda Luna Mandala</p>
-            <h1>Control</h1>
-            <p className="subtle-line">Centro: {payload?.center?.displayName || "-"}</p>
+            <h1>{sectionTitle}</h1>
+            <p className="subtle-line">Centro: {sectionCenterName}</p>
           </div>
 
           <div className="controls">
@@ -1004,7 +1466,7 @@ function AdminApp() {
               </div>
             ) : null}
 
-            {authToken ? (
+            {authToken && isControlSection ? (
               <>
                 <label className="control-field" htmlFor="limit-select">
                   <span>Limit</span>
@@ -1034,12 +1496,14 @@ function AdminApp() {
                 <button type="button" className="refresh-button" onClick={() => setRefreshTick((value) => value + 1)}>
                   Actualizar
                 </button>
-
-                <button type="button" className="logout-button" onClick={handleLogout}>
-                  <SignOut size={16} weight="regular" aria-hidden="true" />
-                  <span>Salir</span>
-                </button>
               </>
+            ) : null}
+
+            {authToken ? (
+              <button type="button" className="logout-button" onClick={handleLogout}>
+                <SignOut size={16} weight="regular" aria-hidden="true" />
+                <span>Salir</span>
+              </button>
             ) : null}
           </div>
         </header>
@@ -1084,167 +1548,278 @@ function AdminApp() {
             </section>
           ) : (
             <>
-              <section className="meta-strip" aria-label="Filtros activos">
-                <p>
-                  Fecha: <strong>{payload?.filters?.date || "today"}</strong>
-                </p>
-                <p>
-                  Upcoming: <strong>{toBoolLabel(includeUpcoming)}</strong>
-                </p>
-                <p>
-                  Ultima carga: <strong>{generatedAtLabel}</strong>
-                </p>
-              </section>
-
-              <section className="command-bar" aria-label="Vistas internas control">
-                {VIEW_TABS.map((tab) => {
-                  const Icon = tab.Icon;
-                  const active = activeTab === tab.id;
-
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      className={`tab-button${active ? " is-active" : ""}`}
-                      onClick={() => setActiveTab(tab.id)}
-                    >
-                      <Icon size={16} weight={active ? "fill" : "regular"} />
-                      <span>{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </section>
-
-              {isLoading ? <p className="feedback">Cargando tablero...</p> : null}
-              {!isLoading && error ? <p className="feedback error">{error}</p> : null}
-
-              {!isLoading && !error && payload ? (
+              {isControlSection ? (
                 <>
-                  {activeTab === "today" ? (
+                  <section className="meta-strip" aria-label="Filtros activos">
+                    <p>
+                      Fecha: <strong>{payload?.filters?.date || "today"}</strong>
+                    </p>
+                    <p>
+                      Upcoming: <strong>{toBoolLabel(includeUpcoming)}</strong>
+                    </p>
+                    <p>
+                      Ultima carga: <strong>{generatedAtLabel}</strong>
+                    </p>
+                  </section>
+
+                  <section className="command-bar" aria-label="Vistas internas control">
+                    {VIEW_TABS.map((tab) => {
+                      const Icon = tab.Icon;
+                      const active = activeTab === tab.id;
+
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          className={`tab-button${active ? " is-active" : ""}`}
+                          onClick={() => setActiveTab(tab.id)}
+                        >
+                          <Icon size={16} weight={active ? "fill" : "regular"} />
+                          <span>{tab.label}</span>
+                        </button>
+                      );
+                    })}
+                  </section>
+
+                  {isLoading ? <p className="feedback">Cargando tablero...</p> : null}
+                  {!isLoading && error ? <p className="feedback error">{error}</p> : null}
+
+                  {!isLoading && !error && payload ? (
                     <>
-                      <section className="summary-grid" aria-label="Resumen por estado">
-                        <SummaryCard label="Pending" value={summary.pending} className="status-pending" />
-                        <SummaryCard label="Confirmed" value={summary.confirmed} className="status-confirmed" />
-                        <SummaryCard label="Cancelled" value={summary.cancelled} className="status-cancelled" />
-                        <SummaryCard label="Completed" value={summary.completed} className="status-completed" />
-                        <SummaryCard label="No show" value={summary.no_show} className="status-no-show" />
-                        <SummaryCard label="Total" value={summary.total} className="status-total" />
-                      </section>
+                      {activeTab === "today" ? (
+                        <>
+                          <section className="summary-grid" aria-label="Resumen por estado">
+                            <SummaryCard label="Pending" value={summary.pending} className="status-pending" />
+                            <SummaryCard label="Confirmed" value={summary.confirmed} className="status-confirmed" />
+                            <SummaryCard label="Cancelled" value={summary.cancelled} className="status-cancelled" />
+                            <SummaryCard label="Completed" value={summary.completed} className="status-completed" />
+                            <SummaryCard label="No show" value={summary.no_show} className="status-no-show" />
+                            <SummaryCard label="Total" value={summary.total} className="status-total" />
+                          </section>
 
-                      <section className="panel" aria-label="Casos prioritarios">
-                        <div className="panel-heading">
-                          <h2>Casos</h2>
-                          <p>Pending / No show / Canceladas</p>
-                        </div>
-                        <div className="cases-grid">
-                          {casesByStatus.map((group) => (
-                            <article key={group.status} className="case-column">
-                              <div className="case-column-head">
-                                <StatusChip status={group.status} />
-                                <span>{group.appointments.length}</span>
+                          <section className="panel" aria-label="Casos prioritarios">
+                            <div className="panel-heading">
+                              <h2>Casos</h2>
+                              <p>Pending / No show / Canceladas</p>
+                            </div>
+                            <div className="cases-grid">
+                              {casesByStatus.map((group) => (
+                                <article key={group.status} className="case-column">
+                                  <div className="case-column-head">
+                                    <StatusChip status={group.status} />
+                                    <span>{group.appointments.length}</span>
+                                  </div>
+                                  {group.appointments.length ? (
+                                    <ul className="case-list">
+                                      {group.appointments.map((item) => (
+                                        <li key={`case-${group.status}-${item.id}`}>
+                                          <button
+                                            type="button"
+                                            className="case-item"
+                                            onClick={() => openDrawer(item.id)}
+                                          >
+                                            <strong>{item.client.fullName || "Sin nombre"}</strong>
+                                            <span>{formatDateTime(item.startsAt, timezone)}</span>
+                                            <span>{item.publicCode || "-"}</span>
+                                          </button>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <p className="empty-state compact">Sin casos en este estado.</p>
+                                  )}
+                                </article>
+                              ))}
+                            </div>
+                          </section>
+
+                          <section className="panel" aria-label="Citas de hoy">
+                            <div className="panel-heading">
+                              <h2>Citas de hoy</h2>
+                              <p>{todayAppointments.length} registros</p>
+                            </div>
+                            <AppointmentTable
+                              appointments={todayAppointments}
+                              timezone={timezone}
+                              onSelect={openDrawer}
+                            />
+                          </section>
+
+                          {includeUpcoming ? (
+                            <section className="panel" aria-label="Proximas citas">
+                              <div className="panel-heading">
+                                <h2>Proximas citas</h2>
+                                <p>{upcomingAppointments.length} registros</p>
                               </div>
-                              {group.appointments.length ? (
-                                <ul className="case-list">
-                                  {group.appointments.map((item) => (
-                                    <li key={`case-${group.status}-${item.id}`}>
-                                      <button
-                                        type="button"
-                                        className="case-item"
-                                        onClick={() => openDrawer(item.id)}
-                                      >
-                                        <strong>{item.client.fullName || "Sin nombre"}</strong>
-                                        <span>{formatDateTime(item.startsAt, timezone)}</span>
-                                        <span>{item.publicCode || "-"}</span>
-                                      </button>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <p className="empty-state compact">Sin casos en este estado.</p>
-                              )}
-                            </article>
-                          ))}
-                        </div>
-                      </section>
+                              <AppointmentTable
+                                appointments={upcomingAppointments}
+                                timezone={timezone}
+                                onSelect={openDrawer}
+                              />
+                            </section>
+                          ) : null}
 
-                      <section className="panel" aria-label="Citas de hoy">
-                        <div className="panel-heading">
-                          <h2>Citas de hoy</h2>
-                          <p>{todayAppointments.length} registros</p>
-                        </div>
-                        <AppointmentTable
-                          appointments={todayAppointments}
-                          timezone={timezone}
-                          onSelect={openDrawer}
-                        />
-                      </section>
+                          <section className="panel" aria-label="Ultimas citas creadas">
+                            <div className="panel-heading">
+                              <h2>Ultimas citas creadas</h2>
+                              <p>{recentAppointments.length} registros</p>
+                            </div>
+                            <AppointmentTable
+                              appointments={recentAppointments}
+                              timezone={timezone}
+                              onSelect={openDrawer}
+                            />
+                          </section>
+                        </>
+                      ) : null}
 
-                      {includeUpcoming ? (
-                        <section className="panel" aria-label="Proximas citas">
+                      {activeTab === "timeline" ? (
+                        <section className="panel" aria-label="Timeline real de citas">
                           <div className="panel-heading">
-                            <h2>Proximas citas</h2>
-                            <p>{upcomingAppointments.length} registros</p>
+                            <h2>Timeline</h2>
+                            <p>{timelineAppointments.length} citas</p>
                           </div>
-                          <AppointmentTable
-                            appointments={upcomingAppointments}
+                          <TimelineView
+                            appointments={timelineAppointments}
                             timezone={timezone}
                             onSelect={openDrawer}
                           />
                         </section>
                       ) : null}
 
-                      <section className="panel" aria-label="Ultimas citas creadas">
-                        <div className="panel-heading">
-                          <h2>Ultimas citas creadas</h2>
-                          <p>{recentAppointments.length} registros</p>
-                        </div>
-                        <AppointmentTable
-                          appointments={recentAppointments}
-                          timezone={timezone}
-                          onSelect={openDrawer}
-                        />
-                      </section>
+                      {activeTab === "rooms" ? (
+                        <section className="panel" aria-label="Vista por salas">
+                          <div className="panel-heading">
+                            <h2>Salas</h2>
+                            <p>{listAppointments.length} citas visibles</p>
+                          </div>
+                          <RoomsView
+                            appointments={listAppointments}
+                            timezone={timezone}
+                            onSelect={openDrawer}
+                          />
+                        </section>
+                      ) : null}
+
+                      {activeTab === "list" ? (
+                        <section className="panel" aria-label="Lista completa">
+                          <div className="panel-heading">
+                            <h2>Lista</h2>
+                            <p>{listAppointments.length} citas</p>
+                          </div>
+                          <AppointmentTable
+                            appointments={listAppointments}
+                            timezone={timezone}
+                            onSelect={openDrawer}
+                          />
+                        </section>
+                      ) : null}
                     </>
                   ) : null}
+                </>
+              ) : null}
 
-                  {activeTab === "timeline" ? (
-                    <section className="panel" aria-label="Timeline real de citas">
-                      <div className="panel-heading">
-                        <h2>Timeline</h2>
-                        <p>{timelineAppointments.length} citas</p>
-                      </div>
-                      <TimelineView
-                        appointments={timelineAppointments}
-                        timezone={timezone}
-                        onSelect={openDrawer}
-                      />
-                    </section>
-                  ) : null}
+              {isClientsSection ? (
+                <>
+                  <section className="panel" aria-label="Filtros clientes">
+                    <form className="client-command-bar" onSubmit={handleClientSearchSubmit}>
+                      <label className="client-filter-field" htmlFor="client-search">
+                        <span>Buscar</span>
+                        <input
+                          id="client-search"
+                          type="search"
+                          value={clientsDraft.q}
+                          onChange={(event) =>
+                            setClientsDraft((value) => ({ ...value, q: event.target.value }))
+                          }
+                          placeholder="Nombre o WhatsApp"
+                        />
+                      </label>
 
-                  {activeTab === "rooms" ? (
-                    <section className="panel" aria-label="Vista por salas">
-                      <div className="panel-heading">
-                        <h2>Salas</h2>
-                        <p>{listAppointments.length} citas visibles</p>
-                      </div>
-                      <RoomsView
-                        appointments={listAppointments}
-                        timezone={timezone}
-                        onSelect={openDrawer}
-                      />
-                    </section>
-                  ) : null}
+                      <label className="client-filter-field" htmlFor="client-onboarding">
+                        <span>Onboarding</span>
+                        <select
+                          id="client-onboarding"
+                          className="control-input"
+                          value={clientsDraft.onboarding}
+                          onChange={(event) =>
+                            setClientsDraft((value) => ({
+                              ...value,
+                              onboarding: event.target.value
+                            }))
+                          }
+                        >
+                          <option value="all">Todos</option>
+                          <option value="complete">Completo</option>
+                          <option value="incomplete">Incompleto</option>
+                        </select>
+                      </label>
 
-                  {activeTab === "list" ? (
-                    <section className="panel" aria-label="Lista completa">
-                      <div className="panel-heading">
-                        <h2>Lista</h2>
-                        <p>{listAppointments.length} citas</p>
+                      <label className="client-filter-field" htmlFor="client-limit">
+                        <span>Limit</span>
+                        <select
+                          id="client-limit"
+                          className="control-input"
+                          value={clientsDraft.limit}
+                          onChange={(event) =>
+                            setClientsDraft((value) => ({
+                              ...value,
+                              limit: Number(event.target.value)
+                            }))
+                          }
+                        >
+                          <option value={10}>10</option>
+                          <option value={20}>20</option>
+                          <option value={30}>30</option>
+                          <option value={50}>50</option>
+                        </select>
+                      </label>
+
+                      <div className="client-command-actions">
+                        <button type="submit" className="refresh-button">Buscar</button>
+                        <button
+                          type="button"
+                          className="logout-button"
+                          onClick={handleClientFiltersReset}
+                        >
+                          Limpiar
+                        </button>
+                        <button
+                          type="button"
+                          className="refresh-button"
+                          onClick={() => setClientsRefreshTick((value) => value + 1)}
+                        >
+                          Actualizar
+                        </button>
                       </div>
-                      <AppointmentTable
-                        appointments={listAppointments}
+                    </form>
+                  </section>
+
+                  <section className="meta-strip" aria-label="Filtros activos clientes">
+                    <p>
+                      Filtro q: <strong>{clientsFilters.q || "-"}</strong>
+                    </p>
+                    <p>
+                      Onboarding: <strong>{clientsFilters.onboarding}</strong>
+                    </p>
+                    <p>
+                      Ultima carga: <strong>{clientsGeneratedAtLabel}</strong>
+                    </p>
+                  </section>
+
+                  {clientsLoading ? <p className="feedback">Cargando clientes...</p> : null}
+                  {!clientsLoading && clientsError ? <p className="feedback error">{clientsError}</p> : null}
+
+                  {!clientsLoading && !clientsError && clientsPayload ? (
+                    <section className="panel" aria-label="Listado de clientes">
+                      <div className="panel-heading">
+                        <h2>Clientes</h2>
+                        <p>{listedClients.length} registros</p>
+                      </div>
+                      <ClientTable
+                        clients={listedClients}
                         timezone={timezone}
-                        onSelect={openDrawer}
+                        onSelect={openClientDrawer}
                       />
                     </section>
                   ) : null}
@@ -1265,6 +1840,15 @@ function AdminApp() {
         onChangeStatus={handleStatusChange}
         mutationLoading={mutationLoading}
         mutationError={mutationError}
+      />
+
+      <ClientDrawer
+        open={clientDrawerOpen}
+        detail={clientDetailPayload}
+        loading={clientDetailLoading}
+        error={clientDetailError}
+        timezone={timezone}
+        onClose={closeClientDrawer}
       />
     </div>
   );

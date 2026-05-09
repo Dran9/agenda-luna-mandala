@@ -7,6 +7,11 @@ const {
   listAdminAppointments,
   updateAdminAppointmentStatus
 } = require("../services/adminAppointments.service");
+const {
+  AdminClientsError,
+  getAdminClientDetail,
+  listAdminClients
+} = require("../services/adminClients.service");
 const { ValidationError } = require("../services/errors");
 const { AdminAuthError, loginAdmin, verifyAdminToken } = require("../services/adminAuth.service");
 
@@ -43,6 +48,15 @@ function toErrorResponse(error) {
     return {
       status: error.status || 400,
       code: error.code || "ADMIN_APPOINTMENTS_ERROR",
+      message: error.message,
+      details: error.details || {}
+    };
+  }
+
+  if (error instanceof AdminClientsError) {
+    return {
+      status: error.status || 400,
+      code: error.code || "ADMIN_CLIENTS_ERROR",
       message: error.message,
       details: error.details || {}
     };
@@ -93,6 +107,8 @@ function createAdminRouter({
   listAppointments = listAdminAppointments,
   getAppointmentById = getAdminAppointmentDetail,
   setAppointmentStatus = updateAdminAppointmentStatus,
+  listClients = listAdminClients,
+  getClientById = getAdminClientDetail,
   login = loginAdmin,
   verifyToken = verifyAdminToken
 } = {}) {
@@ -177,6 +193,48 @@ function createAdminRouter({
         connection,
         appointmentId: req.params.id,
         status: req.body?.status,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.get("/clients", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await listClients({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        q: req.query.q,
+        onboarding: req.query.onboarding,
+        limit: req.query.limit,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.get("/clients/:id", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await getClientById({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        clientId: req.params.id,
         now: new Date(),
         adminSession
       });
