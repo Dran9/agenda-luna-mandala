@@ -1,6 +1,7 @@
 const express = require("express");
 const path = require("node:path");
 
+const { adminRoute } = require("./routes/admin.route");
 const { healthRoute } = require("./routes/health.route");
 const { publicBookingRoute } = require("./routes/publicBooking.route");
 
@@ -16,6 +17,7 @@ function createApp() {
   app.use(express.urlencoded({ extended: false }));
 
   app.use("/api/health", healthRoute);
+  app.use("/api/admin", adminRoute);
   app.use("/api/public/booking", publicBookingRoute);
 
   app.use("/admin", express.static(adminDistDir));

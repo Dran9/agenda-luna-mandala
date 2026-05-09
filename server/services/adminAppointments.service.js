@@ -1,0 +1,897 @@
+const { formatDateTimeForDbLocal, getLocalDateKey, toDate } = require("../utils/dates");
+const {
+  buildClaimRows,
+  createAppointmentClaims,
+  releaseAppointmentClaims
+} = require("./claims.service");
+const { SlotOccupiedError, ValidationError } = require("./errors");
+
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+const DEFAULT_DB_OFFSET = process.env.DB_TIMEZONE || "-04:00";
+const STATUS_KEYS = ["pending", "confirmed", "cancelled", "completed", "no_show"];
+const TERMINAL_STATUSES = new Set(["cancelled", "completed", "no_show"]);
+const ALLOWED_STATUS_TRANSITIONS = {
+  pending: new Set(["confirmed", "completed", "cancelled", "no_show"]),
+  confirmed: new Set(["completed", "cancelled", "no_show"])
+};
+
+class AdminAppointmentsError extends Error {
+  constructor({
+    message = "No se pudo completar la operacion admin",
+    code = "ADMIN_APPOINTMENTS_ERROR",
+    status = 400,
+    details = {}
+  } = {}) {
+    super(message);
+    this.name = "AdminAppointmentsError";
+    this.code = code;
+    this.status = status;
+    this.details = details;
+  }
+}
+
+function toIso(value) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+
+  return parsed.toISOString();
+}
+
+function parseLimit(rawLimit) {
+  if (rawLimit === undefined || rawLimit === null || rawLimit === "") {
+    return DEFAULT_LIMIT;
+  }
+
+  const parsed = Number.parseInt(rawLimit, 10);
+
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_LIMIT) {
+    throw new ValidationError("limit invalido", {
+      field: "limit",
+      min: 1,
+      max: MAX_LIMIT
+    });
+  }
+
+  return parsed;
+}
+
+function parseUpcoming(rawUpcoming) {
+  if (rawUpcoming === undefined || rawUpcoming === null || rawUpcoming === "") {
+    return true;
+  }
+
+  const normalized = String(rawUpcoming).trim().toLowerCase();
+
+  if (["1", "true", "yes", "si"].includes(normalized)) {
+    return true;
+  }
+
+  if (["0", "false", "no"].includes(normalized)) {
+    return false;
+  }
+
+  throw new ValidationError("upcoming invalido", {
+    field: "upcoming"
+  });
+}
+
+function normalizeDateFilter(rawDate, now = new Date()) {
+  if (rawDate === undefined || rawDate === null || rawDate === "" || rawDate === "today") {
+    return getLocalDateKey(now, DEFAULT_DB_OFFSET);
+  }
+
+  const value = String(rawDate).trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  throw new ValidationError("date invalida", {
+    field: "date",
+    allowed: ["today", "YYYY-MM-DD"]
+  });
+}
+
+function parseAppointmentId(rawValue) {
+  const parsed = Number.parseInt(rawValue, 10);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new ValidationError("appointmentId invalido", {
+      field: "appointmentId",
+      value: rawValue
+    });
+  }
+
+  return parsed;
+}
+
+function normalizeTargetStatus(rawStatus) {
+  const normalized = String(rawStatus || "").trim().toLowerCase();
+
+  if (!STATUS_KEYS.includes(normalized)) {
+    throw new ValidationError("status invalido", {
+      field: "status",
+      allowed: STATUS_KEYS
+    });
+  }
+
+  return normalized;
+}
+
+function parseAdminCenterId(adminSession) {
+  const parsed = Number.parseInt(adminSession?.centerId, 10);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function baseAppointmentSelectSql() {
+  return `SELECT
+    a.id,
+    a.public_code AS publicCode,
+    a.status,
+    a.starts_at AS startsAt,
+    a.ends_at AS endsAt,
+    a.created_at AS createdAt,
+    c.id AS clientId,
+    c.full_name AS clientName,
+    c.whatsapp_e164 AS clientPhone,
+    s.id AS serviceId,
+    s.name AS serviceName,
+    t.id AS therapistId,
+    COALESCE(t.display_name, t.full_name) AS therapistName,
+    r.id AS roomId,
+    r.name AS roomName
+   FROM appointments a
+   INNER JOIN clients c
+     ON c.id = a.client_id
+   INNER JOIN services s
+     ON s.id = a.service_id
+   INNER JOIN therapists t
+     ON t.id = a.therapist_id
+   INNER JOIN rooms r
+     ON r.id = a.room_id`;
+}
+
+function mapAppointmentRow(row) {
+  return {
+    id: Number(row.id),
+    publicCode: row.publicCode,
+    status: row.status,
+    startsAt: toIso(row.startsAt),
+    endsAt: toIso(row.endsAt),
+    createdAt: toIso(row.createdAt),
+    client: {
+      id: Number(row.clientId),
+      fullName: row.clientName,
+      whatsapp: row.clientPhone
+    },
+    service: {
+      id: Number(row.serviceId),
+      name: row.serviceName
+    },
+    therapist: {
+      id: Number(row.therapistId),
+      name: row.therapistName
+    },
+    room: {
+      id: Number(row.roomId),
+      name: row.roomName
+    }
+  };
+}
+
+function createSummary(statusRows) {
+  const summary = {
+    pending: 0,
+    confirmed: 0,
+    cancelled: 0,
+    completed: 0,
+    no_show: 0,
+    total: 0
+  };
+
+  for (const row of statusRows) {
+    if (!STATUS_KEYS.includes(row.status)) {
+      continue;
+    }
+
+    const count = Number(row.total || 0);
+    summary[row.status] = count;
+    summary.total += count;
+  }
+
+  return summary;
+}
+
+function isClientOnboardingComplete(row) {
+  const firstName = String(row.clientFirstName || "").trim();
+  const lastName = String(row.clientLastName || "").trim();
+  const city = String(row.clientCity || "").trim();
+  const source = String(row.clientSource || "").trim();
+  const age = Number.parseInt(row.clientAge, 10);
+
+  return (
+    firstName.length > 0 &&
+    lastName.length > 0 &&
+    city.length > 0 &&
+    source.length > 0 &&
+    Number.isInteger(age) &&
+    age >= 18 &&
+    age <= 75 &&
+    Boolean(row.clientOnboardingCompletedAt)
+  );
+}
+
+function mapAppointmentDetail(row, { claims = [], payments = [] } = {}) {
+  const paymentsSummary = {
+    totalPayments: payments.length,
+    byStatus: {
+      pending: 0,
+      submitted: 0,
+      approved: 0,
+      rejected: 0,
+      cancelled: 0
+    },
+    totalsByCurrency: {}
+  };
+
+  for (const payment of payments) {
+    if (paymentsSummary.byStatus[payment.status] !== undefined) {
+      paymentsSummary.byStatus[payment.status] += 1;
+    }
+
+    const currencyCode = String(payment.currencyCode || "").trim() || "UNKNOWN";
+    paymentsSummary.totalsByCurrency[currencyCode] =
+      (paymentsSummary.totalsByCurrency[currencyCode] || 0) + Number(payment.amount || 0);
+  }
+
+  return {
+    id: Number(row.id),
+    publicCode: row.publicCode,
+    status: row.status,
+    startsAt: toIso(row.startsAt),
+    endsAt: toIso(row.endsAt),
+    createdAt: toIso(row.createdAt),
+    client: {
+      id: Number(row.clientId),
+      fullName: row.clientName,
+      whatsapp: row.clientPhone,
+      firstName: row.clientFirstName,
+      lastName: row.clientLastName,
+      age: row.clientAge === null ? null : Number(row.clientAge),
+      city: row.clientCity,
+      source: row.clientSource,
+      onboardingCompletedAt: toIso(row.clientOnboardingCompletedAt),
+      onboardingComplete: isClientOnboardingComplete(row)
+    },
+    service: {
+      id: Number(row.serviceId),
+      name: row.serviceName
+    },
+    therapist: {
+      id: Number(row.therapistId),
+      name: row.therapistName
+    },
+    room: {
+      id: Number(row.roomId),
+      name: row.roomName
+    },
+    claims,
+    payments,
+    paymentsSummary
+  };
+}
+
+function normalizeClaimTimeForSet(value) {
+  if (value instanceof Date) {
+    return formatDateTimeForDbLocal(value, DEFAULT_DB_OFFSET);
+  }
+
+  const raw = String(value || "").trim();
+
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(raw)) {
+    return raw.slice(0, 19);
+  }
+
+  try {
+    return formatDateTimeForDbLocal(toDate(raw), DEFAULT_DB_OFFSET);
+  } catch {
+    return raw;
+  }
+}
+
+function createClaimSet(claims) {
+  const claimSet = new Set();
+
+  for (const claim of claims) {
+    claimSet.add(
+      [
+        String(claim.resourceType || "").trim(),
+        Number(claim.resourceId),
+        normalizeClaimTimeForSet(claim.claimTime)
+      ].join("|")
+    );
+  }
+
+  return claimSet;
+}
+
+function createExpectedClaimSet(expectedClaims) {
+  const claimSet = new Set();
+
+  for (const claim of expectedClaims) {
+    claimSet.add([String(claim[2] || "").trim(), Number(claim[3]), claim[4]].join("|"));
+  }
+
+  return claimSet;
+}
+
+function doActiveClaimsMatchExpected({ activeClaims, expectedClaims }) {
+  const activeSet = createClaimSet(activeClaims);
+  const expectedSet = createExpectedClaimSet(expectedClaims);
+
+  if (activeClaims.length !== expectedClaims.length || activeSet.size !== expectedSet.size) {
+    return false;
+  }
+
+  for (const expectedClaim of expectedSet) {
+    if (!activeSet.has(expectedClaim)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function resolveCenter({ connection, tenantSlug, adminSession }) {
+  const normalizedTenant = typeof tenantSlug === "string" ? tenantSlug.trim() : "";
+  const adminCenterId = parseAdminCenterId(adminSession);
+
+  if (adminCenterId) {
+    const centerParams = [adminCenterId];
+    let centerSql = `SELECT
+      id,
+      slug,
+      name,
+      timezone
+     FROM centers
+     WHERE id = ?
+       AND is_active = 1`;
+
+    if (normalizedTenant) {
+      centerSql += " AND slug = ?";
+      centerParams.push(normalizedTenant);
+    }
+
+    centerSql += " LIMIT 1";
+
+    const [rows] = await connection.query(centerSql, centerParams);
+
+    if (rows.length === 0) {
+      throw new AdminAppointmentsError({
+        status: 403,
+        code: "ADMIN_CENTER_SCOPE_FORBIDDEN",
+        message: "El admin no tiene acceso a ese centro"
+      });
+    }
+
+    return {
+      id: Number(rows[0].id),
+      slug: rows[0].slug,
+      displayName: rows[0].name,
+      timezone: rows[0].timezone
+    };
+  }
+
+  if (normalizedTenant) {
+    const [rows] = await connection.query(
+      `SELECT
+        id,
+        slug,
+        name,
+        timezone
+       FROM centers
+       WHERE slug = ?
+         AND is_active = 1
+       LIMIT 1`,
+      [normalizedTenant]
+    );
+
+    if (rows.length === 0) {
+      throw new ValidationError("tenantSlug no encontrado", {
+        field: "tenantSlug"
+      });
+    }
+
+    return {
+      id: Number(rows[0].id),
+      slug: rows[0].slug,
+      displayName: rows[0].name,
+      timezone: rows[0].timezone
+    };
+  }
+
+  const [rows] = await connection.query(
+    `SELECT
+      id,
+      slug,
+      name,
+      timezone
+     FROM centers
+     WHERE is_active = 1
+     ORDER BY id ASC
+     LIMIT 1`
+  );
+
+  if (rows.length === 0) {
+    throw new ValidationError("No hay centro activo configurado", {
+      field: "center"
+    });
+  }
+
+  return {
+    id: Number(rows[0].id),
+    slug: rows[0].slug,
+    displayName: rows[0].name,
+    timezone: rows[0].timezone
+  };
+}
+
+async function getAppointmentRow({ connection, centerId, appointmentId, forUpdate = false }) {
+  const lockSuffix = forUpdate ? " FOR UPDATE" : "";
+  const [rows] = await connection.query(
+    `SELECT
+      a.id,
+      a.public_code AS publicCode,
+      a.status,
+      a.starts_at AS startsAt,
+      a.ends_at AS endsAt,
+      a.created_at AS createdAt,
+      a.hold_token AS holdToken,
+      c.id AS clientId,
+      c.full_name AS clientName,
+      c.whatsapp_e164 AS clientPhone,
+      c.first_name AS clientFirstName,
+      c.last_name AS clientLastName,
+      c.age AS clientAge,
+      c.city AS clientCity,
+      c.source AS clientSource,
+      c.onboarding_completed_at AS clientOnboardingCompletedAt,
+      s.id AS serviceId,
+      s.name AS serviceName,
+      t.id AS therapistId,
+      COALESCE(t.display_name, t.full_name) AS therapistName,
+      r.id AS roomId,
+      r.name AS roomName
+     FROM appointments a
+     INNER JOIN clients c ON c.id = a.client_id
+     INNER JOIN services s ON s.id = a.service_id
+     INNER JOIN therapists t ON t.id = a.therapist_id
+     INNER JOIN rooms r ON r.id = a.room_id
+     WHERE a.center_id = ?
+       AND a.id = ?
+     LIMIT 1${lockSuffix}`,
+    [centerId, appointmentId]
+  );
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return rows[0];
+}
+
+async function getAppointmentClaims({ connection, centerId, appointmentId }) {
+  const [rows] = await connection.query(
+    `SELECT
+      c.id,
+      c.resource_type AS resourceType,
+      c.resource_id AS resourceId,
+      c.claim_time AS claimTime,
+      c.created_at AS createdAt,
+      COALESCE(
+        CASE WHEN c.resource_type = 'therapist' THEN t.display_name END,
+        CASE WHEN c.resource_type = 'therapist' THEN t.full_name END,
+        CASE WHEN c.resource_type = 'room' THEN r.name END
+      ) AS resourceName
+     FROM appointment_resource_claims c
+     LEFT JOIN therapists t
+       ON c.resource_type = 'therapist'
+      AND t.id = c.resource_id
+      AND t.center_id = c.center_id
+     LEFT JOIN rooms r
+       ON c.resource_type = 'room'
+      AND r.id = c.resource_id
+      AND r.center_id = c.center_id
+     WHERE c.center_id = ?
+       AND c.appointment_id = ?
+     ORDER BY c.claim_time ASC, c.resource_type ASC, c.resource_id ASC`,
+    [centerId, appointmentId]
+  );
+
+  return rows.map((row) => ({
+    id: Number(row.id),
+    resourceType: row.resourceType,
+    resourceId: Number(row.resourceId),
+    resourceName: row.resourceName || null,
+    claimTime: toIso(row.claimTime),
+    createdAt: toIso(row.createdAt)
+  }));
+}
+
+async function getAppointmentPayments({ connection, centerId, appointmentId }) {
+  const [rows] = await connection.query(
+    `SELECT
+      id,
+      status,
+      amount,
+      currency_code AS currencyCode,
+      method,
+      proof_file_id AS proofFileId,
+      reviewed_by_admin_user_id AS reviewedByAdminUserId,
+      reviewed_at AS reviewedAt,
+      notes,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+     FROM payments
+     WHERE center_id = ?
+       AND appointment_id = ?
+     ORDER BY created_at DESC, id DESC`,
+    [centerId, appointmentId]
+  );
+
+  return rows.map((row) => ({
+    id: Number(row.id),
+    status: row.status,
+    amount: Number(row.amount),
+    currencyCode: row.currencyCode,
+    method: row.method,
+    proofFileId: row.proofFileId === null ? null : Number(row.proofFileId),
+    reviewedByAdminUserId:
+      row.reviewedByAdminUserId === null ? null : Number(row.reviewedByAdminUserId),
+    reviewedAt: toIso(row.reviewedAt),
+    notes: row.notes,
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt)
+  }));
+}
+
+async function buildAppointmentDetail({ connection, centerId, appointmentId, row }) {
+  const appointmentRow = row || (await getAppointmentRow({ connection, centerId, appointmentId }));
+
+  if (!appointmentRow) {
+    return null;
+  }
+
+  const [claims, payments] = await Promise.all([
+    getAppointmentClaims({ connection, centerId, appointmentId }),
+    getAppointmentPayments({ connection, centerId, appointmentId })
+  ]);
+
+  return mapAppointmentDetail(appointmentRow, { claims, payments });
+}
+
+async function listAdminAppointments({
+  connection,
+  tenantSlug,
+  date,
+  upcoming,
+  limit,
+  now = new Date(),
+  adminSession
+}) {
+  const nowDate = toDate(now);
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+  const dateKey = normalizeDateFilter(date, nowDate);
+  const includeUpcoming = parseUpcoming(upcoming);
+  const rowLimit = parseLimit(limit);
+
+  const dayStart = `${dateKey} 00:00:00`;
+  const dayEnd = `${dateKey} 23:59:59`;
+
+  const [todayRows] = await connection.query(
+    `${baseAppointmentSelectSql()}
+     WHERE a.center_id = ?
+       AND a.starts_at >= ?
+       AND a.starts_at <= ?
+     ORDER BY a.starts_at ASC, a.id ASC
+     LIMIT ?`,
+    [center.id, dayStart, dayEnd, rowLimit]
+  );
+
+  let upcomingRows = [];
+
+  if (includeUpcoming) {
+    const [rows] = await connection.query(
+      `${baseAppointmentSelectSql()}
+       WHERE a.center_id = ?
+         AND a.starts_at > ?
+       ORDER BY a.starts_at ASC, a.id ASC
+       LIMIT ?`,
+      [center.id, dayEnd, rowLimit]
+    );
+
+    upcomingRows = rows;
+  }
+
+  const summaryParams = [center.id, dayStart];
+  let summaryRangeSql = "";
+
+  if (!includeUpcoming) {
+    summaryRangeSql = " AND starts_at <= ?";
+    summaryParams.push(dayEnd);
+  }
+
+  const [summaryRows] = await connection.query(
+    `SELECT
+      status,
+      COUNT(*) AS total
+     FROM appointments
+     WHERE center_id = ?
+       AND starts_at >= ?${summaryRangeSql}
+     GROUP BY status`,
+    summaryParams
+  );
+
+  const [recentRows] = await connection.query(
+    `${baseAppointmentSelectSql()}
+     WHERE a.center_id = ?
+     ORDER BY a.created_at DESC, a.id DESC
+     LIMIT ?`,
+    [center.id, rowLimit]
+  );
+
+  return {
+    generatedAt: nowDate.toISOString(),
+    center,
+    filters: {
+      date: dateKey,
+      upcoming: includeUpcoming,
+      limit: rowLimit
+    },
+    summary: createSummary(summaryRows),
+    today: todayRows.map(mapAppointmentRow),
+    upcoming: upcomingRows.map(mapAppointmentRow),
+    recentCreated: recentRows.map(mapAppointmentRow),
+    metadata: {
+      dbNow: formatDateTimeForDbLocal(nowDate, DEFAULT_DB_OFFSET)
+    }
+  };
+}
+
+async function getAdminAppointmentDetail({
+  connection,
+  appointmentId,
+  adminSession,
+  tenantSlug,
+  now = new Date()
+}) {
+  const resolvedAppointmentId = parseAppointmentId(appointmentId);
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+  const detail = await buildAppointmentDetail({
+    connection,
+    centerId: center.id,
+    appointmentId: resolvedAppointmentId
+  });
+
+  if (!detail) {
+    throw new AdminAppointmentsError({
+      status: 404,
+      code: "APPOINTMENT_NOT_FOUND",
+      message: "Cita no encontrada"
+    });
+  }
+
+  return {
+    generatedAt: toDate(now).toISOString(),
+    center,
+    appointment: detail
+  };
+}
+
+async function updateAdminAppointmentStatus({
+  connection,
+  appointmentId,
+  status,
+  adminSession,
+  tenantSlug,
+  now = new Date(),
+  createClaims = createAppointmentClaims,
+  releaseClaims = releaseAppointmentClaims
+}) {
+  const resolvedAppointmentId = parseAppointmentId(appointmentId);
+  const targetStatus = normalizeTargetStatus(status);
+  const nowDate = toDate(now);
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+
+  let startedTransaction = false;
+
+  try {
+    await connection.beginTransaction();
+    startedTransaction = true;
+
+    const appointmentRow = await getAppointmentRow({
+      connection,
+      centerId: center.id,
+      appointmentId: resolvedAppointmentId,
+      forUpdate: true
+    });
+
+    if (!appointmentRow) {
+      throw new AdminAppointmentsError({
+        status: 404,
+        code: "APPOINTMENT_NOT_FOUND",
+        message: "Cita no encontrada"
+      });
+    }
+
+    const currentStatus = String(appointmentRow.status || "").trim().toLowerCase();
+    const nextAllowedTransitions = ALLOWED_STATUS_TRANSITIONS[currentStatus] || null;
+
+    if (!nextAllowedTransitions || !nextAllowedTransitions.has(targetStatus)) {
+      throw new AdminAppointmentsError({
+        status: 409,
+        code: "APPOINTMENT_STATUS_TRANSITION_INVALID",
+        message: "Transicion de estado no permitida",
+        details: {
+          from: currentStatus,
+          to: targetStatus
+        }
+      });
+    }
+
+    let claimsAction = "unchanged";
+    let claimsReleased = 0;
+    let claimsCreated = 0;
+
+    if (TERMINAL_STATUSES.has(targetStatus)) {
+      const releaseResult = await releaseClaims({
+        connection,
+        appointmentId: resolvedAppointmentId,
+        manageTransaction: false
+      });
+
+      claimsAction = "released";
+      claimsReleased = Number(releaseResult?.claimsReleased || 0);
+    } else if (currentStatus === "pending" && targetStatus === "confirmed") {
+      const [activeClaims] = await connection.query(
+        `SELECT
+           resource_type AS resourceType,
+           resource_id AS resourceId,
+           claim_time AS claimTime
+         FROM appointment_resource_claims
+         WHERE center_id = ?
+           AND appointment_id = ?
+         ORDER BY claim_time ASC, resource_type ASC, resource_id ASC`,
+        [center.id, resolvedAppointmentId]
+      );
+
+      const expectedClaims = buildClaimRows({
+        centerId: center.id,
+        appointmentId: resolvedAppointmentId,
+        therapistId: Number(appointmentRow.therapistId),
+        roomId: Number(appointmentRow.roomId),
+        startsAt: appointmentRow.startsAt,
+        endsAt: appointmentRow.endsAt
+      });
+
+      if (doActiveClaimsMatchExpected({ activeClaims, expectedClaims })) {
+        claimsAction = "preserved";
+      } else {
+        try {
+          const createResult = await createClaims({
+            connection,
+            manageTransaction: false,
+            appointment: {
+              centerId: center.id,
+              appointmentId: resolvedAppointmentId,
+              therapistId: Number(appointmentRow.therapistId),
+              roomId: Number(appointmentRow.roomId),
+              startsAt: appointmentRow.startsAt,
+              endsAt: appointmentRow.endsAt,
+              status: "confirmed"
+            }
+          });
+
+          claimsAction = "recreated";
+          claimsCreated = Number(createResult?.claimsCreated || 0);
+        } catch (error) {
+          if (error instanceof SlotOccupiedError || error?.code === "SLOT_OCCUPIED") {
+            throw new AdminAppointmentsError({
+              status: 409,
+              code: "SLOT_NOT_AVAILABLE",
+              message: "El slot ya no esta disponible"
+            });
+          }
+
+          throw error;
+        }
+      }
+    }
+
+    const shouldClearHoldToken = currentStatus === "pending" && targetStatus !== "pending";
+
+    const [updateResult] = await connection.query(
+      `UPDATE appointments
+       SET
+         status = ?,
+         cancelled_at = CASE WHEN ? = 'cancelled' THEN ? ELSE cancelled_at END,
+         completed_at = CASE WHEN ? = 'completed' THEN ? ELSE completed_at END,
+         no_show_at = CASE WHEN ? = 'no_show' THEN ? ELSE no_show_at END,
+         hold_token = CASE WHEN ? = 1 THEN NULL ELSE hold_token END,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?
+         AND center_id = ?
+       LIMIT 1`,
+      [
+        targetStatus,
+        targetStatus,
+        nowDate,
+        targetStatus,
+        nowDate,
+        targetStatus,
+        nowDate,
+        shouldClearHoldToken ? 1 : 0,
+        resolvedAppointmentId,
+        center.id
+      ]
+    );
+
+    if (Number(updateResult?.affectedRows || 0) !== 1) {
+      throw new AdminAppointmentsError({
+        status: 409,
+        code: "APPOINTMENT_STATUS_UPDATE_CONFLICT",
+        message: "No se pudo actualizar la cita"
+      });
+    }
+
+    const detail = await buildAppointmentDetail({
+      connection,
+      centerId: center.id,
+      appointmentId: resolvedAppointmentId
+    });
+
+    await connection.commit();
+
+    return {
+      generatedAt: nowDate.toISOString(),
+      center,
+      transition: {
+        from: currentStatus,
+        to: targetStatus,
+        changedAt: nowDate.toISOString(),
+        claims: {
+          action: claimsAction,
+          released: claimsReleased,
+          created: claimsCreated
+        }
+      },
+      appointment: detail
+    };
+  } catch (error) {
+    if (startedTransaction) {
+      await connection.rollback();
+    }
+
+    throw error;
+  }
+}
+
+module.exports = {
+  AdminAppointmentsError,
+  listAdminAppointments,
+  getAdminAppointmentDetail,
+  updateAdminAppointmentStatus
+};
