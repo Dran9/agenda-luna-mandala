@@ -6,6 +6,7 @@ const {
   pickPublicAvailabilityPair,
   releaseExpiredHolds
 } = require("./appointments.service");
+const { fetchLastTherapistId, pickTherapistCandidate } = require("./roundRobin.service");
 const { PublicBookingError, ValidationError } = require("./errors");
 
 const DEFAULT_TENANT_SLUG = "demo";
@@ -240,6 +241,95 @@ function calculateAvailableActions({ startsAt, now, minimumNoticeHours, penaltyP
   ];
 }
 
+function mapPublicSlot({ slot, pair }) {
+  if (!pair) {
+    return null;
+  }
+
+  return {
+    startsAt: slot.startsAt,
+    endsAt: slot.endsAt,
+    therapistId: String(pair.therapistId),
+    therapistName: pair.therapistName,
+    roomId: String(pair.roomId),
+    roomName: pair.roomName
+  };
+}
+
+function pickFirstRoomPairForTherapist({ pairs, therapistId }) {
+  return (pairs || [])
+    .filter((pair) => Number(pair.therapistId) === Number(therapistId))
+    .sort((left, right) => Number(left.roomId) - Number(right.roomId))[0] || null;
+}
+
+async function mapAvailabilityForPublic({
+  connection,
+  centerId,
+  serviceId,
+  availability,
+  therapistId
+}) {
+  const hasRequestedTherapist = therapistId !== undefined && therapistId !== null && therapistId !== "";
+
+  if (hasRequestedTherapist) {
+    return availability
+      .map((slot) => mapPublicSlot({
+        slot,
+        pair: pickPublicAvailabilityPair({
+          pairs: slot.pairs,
+          therapistId
+        })
+      }))
+      .filter(Boolean);
+  }
+
+  let rollingLastTherapistId = await fetchLastTherapistId({
+    connection,
+    centerId,
+    serviceId
+  });
+
+  return availability
+    .map((slot) => {
+      const therapistsById = new Map();
+
+      for (const pair of slot.pairs || []) {
+        const therapistIdNumber = Number(pair.therapistId);
+
+        if (!Number.isInteger(therapistIdNumber) || therapistsById.has(therapistIdNumber)) {
+          continue;
+        }
+
+        therapistsById.set(therapistIdNumber, {
+          therapistId: therapistIdNumber,
+          therapistName: pair.therapistName || null
+        });
+      }
+
+      const selectedTherapist = pickTherapistCandidate({
+        candidates: Array.from(therapistsById.values()),
+        lastTherapistId: rollingLastTherapistId
+      });
+
+      if (!selectedTherapist) {
+        return null;
+      }
+
+      rollingLastTherapistId = Number(selectedTherapist.therapistId);
+
+      const selectedPair = pickFirstRoomPairForTherapist({
+        pairs: slot.pairs,
+        therapistId: selectedTherapist.therapistId
+      });
+
+      return mapPublicSlot({
+        slot,
+        pair: selectedPair
+      });
+    })
+    .filter(Boolean);
+}
+
 async function getCatalog({ connection, tenantSlug }) {
   const center = await resolveCenter(connection, tenantSlug);
 
@@ -449,27 +539,13 @@ async function getAvailability({
     serviceId: String(normalizedServiceId),
     date: dateKey,
     timezone: timezone || center.timezone,
-    slots: availability
-      .map((slot) => {
-        const pair = pickPublicAvailabilityPair({
-          pairs: slot.pairs,
-          therapistId
-        });
-
-        if (!pair) {
-          return null;
-        }
-
-        return {
-          startsAt: slot.startsAt,
-          endsAt: slot.endsAt,
-          therapistId: String(pair.therapistId),
-          therapistName: pair.therapistName,
-          roomId: String(pair.roomId),
-          roomName: pair.roomName
-        };
-      })
-      .filter(Boolean)
+    slots: await mapAvailabilityForPublic({
+      connection,
+      centerId: center.id,
+      serviceId: normalizedServiceId,
+      availability,
+      therapistId
+    })
   };
 }
 

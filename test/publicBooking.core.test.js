@@ -1135,6 +1135,84 @@ test("availability no devuelve slots ocupados por claim", async () => {
   assert.equal(result.slots.some((slot) => slot.startsAt === "2026-05-11T13:00:00.000Z"), false);
 });
 
+test("availability sin terapeuta elegido proyecta terapeutas en secuencia round-robin", async () => {
+  const fixture = createFixture();
+  fixture.therapists = [
+    { id: 100, centerId: 1, displayName: "Ana", isActive: 1 },
+    { id: 101, centerId: 1, displayName: "Bea", isActive: 1 }
+  ];
+  fixture.therapistServices = [
+    { centerId: 1, therapistId: 100, serviceId: 10, isActive: 1 },
+    { centerId: 1, therapistId: 101, serviceId: 10, isActive: 1 }
+  ];
+  fixture.rooms = [
+    { id: 200, centerId: 1, name: "Sala Luna", isActive: 1 },
+    { id: 201, centerId: 1, name: "Sala Sol", isActive: 1 }
+  ];
+  fixture.serviceRooms = [
+    { centerId: 1, serviceId: 10, roomId: 200, isActive: 1 },
+    { centerId: 1, serviceId: 10, roomId: 201, isActive: 1 }
+  ];
+  fixture.resourceSchedules = [
+    {
+      centerId: 1,
+      resourceType: "therapist",
+      resourceId: 100,
+      weekday: 1,
+      startTime: "08:00:00",
+      endTime: "12:00:00",
+      slotMinutes: 60,
+      isActive: 1
+    },
+    {
+      centerId: 1,
+      resourceType: "therapist",
+      resourceId: 101,
+      weekday: 1,
+      startTime: "08:00:00",
+      endTime: "12:00:00",
+      slotMinutes: 60,
+      isActive: 1
+    },
+    {
+      centerId: 1,
+      resourceType: "room",
+      resourceId: 200,
+      weekday: 1,
+      startTime: "08:00:00",
+      endTime: "12:00:00",
+      slotMinutes: 60,
+      isActive: 1
+    },
+    {
+      centerId: 1,
+      resourceType: "room",
+      resourceId: 201,
+      weekday: 1,
+      startTime: "08:00:00",
+      endTime: "12:00:00",
+      slotMinutes: 60,
+      isActive: 1
+    }
+  ];
+  fixture.roundRobinState = [{ centerId: 1, serviceId: 10, lastTherapistId: 100 }];
+  const connection = new FakeBookingConnection(fixture);
+
+  const result = await getAvailability({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    date: "2026-05-11",
+    timezone: "America/La_Paz",
+    stepMinutes: 60,
+    now: "2026-05-11T07:00:00-04:00"
+  });
+
+  assert.ok(result.slots.length >= 2);
+  assert.notEqual(result.slots[0].therapistId, result.slots[1].therapistId);
+});
+
 test("availability rechaza telefono local invalido de Bolivia", async () => {
   const connection = new FakeBookingConnection(createFixture());
 
