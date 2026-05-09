@@ -26,7 +26,7 @@
   --shadow-md: 0 16px 30px rgba(15, 23, 42, 0.16);
   --shadow-focus: 0 0 0 3px rgba(79, 70, 229, 0.2);
 
-  --sidebar-w: 80px;
+  --sidebar-w: 112px;
 }
 
 [data-theme="dark"] {
@@ -62,7 +62,7 @@
 }
 
 html {
-  font-size: 18px;
+  font-size: 20px;
 }
 
 body {
@@ -883,6 +883,11 @@ select {
   font-size: 0.92rem;
 }
 
+.drawer-note {
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
 .drawer-grid {
   display: grid;
   grid-template-columns: minmax(0, 130px) minmax(0, 1fr);
@@ -1008,6 +1013,30 @@ select {
   gap: 3px;
   font-size: 0.82rem;
   color: var(--muted);
+}
+
+.room-change-box {
+  display: grid;
+  gap: 8px;
+}
+
+.field-inline {
+  display: grid;
+  gap: 6px;
+}
+
+.field-inline span {
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.field-inline select {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .drawer-actions {

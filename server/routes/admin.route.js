@@ -5,6 +5,7 @@ const {
   AdminAppointmentsError,
   getAdminAppointmentDetail,
   listAdminAppointments,
+  updateAdminAppointmentRoom,
   updateAdminAppointmentStatus
 } = require("../services/adminAppointments.service");
 const {
@@ -109,6 +110,7 @@ function createAdminRouter({
   listAppointments = listAdminAppointments,
   getAppointmentById = getAdminAppointmentDetail,
   setAppointmentStatus = updateAdminAppointmentStatus,
+  setAppointmentRoom = updateAdminAppointmentRoom,
   listClients = listAdminClients,
   getClientById = getAdminClientDetail,
   login = loginAdmin,
@@ -204,6 +206,26 @@ function createAdminRouter({
         connection,
         appointmentId: req.params.id,
         status: req.body?.status,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.post("/appointments/:id/room", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await setAppointmentRoom({
+        connection,
+        appointmentId: req.params.id,
+        roomId: req.body?.roomId,
         now: new Date(),
         adminSession
       });

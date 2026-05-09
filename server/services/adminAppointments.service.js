@@ -11,6 +11,7 @@ const MAX_LIMIT = 100;
 const DEFAULT_DB_OFFSET = process.env.DB_TIMEZONE || "-04:00";
 const STATUS_KEYS = ["pending", "confirmed", "cancelled", "completed", "no_show"];
 const TERMINAL_STATUSES = new Set(["cancelled", "completed", "no_show"]);
+const ROOM_MUTABLE_STATUSES = new Set(["pending", "confirmed"]);
 const ALLOWED_STATUS_TRANSITIONS = {
   pending: new Set(["confirmed", "completed", "cancelled", "no_show"]),
   confirmed: new Set(["completed", "cancelled", "no_show"])
@@ -113,6 +114,19 @@ function parseAppointmentId(rawValue) {
   return parsed;
 }
 
+function parseRoomId(rawValue) {
+  const parsed = Number.parseInt(rawValue, 10);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new ValidationError("roomId invalido", {
+      field: "roomId",
+      value: rawValue
+    });
+  }
+
+  return parsed;
+}
+
 function normalizeTargetStatus(rawStatus) {
   const normalized = String(rawStatus || "").trim().toLowerCase();
 
@@ -134,6 +148,20 @@ function parseAdminCenterId(adminSession) {
   }
 
   return parsed;
+}
+
+function buildInClause(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return {
+      sql: "(NULL)",
+      values: []
+    };
+  }
+
+  return {
+    sql: `(${values.map(() => "?").join(", ")})`,
+    values
+  };
 }
 
 function baseAppointmentSelectSql() {
@@ -568,19 +596,157 @@ async function getAppointmentPayments({ connection, centerId, appointmentId }) {
   }));
 }
 
-async function buildAppointmentDetail({ connection, centerId, appointmentId, row }) {
+async function getClientActiveContext({
+  connection,
+  centerId,
+  clientId,
+  appointmentId,
+  now = new Date()
+}) {
+  const nowDb = formatDateTimeForDbLocal(now, DEFAULT_DB_OFFSET);
+  const [rows] = await connection.query(
+    `SELECT
+      a.id,
+      a.service_id AS serviceId,
+      s.name AS serviceName,
+      a.therapist_id AS therapistId,
+      COALESCE(t.display_name, t.full_name) AS therapistName,
+      a.room_id AS roomId,
+      r.name AS roomName,
+      a.status,
+      a.starts_at AS startsAt
+     FROM appointments a
+     INNER JOIN services s ON s.id = a.service_id
+     INNER JOIN therapists t ON t.id = a.therapist_id
+     INNER JOIN rooms r ON r.id = a.room_id
+     WHERE a.center_id = ?
+       AND a.client_id = ?
+       AND a.status IN ('pending', 'confirmed')
+       AND a.starts_at >= ?
+     ORDER BY a.starts_at ASC, a.id ASC`,
+    [centerId, clientId, nowDb]
+  );
+
+  const activeAppointments = rows.map((entry) => ({
+    id: Number(entry.id),
+    serviceId: Number(entry.serviceId),
+    serviceName: entry.serviceName,
+    therapistId: Number(entry.therapistId),
+    therapistName: entry.therapistName,
+    roomId: Number(entry.roomId),
+    roomName: entry.roomName,
+    status: entry.status,
+    startsAt: toIso(entry.startsAt),
+    isCurrent: Number(entry.id) === Number(appointmentId)
+  }));
+
+  const distinctServiceNames = Array.from(
+    new Set(activeAppointments.map((entry) => String(entry.serviceName || "").trim()).filter(Boolean))
+  );
+
+  return {
+    activeAppointments,
+    distinctServiceNames,
+    activeServiceCount: distinctServiceNames.length,
+    hasMultipleServices: distinctServiceNames.length > 1
+  };
+}
+
+async function getRoomOptionsForAppointment({
+  connection,
+  centerId,
+  appointmentRow
+}) {
+  const serviceId = Number(appointmentRow.serviceId);
+  const appointmentId = Number(appointmentRow.id);
+  const currentRoomId = Number(appointmentRow.roomId);
+
+  const [roomRows] = await connection.query(
+    `SELECT
+      r.id AS roomId,
+      r.name AS roomName
+     FROM service_rooms sr
+     INNER JOIN rooms r
+       ON r.id = sr.room_id
+      AND r.center_id = sr.center_id
+     WHERE sr.center_id = ?
+       AND sr.service_id = ?
+       AND sr.is_active = 1
+       AND r.is_active = 1
+     ORDER BY r.id ASC`,
+    [centerId, serviceId]
+  );
+
+  if (roomRows.length === 0) {
+    return [];
+  }
+
+  const roomIds = roomRows.map((entry) => Number(entry.roomId));
+  const inClause = buildInClause(roomIds);
+  const startsAtDb = formatDateTimeForDbLocal(appointmentRow.startsAt, DEFAULT_DB_OFFSET);
+  const endsAtDb = formatDateTimeForDbLocal(appointmentRow.endsAt, DEFAULT_DB_OFFSET);
+
+  const [blockedRows] = await connection.query(
+    `SELECT
+      resource_id AS roomId,
+      COUNT(*) AS blockedMinutes
+     FROM appointment_resource_claims
+     WHERE center_id = ?
+       AND resource_type = 'room'
+       AND appointment_id <> ?
+       AND claim_time >= ?
+       AND claim_time < ?
+       AND resource_id IN ${inClause.sql}
+     GROUP BY resource_id`,
+    [centerId, appointmentId, startsAtDb, endsAtDb, ...inClause.values]
+  );
+
+  const blockedByRoomId = new Map(
+    blockedRows.map((entry) => [Number(entry.roomId), Number(entry.blockedMinutes || 0)])
+  );
+
+  return roomRows.map((entry) => {
+    const roomId = Number(entry.roomId);
+    const blockedMinutes = blockedByRoomId.get(roomId) || 0;
+    return {
+      id: roomId,
+      name: entry.roomName,
+      available: blockedMinutes === 0,
+      blockedMinutes,
+      current: roomId === currentRoomId
+    };
+  });
+}
+
+async function buildAppointmentDetail({ connection, centerId, appointmentId, row, now = new Date() }) {
   const appointmentRow = row || (await getAppointmentRow({ connection, centerId, appointmentId }));
 
   if (!appointmentRow) {
     return null;
   }
 
-  const [claims, payments] = await Promise.all([
+  const [claims, payments, clientContext, roomOptions] = await Promise.all([
     getAppointmentClaims({ connection, centerId, appointmentId }),
-    getAppointmentPayments({ connection, centerId, appointmentId })
+    getAppointmentPayments({ connection, centerId, appointmentId }),
+    getClientActiveContext({
+      connection,
+      centerId,
+      clientId: Number(appointmentRow.clientId),
+      appointmentId,
+      now
+    }),
+    getRoomOptionsForAppointment({
+      connection,
+      centerId,
+      appointmentRow
+    })
   ]);
 
-  return mapAppointmentDetail(appointmentRow, { claims, payments });
+  return {
+    ...mapAppointmentDetail(appointmentRow, { claims, payments }),
+    clientContext,
+    roomOptions
+  };
 }
 
 async function listAdminAppointments({
@@ -683,7 +849,8 @@ async function getAdminAppointmentDetail({
   const detail = await buildAppointmentDetail({
     connection,
     centerId: center.id,
-    appointmentId: resolvedAppointmentId
+    appointmentId: resolvedAppointmentId,
+    now: toDate(now)
   });
 
   if (!detail) {
@@ -860,7 +1027,8 @@ async function updateAdminAppointmentStatus({
     const detail = await buildAppointmentDetail({
       connection,
       centerId: center.id,
-      appointmentId: resolvedAppointmentId
+      appointmentId: resolvedAppointmentId,
+      now: nowDate
     });
 
     await connection.commit();
@@ -889,9 +1057,158 @@ async function updateAdminAppointmentStatus({
   }
 }
 
+async function updateAdminAppointmentRoom({
+  connection,
+  appointmentId,
+  roomId,
+  adminSession,
+  tenantSlug,
+  now = new Date(),
+  createClaims = createAppointmentClaims
+}) {
+  const resolvedAppointmentId = parseAppointmentId(appointmentId);
+  const resolvedRoomId = parseRoomId(roomId);
+  const nowDate = toDate(now);
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+
+  let startedTransaction = false;
+
+  try {
+    await connection.beginTransaction();
+    startedTransaction = true;
+
+    const appointmentRow = await getAppointmentRow({
+      connection,
+      centerId: center.id,
+      appointmentId: resolvedAppointmentId,
+      forUpdate: true
+    });
+
+    if (!appointmentRow) {
+      throw new AdminAppointmentsError({
+        status: 404,
+        code: "APPOINTMENT_NOT_FOUND",
+        message: "Cita no encontrada"
+      });
+    }
+
+    const currentStatus = String(appointmentRow.status || "").trim().toLowerCase();
+
+    if (!ROOM_MUTABLE_STATUSES.has(currentStatus)) {
+      throw new AdminAppointmentsError({
+        status: 409,
+        code: "APPOINTMENT_ROOM_CHANGE_NOT_ALLOWED",
+        message: "Solo se puede cambiar sala en citas pending o confirmed"
+      });
+    }
+
+    const currentRoomId = Number(appointmentRow.roomId);
+    const roomOptions = await getRoomOptionsForAppointment({
+      connection,
+      centerId: center.id,
+      appointmentRow
+    });
+    const targetRoomOption = roomOptions.find((entry) => Number(entry.id) === resolvedRoomId);
+    const availableRooms = roomOptions.filter((entry) => entry.available);
+
+    if (availableRooms.length === 0) {
+      throw new AdminAppointmentsError({
+        status: 409,
+        code: "ROOM_NOT_AVAILABLE",
+        message: "No hay salas disponibles para ese horario"
+      });
+    }
+
+    if (!targetRoomOption || !targetRoomOption.available) {
+      throw new AdminAppointmentsError({
+        status: 409,
+        code: "ROOM_NOT_AVAILABLE",
+        message: "La sala seleccionada no esta disponible para ese horario",
+        details: {
+          roomId: resolvedRoomId
+        }
+      });
+    }
+
+    if (resolvedRoomId !== currentRoomId) {
+      const [updateResult] = await connection.query(
+        `UPDATE appointments
+         SET
+           room_id = ?,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?
+           AND center_id = ?
+         LIMIT 1`,
+        [resolvedRoomId, resolvedAppointmentId, center.id]
+      );
+
+      if (Number(updateResult?.affectedRows || 0) !== 1) {
+        throw new AdminAppointmentsError({
+          status: 409,
+          code: "APPOINTMENT_ROOM_UPDATE_CONFLICT",
+          message: "No se pudo actualizar la sala de la cita"
+        });
+      }
+    }
+
+    try {
+      await createClaims({
+        connection,
+        manageTransaction: false,
+        appointment: {
+          centerId: center.id,
+          appointmentId: resolvedAppointmentId,
+          therapistId: Number(appointmentRow.therapistId),
+          roomId: resolvedRoomId,
+          startsAt: appointmentRow.startsAt,
+          endsAt: appointmentRow.endsAt,
+          status: currentStatus
+        }
+      });
+    } catch (error) {
+      if (error instanceof SlotOccupiedError || error?.code === "SLOT_OCCUPIED") {
+        throw new AdminAppointmentsError({
+          status: 409,
+          code: "ROOM_NOT_AVAILABLE",
+          message: "La sala seleccionada ya no esta disponible"
+        });
+      }
+
+      throw error;
+    }
+
+    const detail = await buildAppointmentDetail({
+      connection,
+      centerId: center.id,
+      appointmentId: resolvedAppointmentId,
+      now: nowDate
+    });
+
+    await connection.commit();
+
+    return {
+      generatedAt: nowDate.toISOString(),
+      center,
+      roomChange: {
+        fromRoomId: currentRoomId,
+        toRoomId: resolvedRoomId,
+        changedAt: nowDate.toISOString()
+      },
+      appointment: detail
+    };
+  } catch (error) {
+    if (startedTransaction) {
+      await connection.rollback();
+    }
+
+    throw error;
+  }
+}
+
 module.exports = {
   AdminAppointmentsError,
   listAdminAppointments,
   getAdminAppointmentDetail,
-  updateAdminAppointmentStatus
+  updateAdminAppointmentStatus,
+  updateAdminAppointmentRoom
 };

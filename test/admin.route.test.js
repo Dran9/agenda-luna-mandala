@@ -625,6 +625,81 @@ test("POST /api/admin/appointments/:id/status returns 409 on invalid transition"
   assert.equal(res.payload.error.code, "APPOINTMENT_STATUS_TRANSITION_INVALID");
 });
 
+test("POST /api/admin/appointments/:id/room applies room change", async () => {
+  const connection = {
+    release() {}
+  };
+
+  let receivedArgs = null;
+
+  const router = createAdminRouter({
+    getPool: () => ({
+      async getConnection() {
+        return connection;
+      }
+    }),
+    verifyToken: () => ({ adminId: 2, centerId: 1, email: "admin@luna.com", role: "admin" }),
+    setAppointmentRoom: async (args) => {
+      receivedArgs = args;
+      return {
+        roomChange: { fromRoomId: 1, toRoomId: 2 },
+        appointment: { id: 88, room: { id: 2, name: "Sala Sol" } }
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/appointments/:id/room", "post");
+  const req = {
+    params: { id: "88" },
+    body: { roomId: 2 },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(receivedArgs.appointmentId, "88");
+  assert.equal(receivedArgs.roomId, 2);
+  assert.equal(receivedArgs.adminSession.role, "admin");
+  assert.equal(res.payload.appointment.room.id, 2);
+});
+
+test("POST /api/admin/appointments/:id/room without token returns 401", async () => {
+  let requestedConnection = false;
+
+  const pool = {
+    async getConnection() {
+      requestedConnection = true;
+      return {
+        release() {}
+      };
+    }
+  };
+
+  const router = createAdminRouter({
+    getPool: () => pool
+  });
+
+  const handler = getRouteHandler(router, "/appointments/:id/room", "post");
+  const req = {
+    params: { id: "88" },
+    body: { roomId: 2 },
+    get() {
+      return undefined;
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.payload.error.code, "ADMIN_TOKEN_REQUIRED");
+  assert.equal(requestedConnection, false);
+});
+
 test("GET /api/admin/clients without token returns 401", async () => {
   let requestedConnection = false;
 

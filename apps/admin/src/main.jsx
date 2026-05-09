@@ -5,6 +5,7 @@ import {
   CircleNotch,
   Clock,
   Door,
+  Lightning,
   Moon,
   SignOut,
   SlidersHorizontal,
@@ -20,7 +21,7 @@ import {
 import "./styles.css";
 
 const MENU = [
-  { id: "control", label: "Control", Icon: CalendarCheck, phase: "Activo" },
+  { id: "control", label: "Control", Icon: Lightning, phase: "Activo" },
   { id: "clientes", label: "Clientes", Icon: UsersThree, phase: "Fase 4B" },
   { id: "terapeutas", label: "Terapeutas", Icon: UserGear, phase: "Fase 4B" },
   { id: "finanzas", label: "Finanzas", Icon: Wallet, phase: "Fase 5" },
@@ -54,6 +55,8 @@ const ACTION_LABELS = {
   no_show: "Marcar no show"
 };
 const TERMINAL_ACTIONS = new Set(["completed", "cancelled", "no_show"]);
+const CONTROL_AUTO_REFRESH_MS = 15000;
+const CLIENTS_AUTO_REFRESH_MS = 20000;
 
 const ADMIN_TOKEN_KEY = "agenda-admin-token";
 const ADMIN_PROFILE_KEY = "agenda-admin-profile";
@@ -469,13 +472,12 @@ function AppointmentDrawer({
   timezone,
   onClose,
   onChangeStatus,
+  onChangeRoom,
   mutationLoading,
-  mutationError
+  mutationError,
+  roomMutationLoading,
+  roomMutationError
 }) {
-  if (!open) {
-    return null;
-  }
-
   const appointment = detail?.appointment || null;
   const client = appointment?.client || {};
   const service = appointment?.service || {};
@@ -484,9 +486,26 @@ function AppointmentDrawer({
   const claims = appointment?.claims || [];
   const payments = appointment?.payments || [];
   const paymentsSummary = appointment?.paymentsSummary || null;
+  const clientContext = appointment?.clientContext || null;
+  const roomOptions = appointment?.roomOptions || [];
 
   const nextActions = appointment ? STATUS_ACTIONS[appointment.status] || [] : [];
   const whatsappDigits = sanitizePhoneForWa(client.whatsapp);
+  const selectableRooms = roomOptions.filter((entry) => entry.available || entry.current);
+  const [targetRoomId, setTargetRoomId] = useState("");
+
+  useEffect(() => {
+    if (!open || !appointment?.room?.id) {
+      setTargetRoomId("");
+      return;
+    }
+
+    setTargetRoomId(String(appointment.room.id));
+  }, [open, appointment?.id, appointment?.room?.id]);
+
+  if (!open) {
+    return null;
+  }
 
   return (
     <div className="drawer-overlay" role="presentation" onClick={onClose}>
@@ -534,21 +553,30 @@ function AppointmentDrawer({
                     </a>
                   ) : null}
                 </dd>
-                <dt>First name</dt>
-                <dd>{client.firstName || "-"}</dd>
-                <dt>Last name</dt>
-                <dd>{client.lastName || "-"}</dd>
-                <dt>Edad</dt>
-                <dd>{client.age ?? "-"}</dd>
-                <dt>Ciudad</dt>
-                <dd>{client.city || "-"}</dd>
-                <dt>Fuente</dt>
-                <dd>{client.source || "-"}</dd>
-                <dt>Onboarding</dt>
-                <dd>{client.onboardingComplete ? "Completo" : "Incompleto"}</dd>
-                <dt>Onboarding at</dt>
-                <dd>{formatDateTime(client.onboardingCompletedAt, timezone)}</dd>
               </dl>
+            </DrawerSection>
+
+            <DrawerSection title="Contexto cliente">
+              {clientContext?.activeAppointments?.length ? (
+                <>
+                  <p className="drawer-note">
+                    Citas activas: <strong>{clientContext.activeAppointments.length}</strong> · Terapias distintas:{" "}
+                    <strong>{clientContext.activeServiceCount || 0}</strong>
+                  </p>
+                  <ul className="drawer-list">
+                    {clientContext.activeAppointments.map((entry) => (
+                      <li key={`context-${entry.id}`}>
+                        <span>
+                          {entry.serviceName || "-"} · {entry.therapistName || "-"}
+                        </span>
+                        <span>{formatDateTime(entry.startsAt, timezone)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="empty-state compact">Sin otras citas activas para este cliente.</p>
+              )}
             </DrawerSection>
 
             <DrawerSection title="Cita">
@@ -564,6 +592,44 @@ function AppointmentDrawer({
                 <dt>Fin</dt>
                 <dd>{formatDateTime(appointment.endsAt, timezone)}</dd>
               </dl>
+            </DrawerSection>
+
+            <DrawerSection title="Cambio de sala">
+              {selectableRooms.length ? (
+                <div className="room-change-box">
+                  <label className="field-inline">
+                    <span>Sala disponible</span>
+                    <select
+                      value={targetRoomId}
+                      onChange={(event) => setTargetRoomId(event.target.value)}
+                      disabled={roomMutationLoading}
+                    >
+                      {selectableRooms.map((option) => (
+                        <option key={`room-option-${option.id}`} value={String(option.id)}>
+                          {option.name}
+                          {option.current ? " (actual)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    className="status-action"
+                    disabled={
+                      roomMutationLoading
+                      || !targetRoomId
+                      || Number(targetRoomId) === Number(room.id)
+                    }
+                    onClick={() => onChangeRoom(targetRoomId)}
+                  >
+                    {roomMutationLoading ? <CircleNotch size={16} className="spin" /> : null}
+                    <span>Guardar sala</span>
+                  </button>
+                </div>
+              ) : (
+                <p className="empty-state compact">No hay salas disponibles para esta hora.</p>
+              )}
+              {roomMutationError ? <p className="feedback error compact-feedback">{roomMutationError}</p> : null}
             </DrawerSection>
 
             <DrawerSection title="Recursos bloqueados">
@@ -870,6 +936,8 @@ function AdminApp() {
   const [detailPayload, setDetailPayload] = useState(null);
   const [mutationLoading, setMutationLoading] = useState(false);
   const [mutationError, setMutationError] = useState("");
+  const [roomMutationLoading, setRoomMutationLoading] = useState(false);
+  const [roomMutationError, setRoomMutationError] = useState("");
   const [clientsDraft, setClientsDraft] = useState({
     q: "",
     onboarding: "all",
@@ -1084,6 +1152,30 @@ function AdminApp() {
   }, [authToken, activeSection, clientsFilters, clientsRefreshTick, handleUnauthorized]);
 
   useEffect(() => {
+    if (!authToken || activeSection !== "control") {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setRefreshTick((value) => value + 1);
+    }, CONTROL_AUTO_REFRESH_MS);
+
+    return () => window.clearInterval(timer);
+  }, [authToken, activeSection]);
+
+  useEffect(() => {
+    if (!authToken || activeSection !== "clientes") {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setClientsRefreshTick((value) => value + 1);
+    }, CLIENTS_AUTO_REFRESH_MS);
+
+    return () => window.clearInterval(timer);
+  }, [authToken, activeSection]);
+
+  useEffect(() => {
     if (activeSection !== "control" || !drawerOpen || !selectedAppointmentId || !authToken) {
       return;
     }
@@ -1119,7 +1211,7 @@ function AdminApp() {
     return () => {
       controller.abort();
     };
-  }, [activeSection, drawerOpen, selectedAppointmentId, authToken, fetchAppointmentDetail]);
+  }, [activeSection, drawerOpen, selectedAppointmentId, authToken, fetchAppointmentDetail, refreshTick]);
 
   useEffect(() => {
     if (activeSection !== "clientes" || !clientDrawerOpen || !selectedClientId || !authToken) {
@@ -1223,6 +1315,7 @@ function AdminApp() {
     setDetailPayload(null);
     setDetailError("");
     setMutationError("");
+    setRoomMutationError("");
     setClientDrawerOpen(false);
     setSelectedClientId(null);
     setClientDetailPayload(null);
@@ -1235,6 +1328,7 @@ function AdminApp() {
     setDetailPayload(null);
     setDetailError("");
     setMutationError("");
+    setRoomMutationError("");
   }, []);
 
   const closeDrawer = useCallback(() => {
@@ -1244,6 +1338,8 @@ function AdminApp() {
     setDetailError("");
     setMutationLoading(false);
     setMutationError("");
+    setRoomMutationLoading(false);
+    setRoomMutationError("");
   }, []);
 
   const openClientDrawer = useCallback((clientId) => {
@@ -1318,6 +1414,7 @@ function AdminApp() {
     setDetailPayload(null);
     setDetailError("");
     setMutationError("");
+    setRoomMutationError("");
     setClientsPayload(null);
     setClientsError("");
     setClientDrawerOpen(false);
@@ -1375,6 +1472,44 @@ function AdminApp() {
     }
   }
 
+  async function handleRoomChange(nextRoomId) {
+    if (!selectedAppointmentId || !nextRoomId || roomMutationLoading) {
+      return;
+    }
+
+    setRoomMutationLoading(true);
+    setRoomMutationError("");
+
+    try {
+      const response = await fetch(`/api/admin/appointments/${selectedAppointmentId}/room`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ roomId: nextRoomId })
+      });
+
+      const mutationPayload = await response.json();
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(mutationPayload));
+      }
+
+      setDetailPayload(mutationPayload);
+      setRefreshTick((value) => value + 1);
+    } catch (mutationRequestError) {
+      setRoomMutationError(mutationRequestError.message || "No se pudo cambiar la sala.");
+    } finally {
+      setRoomMutationLoading(false);
+    }
+  }
+
   function handleClientSearchSubmit(event) {
     event.preventDefault();
     setClientsFilters({
@@ -1423,7 +1558,7 @@ function AdminApp() {
                   onClick={() => activateSection(item.id)}
                   aria-current={isActive ? "page" : undefined}
                 >
-                  <MenuIcon size={20} weight={isActive ? "fill" : "regular"} aria-hidden="true" />
+                  <MenuIcon size={24} weight={isActive ? "fill" : "regular"} aria-hidden="true" />
                   <p className="nav-label">{item.label}</p>
                   <span className={`nav-phase${isActive ? " nav-phase-active" : ""}`}>{item.phase}</span>
                 </button>
@@ -1432,7 +1567,7 @@ function AdminApp() {
 
             return (
               <div className={`nav-item${isActive ? " is-active" : ""}`} key={item.id} aria-current={isActive ? "page" : undefined}>
-                <MenuIcon size={20} weight="regular" aria-hidden="true" />
+                <MenuIcon size={24} weight="regular" aria-hidden="true" />
                 <p className="nav-label">{item.label}</p>
                 <span className="nav-phase">{item.phase}</span>
               </div>
@@ -1446,7 +1581,7 @@ function AdminApp() {
           onClick={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
           aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
         >
-          {theme === "dark" ? <Sun size={18} weight="regular" aria-hidden="true" /> : <Moon size={18} weight="regular" aria-hidden="true" />}
+          {theme === "dark" ? <Sun size={22} weight="regular" aria-hidden="true" /> : <Moon size={22} weight="regular" aria-hidden="true" />}
         </button>
       </aside>
 
@@ -1493,9 +1628,6 @@ function AdminApp() {
                   <span>Incluir proximas</span>
                 </label>
 
-                <button type="button" className="refresh-button" onClick={() => setRefreshTick((value) => value + 1)}>
-                  Actualizar
-                </button>
               </>
             ) : null}
 
@@ -1784,13 +1916,6 @@ function AdminApp() {
                         >
                           Limpiar
                         </button>
-                        <button
-                          type="button"
-                          className="refresh-button"
-                          onClick={() => setClientsRefreshTick((value) => value + 1)}
-                        >
-                          Actualizar
-                        </button>
                       </div>
                     </form>
                   </section>
@@ -1838,8 +1963,11 @@ function AdminApp() {
         timezone={timezone}
         onClose={closeDrawer}
         onChangeStatus={handleStatusChange}
+        onChangeRoom={handleRoomChange}
         mutationLoading={mutationLoading}
         mutationError={mutationError}
+        roomMutationLoading={roomMutationLoading}
+        roomMutationError={roomMutationError}
       />
 
       <ClientDrawer

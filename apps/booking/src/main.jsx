@@ -232,17 +232,6 @@ function readInitialConfig() {
   };
 }
 
-function createVariantHref(tenantSlug, screenType) {
-  const params = new URLSearchParams();
-  params.set("tenantSlug", tenantSlug);
-
-  if (screenType !== "default") {
-    params.set("screenType", screenType);
-  }
-
-  return `/?${params.toString()}`;
-}
-
 function normalizePhone(value) {
   return String(value || "").replace(/\D/g, "");
 }
@@ -1715,7 +1704,6 @@ function BookingApp() {
   const confirmationMissingFields = [];
 
   if (confirmState.status === "success") {
-    if (!confirmedAppointment.publicCode) confirmationMissingFields.push("codigo publico");
     if (!confirmedAppointment.startsAt) confirmationMissingFields.push("fecha/hora");
     if (!confirmedAppointment.serviceName) confirmationMissingFields.push("servicio");
     if (!confirmedAppointment.therapistName) confirmationMissingFields.push("terapeuta");
@@ -1734,29 +1722,6 @@ function BookingApp() {
             <p className="tenant">tenant: {config.tenantSlug}</p>
           </div>
         </header>
-
-        <nav className="variant-nav" aria-label="Variantes de Reserva publica">
-          {Object.entries(SCREEN_TYPES).map(([value, label]) => {
-            const isActive = config.screenType === value;
-
-            return (
-              <a
-                key={value}
-                href={createVariantHref(config.tenantSlug, value)}
-                className={`variant-link${isActive ? " is-active" : ""}`}
-                aria-current={isActive ? "page" : undefined}
-              >
-                {label}
-              </a>
-            );
-          })}
-        </nav>
-
-        {config.screenType !== "default" ? (
-          <p className="phase-note">
-            En Fase 3C el flujo premium conectado aplica solo al modo default. Las variantes avanzadas quedan para la siguiente fase.
-          </p>
-        ) : null}
 
         <div className="support-row">
           <a className="btn btn-ghost" href={supportGuideHref} target="_blank" rel="noreferrer">
@@ -2467,10 +2432,6 @@ function BookingApp() {
               Cita anterior: {formatAppointmentSummary(previousAppointmentAfterReschedule)}.
             </p>
           ) : null}
-          <div className="confirmation-code-wrap">
-            <span className="confirmation-code-label">Codigo publico</span>
-            <strong className="confirmation-code">{confirmedAppointment.publicCode || "--"}</strong>
-          </div>
           <ul className="confirmation-list" aria-label="Detalle de cita confirmada">
             <li>
               <strong>Fecha y hora</strong>

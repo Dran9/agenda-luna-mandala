@@ -5,6 +5,7 @@ const {
   AdminAppointmentsError,
   getAdminAppointmentDetail,
   listAdminAppointments,
+  updateAdminAppointmentRoom,
   updateAdminAppointmentStatus
 } = require("../server/services/adminAppointments.service");
 
@@ -90,6 +91,7 @@ function createServiceConnection(seed) {
     services: (seed.services || []).map((entry) => ({ ...entry })),
     therapists: (seed.therapists || []).map((entry) => ({ ...entry })),
     rooms: (seed.rooms || []).map((entry) => ({ ...entry })),
+    serviceRooms: (seed.serviceRooms || []).map((entry) => ({ ...entry })),
     appointments: (seed.appointments || []).map((entry) => ({ ...entry })),
     claims: (seed.claims || []).map((entry) => ({ ...entry })),
     payments: (seed.payments || []).map((entry) => ({ ...entry }))
@@ -234,6 +236,43 @@ function createServiceConnection(seed) {
         return [[toJoinedDetailRow(this.state, appointment)]];
       }
 
+      if (
+        normalizedSql.includes("FROM appointments a") &&
+        normalizedSql.includes("AND a.client_id = ?") &&
+        normalizedSql.includes("a.status IN ('pending', 'confirmed')") &&
+        normalizedSql.includes("a.starts_at >= ?") &&
+        normalizedSql.includes("ORDER BY a.starts_at ASC, a.id ASC")
+      ) {
+        const [centerId, clientId, startsAtMin] = params;
+        const rows = this.state.appointments
+          .filter((entry) => {
+            if (entry.centerId !== centerId) return false;
+            if (entry.clientId !== clientId) return false;
+            if (entry.status !== "pending" && entry.status !== "confirmed") return false;
+            return toComparableTime(entry.startsAt) >= toComparableTime(startsAtMin);
+          })
+          .sort((left, right) => toComparableTime(left.startsAt) - toComparableTime(right.startsAt) || left.id - right.id)
+          .map((entry) => {
+            const service = this.state.services.find((item) => item.id === entry.serviceId);
+            const therapist = this.state.therapists.find((item) => item.id === entry.therapistId);
+            const room = this.state.rooms.find((item) => item.id === entry.roomId);
+
+            return {
+              id: entry.id,
+              serviceId: entry.serviceId,
+              serviceName: service?.name || null,
+              therapistId: entry.therapistId,
+              therapistName: therapist?.displayName || therapist?.fullName || therapist?.name || null,
+              roomId: entry.roomId,
+              roomName: room?.name || null,
+              status: entry.status,
+              startsAt: entry.startsAt
+            };
+          });
+
+        return [rows];
+      }
+
       if (normalizedSql.includes("FROM appointment_resource_claims c") && normalizedSql.includes("WHERE c.center_id = ?") && normalizedSql.includes("c.appointment_id = ?")) {
         const [centerId, appointmentId] = params;
         const rows = this.state.claims
@@ -275,6 +314,58 @@ function createServiceConnection(seed) {
         return [rows];
       }
 
+      if (normalizedSql.includes("FROM service_rooms sr") && normalizedSql.includes("INNER JOIN rooms r")) {
+        const [centerId, serviceId] = params;
+        const rows = this.state.serviceRooms
+          .filter((entry) => entry.centerId === centerId && entry.serviceId === serviceId && entry.isActive === 1)
+          .map((entry) => {
+            const room = this.state.rooms.find((item) => item.id === entry.roomId && item.isActive !== 0);
+
+            if (!room) {
+              return null;
+            }
+
+            return {
+              roomId: room.id,
+              roomName: room.name
+            };
+          })
+          .filter(Boolean)
+          .sort((left, right) => left.roomId - right.roomId);
+
+        return [rows];
+      }
+
+      if (
+        normalizedSql.includes("FROM appointment_resource_claims") &&
+        normalizedSql.includes("resource_type = 'room'") &&
+        normalizedSql.includes("appointment_id <> ?") &&
+        normalizedSql.includes("GROUP BY resource_id")
+      ) {
+        const [centerId, excludedAppointmentId, startsAtDb, endsAtDb, ...roomIds] = params;
+        const rows = [];
+
+        for (const roomId of roomIds.map((entry) => Number(entry))) {
+          const blockedMinutes = this.state.claims.filter((entry) => {
+            if (entry.centerId !== centerId) return false;
+            if (entry.resourceType !== "room") return false;
+            if (entry.appointmentId === excludedAppointmentId) return false;
+            if (Number(entry.resourceId) !== roomId) return false;
+            const claimTime = String(entry.claimTime || "");
+            return claimTime >= String(startsAtDb) && claimTime < String(endsAtDb);
+          }).length;
+
+          if (blockedMinutes > 0) {
+            rows.push({
+              roomId,
+              blockedMinutes
+            });
+          }
+        }
+
+        return [rows];
+      }
+
       if (normalizedSql.includes("FROM appointment_resource_claims") && normalizedSql.includes("resource_type AS resourceType") && normalizedSql.includes("resource_id AS resourceId") && normalizedSql.includes("claim_time AS claimTime") && normalizedSql.includes("WHERE center_id = ?") && normalizedSql.includes("AND appointment_id = ?")) {
         const [centerId, appointmentId] = params;
         const rows = this.state.claims
@@ -289,6 +380,59 @@ function createServiceConnection(seed) {
         return [rows];
       }
 
+      if (normalizedSql === "DELETE FROM appointment_resource_claims WHERE appointment_id = ?") {
+        const [appointmentId] = params;
+        this.state.claims = this.state.claims.filter((entry) => entry.appointmentId !== appointmentId);
+        return [{ affectedRows: 1 }];
+      }
+
+      if (normalizedSql.startsWith("INSERT INTO appointment_resource_claims")) {
+        if (!params.length || params.length % 5 !== 0) {
+          throw new Error("Insert claims params invalidos en test");
+        }
+
+        let nextId = this.state.claims.reduce((max, entry) => Math.max(max, Number(entry.id) || 0), 0) + 1;
+        const rowsToInsert = [];
+
+        for (let index = 0; index < params.length; index += 5) {
+          const centerId = Number(params[index]);
+          const appointmentId = Number(params[index + 1]);
+          const resourceType = String(params[index + 2]);
+          const resourceId = Number(params[index + 3]);
+          const claimTime = String(params[index + 4]);
+
+          const conflict = this.state.claims.find(
+            (entry) =>
+              Number(entry.centerId) === centerId &&
+              String(entry.resourceType) === resourceType &&
+              Number(entry.resourceId) === resourceId &&
+              String(entry.claimTime) === claimTime &&
+              Number(entry.appointmentId) !== appointmentId
+          );
+
+          if (conflict) {
+            const duplicateError = new Error("Duplicate claim in test");
+            duplicateError.code = "ER_DUP_ENTRY";
+            duplicateError.errno = 1062;
+            throw duplicateError;
+          }
+
+          rowsToInsert.push({
+            id: nextId,
+            centerId,
+            appointmentId,
+            resourceType,
+            resourceId,
+            claimTime,
+            createdAt: new Date().toISOString()
+          });
+          nextId += 1;
+        }
+
+        this.state.claims.push(...rowsToInsert);
+        return [{ affectedRows: rowsToInsert.length }];
+      }
+
       if (normalizedSql.includes("SELECT COUNT(*) AS claimCount") && normalizedSql.includes("FROM appointment_resource_claims")) {
         const [centerId, appointmentId] = params;
         const claimCount = this.state.claims.filter(
@@ -298,7 +442,34 @@ function createServiceConnection(seed) {
         return [[{ claimCount }]];
       }
 
-      if (normalizedSql.includes("UPDATE appointments") && normalizedSql.includes("SET") && normalizedSql.includes("WHERE id = ?") && normalizedSql.includes("AND center_id = ?")) {
+      if (
+        normalizedSql.includes("UPDATE appointments") &&
+        normalizedSql.includes("room_id = ?") &&
+        normalizedSql.includes("WHERE id = ?") &&
+        normalizedSql.includes("AND center_id = ?")
+      ) {
+        const [roomId, appointmentId, centerId] = params;
+        const appointment = this.state.appointments.find(
+          (entry) => entry.id === appointmentId && entry.centerId === centerId
+        );
+
+        if (!appointment) {
+          return [{ affectedRows: 0 }];
+        }
+
+        appointment.roomId = Number(roomId);
+        appointment.updatedAt = new Date();
+        return [{ affectedRows: 1 }];
+      }
+
+      if (
+        normalizedSql.includes("UPDATE appointments") &&
+        normalizedSql.includes("cancelled_at = CASE WHEN") &&
+        normalizedSql.includes("completed_at = CASE WHEN") &&
+        normalizedSql.includes("no_show_at = CASE WHEN") &&
+        normalizedSql.includes("WHERE id = ?") &&
+        normalizedSql.includes("AND center_id = ?")
+      ) {
         const [
           targetStatus,
           cancelledStatus,
@@ -379,7 +550,8 @@ function baseSeed() {
     ],
     services: [{ id: 1, name: "Masaje Relajante" }],
     therapists: [{ id: 1, name: "Ana" }],
-    rooms: [{ id: 1, name: "Sala Luna" }],
+    rooms: [{ id: 1, name: "Sala Luna", isActive: 1 }],
+    serviceRooms: [{ centerId: 1, serviceId: 1, roomId: 1, isActive: 1 }],
     appointments: [],
     claims: [],
     payments: []
@@ -496,6 +668,7 @@ test("getAdminAppointmentDetail devuelve joins reales, claims y pagos", async ()
   const payload = await getAdminAppointmentDetail({
     connection,
     appointmentId: 200,
+    now: new Date("2026-05-09T13:00:00.000Z"),
     adminSession: { centerId: 1 }
   });
 
@@ -505,6 +678,9 @@ test("getAdminAppointmentDetail devuelve joins reales, claims y pagos", async ()
   assert.equal(payload.appointment.claims.length, 1);
   assert.equal(payload.appointment.payments.length, 1);
   assert.equal(payload.appointment.paymentsSummary.totalPayments, 1);
+  assert.equal(payload.appointment.clientContext.activeAppointments.length, 1);
+  assert.equal(payload.appointment.roomOptions.length, 1);
+  assert.equal(payload.appointment.roomOptions[0].available, true);
 });
 
 test("state machine: pending -> confirmed conserva claims existentes", async () => {
@@ -914,6 +1090,105 @@ test("state machine: estado terminal no se reactiva", async () => {
     (error) => {
       assert.equal(error instanceof AdminAppointmentsError, true);
       assert.equal(error.code, "APPOINTMENT_STATUS_TRANSITION_INVALID");
+      assert.equal(error.status, 409);
+      return true;
+    }
+  );
+});
+
+test("room change: confirmed permite cambiar a sala disponible y recrea claims", async () => {
+  const seed = baseSeed();
+  seed.rooms = [
+    { id: 1, name: "Sala Luna", isActive: 1 },
+    { id: 2, name: "Sala Sol", isActive: 1 }
+  ];
+  seed.serviceRooms = [
+    { centerId: 1, serviceId: 1, roomId: 1, isActive: 1 },
+    { centerId: 1, serviceId: 1, roomId: 2, isActive: 1 }
+  ];
+  seed.appointments = [
+    {
+      id: 401,
+      centerId: 1,
+      publicCode: "PUB-ROOM-401",
+      status: "confirmed",
+      startsAt: "2026-05-10T10:00:00-04:00",
+      endsAt: "2026-05-10T10:02:00-04:00",
+      createdAt: "2026-05-09T18:00:00.000Z",
+      clientId: 1,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    }
+  ];
+  seed.claims = [
+    { id: 61, centerId: 1, appointmentId: 401, resourceType: "therapist", resourceId: 1, claimTime: "2026-05-10 10:00:00", createdAt: "2026-05-09T18:00:01.000Z" },
+    { id: 62, centerId: 1, appointmentId: 401, resourceType: "room", resourceId: 1, claimTime: "2026-05-10 10:00:00", createdAt: "2026-05-09T18:00:01.000Z" },
+    { id: 63, centerId: 1, appointmentId: 401, resourceType: "therapist", resourceId: 1, claimTime: "2026-05-10 10:01:00", createdAt: "2026-05-09T18:00:01.000Z" },
+    { id: 64, centerId: 1, appointmentId: 401, resourceType: "room", resourceId: 1, claimTime: "2026-05-10 10:01:00", createdAt: "2026-05-09T18:00:01.000Z" }
+  ];
+
+  const connection = createServiceConnection(seed);
+  const payload = await updateAdminAppointmentRoom({
+    connection,
+    appointmentId: 401,
+    roomId: 2,
+    adminSession: { centerId: 1 }
+  });
+
+  assert.equal(payload.roomChange.fromRoomId, 1);
+  assert.equal(payload.roomChange.toRoomId, 2);
+  assert.equal(payload.appointment.room.id, 2);
+  assert.equal(connection.state.appointments[0].roomId, 2);
+  assert.equal(connection.state.claims.filter((entry) => entry.appointmentId === 401 && entry.resourceType === "room").every((entry) => entry.resourceId === 2), true);
+});
+
+test("room change: sala ocupada devuelve ROOM_NOT_AVAILABLE", async () => {
+  const seed = baseSeed();
+  seed.rooms = [
+    { id: 1, name: "Sala Luna", isActive: 1 },
+    { id: 2, name: "Sala Sol", isActive: 1 }
+  ];
+  seed.serviceRooms = [
+    { centerId: 1, serviceId: 1, roomId: 1, isActive: 1 },
+    { centerId: 1, serviceId: 1, roomId: 2, isActive: 1 }
+  ];
+  seed.appointments = [
+    {
+      id: 402,
+      centerId: 1,
+      publicCode: "PUB-ROOM-402",
+      status: "confirmed",
+      startsAt: "2026-05-10T11:00:00-04:00",
+      endsAt: "2026-05-10T11:02:00-04:00",
+      createdAt: "2026-05-09T18:00:00.000Z",
+      clientId: 1,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    }
+  ];
+  seed.claims = [
+    { id: 71, centerId: 1, appointmentId: 402, resourceType: "therapist", resourceId: 1, claimTime: "2026-05-10 11:00:00", createdAt: "2026-05-09T18:00:01.000Z" },
+    { id: 72, centerId: 1, appointmentId: 402, resourceType: "room", resourceId: 1, claimTime: "2026-05-10 11:00:00", createdAt: "2026-05-09T18:00:01.000Z" },
+    { id: 73, centerId: 1, appointmentId: 5000, resourceType: "room", resourceId: 2, claimTime: "2026-05-10 11:00:00", createdAt: "2026-05-09T18:00:01.000Z" },
+    { id: 74, centerId: 1, appointmentId: 5000, resourceType: "room", resourceId: 2, claimTime: "2026-05-10 11:01:00", createdAt: "2026-05-09T18:00:01.000Z" }
+  ];
+
+  const connection = createServiceConnection(seed);
+
+  await assert.rejects(
+    updateAdminAppointmentRoom({
+      connection,
+      appointmentId: 402,
+      roomId: 2,
+      adminSession: { centerId: 1 }
+    }),
+    (error) => {
+      assert.equal(error instanceof AdminAppointmentsError, true);
+      assert.equal(error.code, "ROOM_NOT_AVAILABLE");
       assert.equal(error.status, 409);
       return true;
     }
