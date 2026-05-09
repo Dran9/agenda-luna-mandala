@@ -294,17 +294,60 @@ function pickFirstRoomPairForTherapist({ pairs, therapistId }) {
     .sort((left, right) => Number(left.roomId) - Number(right.roomId))[0] || null;
 }
 
+function getHourInTimezone(dateValue, timezone) {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone: timezone || undefined
+    });
+    const parts = formatter.formatToParts(dateValue);
+    const hourPart = parts.find((entry) => entry.type === "hour");
+    const parsedHour = Number.parseInt(hourPart?.value || "", 10);
+    return Number.isInteger(parsedHour) ? parsedHour : null;
+  } catch {
+    return null;
+  }
+}
+
+function filterVisiblePublicSlots({ slots, timezone, now }) {
+  const nowDate = toDate(now);
+
+  return (slots || []).filter((slot) => {
+    const slotStartsAt = toDate(slot.startsAt);
+
+    if (slotStartsAt <= nowDate) {
+      return false;
+    }
+
+    const hour = getHourInTimezone(slotStartsAt, timezone);
+
+    if (hour === null) {
+      return true;
+    }
+
+    return hour >= 7 && hour < 20;
+  });
+}
+
 async function mapAvailabilityForPublic({
   connection,
   centerId,
   serviceId,
   availability,
-  therapistId
+  therapistId,
+  timezone,
+  now
 }) {
+  const visibleAvailability = filterVisiblePublicSlots({
+    slots: availability,
+    timezone,
+    now
+  });
   const hasRequestedTherapist = therapistId !== undefined && therapistId !== null && therapistId !== "";
 
   if (hasRequestedTherapist) {
-    return availability
+    return visibleAvailability
       .map((slot) => mapPublicSlot({
         slot,
         pair: pickPublicAvailabilityPair({
@@ -321,7 +364,7 @@ async function mapAvailabilityForPublic({
     serviceId
   });
 
-  return availability
+  return visibleAvailability
     .map((slot) => {
       const therapistsById = new Map();
 
@@ -578,7 +621,9 @@ async function getAvailability({
       centerId: center.id,
       serviceId: normalizedServiceId,
       availability,
-      therapistId
+      therapistId,
+      timezone: timezone || center.timezone,
+      now
     })
   };
 }

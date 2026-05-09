@@ -1388,6 +1388,71 @@ test("availability publica: si Daniel no esta disponible, salta al siguiente dis
   assert.equal(result.slots[0].therapistName, "Carla Bustamante");
 });
 
+test("availability publica: slots fuera de ventana visible no consumen turno de round-robin", async () => {
+  const fixture = createDualTherapistFixture({
+    roundRobinState: [{ centerId: 1, serviceId: 10, lastTherapistId: 100 }],
+    resourceSchedules: [
+      {
+        centerId: 1,
+        resourceType: "therapist",
+        resourceId: 100,
+        weekday: 1,
+        startTime: "06:00:00",
+        endTime: "10:00:00",
+        slotMinutes: 60,
+        isActive: 1
+      },
+      {
+        centerId: 1,
+        resourceType: "therapist",
+        resourceId: 101,
+        weekday: 1,
+        startTime: "06:00:00",
+        endTime: "10:00:00",
+        slotMinutes: 60,
+        isActive: 1
+      },
+      {
+        centerId: 1,
+        resourceType: "room",
+        resourceId: 200,
+        weekday: 1,
+        startTime: "06:00:00",
+        endTime: "10:00:00",
+        slotMinutes: 60,
+        isActive: 1
+      },
+      {
+        centerId: 1,
+        resourceType: "room",
+        resourceId: 201,
+        weekday: 1,
+        startTime: "06:00:00",
+        endTime: "10:00:00",
+        slotMinutes: 60,
+        isActive: 1
+      }
+    ]
+  });
+  const connection = new FakeBookingConnection(fixture);
+
+  const result = await getAvailability({
+    connection,
+    tenantSlug: "luna-mandala",
+    phoneE164: "71234567",
+    serviceId: 10,
+    date: "2026-05-11",
+    timezone: "America/La_Paz",
+    stepMinutes: 60,
+    now: "2026-05-10T23:00:00-04:00"
+  });
+
+  assert.ok(result.slots.length > 0);
+  assert.equal(result.slots[0].startsAt, "2026-05-11T11:00:00.000Z");
+  assert.equal(result.slots[0].therapistId, "101");
+  assert.equal(result.slots[0].therapistName, "Daniel MacLean");
+});
+
 test("availability rechaza telefono local invalido de Bolivia", async () => {
   const connection = new FakeBookingConnection(createFixture());
 
