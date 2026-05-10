@@ -445,10 +445,10 @@ function TimelineView({ appointments, timezone, onSelect }) {
   );
 }
 
-const ROOMS_KANBAN_PIXELS_PER_MIN = 1.4;
-const ROOMS_KANBAN_DEFAULT_START_MIN = 8 * 60;
-const ROOMS_KANBAN_DEFAULT_END_MIN = 19 * 60;
-const ROOMS_KANBAN_HOUR_GAP = 60;
+const ROOMS_GRID_SLOT_MIN = 30;
+const ROOMS_GRID_SLOT_PX = 28;
+const ROOMS_GRID_DEFAULT_START_HOUR = 8;
+const ROOMS_GRID_DEFAULT_END_HOUR = 19;
 
 function clampMinutesOfDay(value) {
   if (!Number.isFinite(value)) {
@@ -484,10 +484,8 @@ function appointmentMinutesOfDay(value, timezone) {
 
 function formatHourLabel(minutesOfDay) {
   const hours = Math.floor(minutesOfDay / 60);
-  const minutes = minutesOfDay % 60;
   const hh = String(hours).padStart(2, "0");
-  const mm = String(minutes).padStart(2, "0");
-  return `${hh}:${mm}`;
+  return `${hh}:00`;
 }
 
 function appointmentDurationMinutes(appointment) {
@@ -500,23 +498,41 @@ function appointmentDurationMinutes(appointment) {
   return Math.max(15, minutes);
 }
 
-function buildRoomColumns(appointments, timezone) {
+function shortFirstName(value) {
+  if (!value) return "";
+  return String(value).split(/\s+/)[0];
+}
+
+function buildRoomGridModel({ appointments, rooms, timezone }) {
+  const knownRooms = Array.isArray(rooms) ? rooms : [];
   const map = new Map();
 
+  for (const room of knownRooms) {
+    if (!room || !Number.isInteger(Number(room.id)) || Number(room.id) <= 0) continue;
+    map.set(String(room.id), {
+      key: String(room.id),
+      roomId: Number(room.id),
+      roomName: room.name || `Sala ${room.id}`,
+      appointments: []
+    });
+  }
+
   for (const item of appointments) {
-    const room = item.room || null;
-    const id = room && Number(room.id) > 0 ? Number(room.id) : null;
-    const name = room?.name || "Sin sala";
-    const key = id !== null ? String(id) : `__no_room_${name}`;
-    if (!map.has(key)) {
-      map.set(key, {
-        key,
-        roomId: id,
-        roomName: name,
+    const id = item.room?.id ? Number(item.room.id) : null;
+    if (id !== null && map.has(String(id))) {
+      map.get(String(id)).appointments.push(item);
+      continue;
+    }
+    const fallbackKey = id !== null ? `unknown-${id}` : "no-room";
+    if (!map.has(fallbackKey)) {
+      map.set(fallbackKey, {
+        key: fallbackKey,
+        roomId: null,
+        roomName: item.room?.name || "Sin sala",
         appointments: []
       });
     }
-    map.get(key).appointments.push(item);
+    map.get(fallbackKey).appointments.push(item);
   }
 
   for (const column of map.values()) {
@@ -529,27 +545,44 @@ function buildRoomColumns(appointments, timezone) {
     return String(left.roomName).localeCompare(String(right.roomName));
   });
 
-  let minStart = ROOMS_KANBAN_DEFAULT_START_MIN;
-  let maxEnd = ROOMS_KANBAN_DEFAULT_END_MIN;
+  let minHour = ROOMS_GRID_DEFAULT_START_HOUR;
+  let maxHour = ROOMS_GRID_DEFAULT_END_HOUR;
 
   for (const item of appointments) {
     const startMin = appointmentMinutesOfDay(item.startsAt, timezone);
     if (startMin === null) continue;
     const duration = appointmentDurationMinutes(item);
     const endMin = startMin + duration;
-    if (startMin < minStart) minStart = Math.max(0, Math.floor(startMin / 30) * 30);
-    if (endMin > maxEnd) maxEnd = Math.min(24 * 60, Math.ceil(endMin / 30) * 30);
+    const startHour = Math.floor(startMin / 60);
+    const endHour = Math.ceil(endMin / 60);
+    if (startHour < minHour) minHour = Math.max(0, startHour);
+    if (endHour > maxHour) maxHour = Math.min(24, endHour);
   }
 
-  if (maxEnd - minStart < 6 * 60) {
-    maxEnd = minStart + 6 * 60;
+  if (maxHour - minHour < 6) {
+    maxHour = Math.min(24, minHour + 6);
   }
 
-  return { columns, range: { startMin: minStart, endMin: maxEnd } };
+  const startMin = minHour * 60;
+  const endMin = maxHour * 60;
+  const totalMinutes = endMin - startMin;
+  const slotsCount = totalMinutes / ROOMS_GRID_SLOT_MIN;
+  const totalHeight = slotsCount * ROOMS_GRID_SLOT_PX;
+  const hourTicks = [];
+  for (let h = minHour; h <= maxHour; h += 1) {
+    hourTicks.push(h * 60);
+  }
+
+  return {
+    columns,
+    range: { startMin, endMin, totalHeight },
+    hourTicks
+  };
 }
 
 function RoomsKanban({
   appointments,
+  rooms,
   timezone,
   onSelect,
   onMoveToRoom,
@@ -561,23 +594,13 @@ function RoomsKanban({
   const [dragState, setDragState] = useState(null);
   const [hoverRoomKey, setHoverRoomKey] = useState(null);
 
-  const { columns, range } = useMemo(
-    () => buildRoomColumns(appointments, timezone),
-    [appointments, timezone]
+  const { columns, range, hourTicks } = useMemo(
+    () => buildRoomGridModel({ appointments, rooms, timezone }),
+    [appointments, rooms, timezone]
   );
 
-  const totalMinutes = Math.max(60, range.endMin - range.startMin);
-  const totalHeight = totalMinutes * ROOMS_KANBAN_PIXELS_PER_MIN;
-  const hourTicks = useMemo(() => {
-    const ticks = [];
-    for (let m = range.startMin; m <= range.endMin; m += ROOMS_KANBAN_HOUR_GAP) {
-      ticks.push(m);
-    }
-    return ticks;
-  }, [range.startMin, range.endMin]);
-
-  if (!appointments.length) {
-    return <p className="empty-state">No hay citas para esta vista.</p>;
+  if (!columns.length) {
+    return <p className="empty-state">No hay salas activas configuradas.</p>;
   }
 
   function clearDrag() {
@@ -636,68 +659,90 @@ function RoomsKanban({
     onMoveToRoom?.(appointmentId, targetRoomId, column.roomName);
   }
 
+  const totalSlots = (range.endMin - range.startMin) / ROOMS_GRID_SLOT_MIN;
+
   return (
-    <div className="rooms-kanban" role="region" aria-label="Salas timeline">
-      <div className="rooms-kanban-scroll">
-        <div className="rooms-kanban-axis" aria-hidden="true">
-          <div className="rooms-kanban-axis-spacer" />
-          <div
-            className="rooms-kanban-axis-track"
-            style={{ height: `${totalHeight}px` }}
-          >
+    <div className="rooms-grid" role="region" aria-label="Salas timeline">
+      <div className="rooms-grid-scroll">
+        <div className="rooms-grid-head">
+          <div className="rooms-grid-head-spacer" />
+          {columns.map((column) => (
+            <div
+              key={`head-${column.key}`}
+              className={`rooms-grid-head-cell${
+                column.roomId === null ? " is-disabled-target" : ""
+              }`}
+            >
+              <Door size={14} weight="regular" aria-hidden="true" />
+              <span>{column.roomName}</span>
+              <span className="rooms-grid-head-count">{column.appointments.length}</span>
+            </div>
+          ))}
+        </div>
+
+        <div
+          className="rooms-grid-body"
+          style={{
+            "--rooms-grid-rooms": columns.length,
+            "--rooms-grid-slot-px": `${ROOMS_GRID_SLOT_PX}px`,
+            height: `${range.totalHeight}px`
+          }}
+        >
+          <div className="rooms-grid-axis">
             {hourTicks.map((tick) => (
               <div
                 key={`tick-${tick}`}
-                className="rooms-kanban-axis-tick"
-                style={{ top: `${(tick - range.startMin) * ROOMS_KANBAN_PIXELS_PER_MIN}px` }}
+                className="rooms-grid-axis-tick"
+                style={{ top: `${(tick - range.startMin) * (ROOMS_GRID_SLOT_PX / ROOMS_GRID_SLOT_MIN)}px` }}
               >
                 {formatHourLabel(tick)}
               </div>
             ))}
           </div>
-        </div>
 
-        <div className="rooms-kanban-columns">
-          {columns.map((column) => {
-            const isHover = hoverRoomKey === column.key && draggable;
+          {Array.from({ length: totalSlots }).map((_, slotIndex) => {
+            const minutesFromStart = slotIndex * ROOMS_GRID_SLOT_MIN;
+            const isHourBoundary = minutesFromStart % 60 === 0;
             return (
               <div
-                key={column.key}
-                className={`rooms-kanban-col${isHover ? " is-drop-target" : ""}${
-                  column.roomId === null ? " is-disabled-target" : ""
-                }`}
-                onDragOver={(event) => handleColumnDragOver(event, column)}
-                onDragLeave={(event) => handleColumnDragLeave(event, column)}
-                onDrop={(event) => handleColumnDrop(event, column)}
+                key={`row-${slotIndex}`}
+                className={`rooms-grid-row${isHourBoundary ? " is-hour-start" : ""}`}
+                style={{ top: `${slotIndex * ROOMS_GRID_SLOT_PX}px` }}
               >
-                <div className="rooms-kanban-col-head">
-                  <h3>{column.roomName}</h3>
-                  <p>{column.appointments.length}</p>
-                </div>
+                {columns.map((column) => (
+                  <div
+                    key={`cell-${slotIndex}-${column.key}`}
+                    className="rooms-grid-cell"
+                  />
+                ))}
+              </div>
+            );
+          })}
+
+          <div className="rooms-grid-columns">
+            {columns.map((column) => {
+              const isHover = hoverRoomKey === column.key && draggable && column.roomId !== null;
+              return (
                 <div
-                  className="rooms-kanban-col-track"
-                  style={{ height: `${totalHeight}px` }}
+                  key={column.key}
+                  className={`rooms-grid-column${isHover ? " is-drop-target" : ""}${
+                    column.roomId === null ? " is-disabled-target" : ""
+                  }`}
+                  onDragOver={(event) => handleColumnDragOver(event, column)}
+                  onDragLeave={(event) => handleColumnDragLeave(event, column)}
+                  onDrop={(event) => handleColumnDrop(event, column)}
                 >
-                  {hourTicks.map((tick) => (
-                    <div
-                      key={`grid-${column.key}-${tick}`}
-                      className="rooms-kanban-grid-line"
-                      style={{ top: `${(tick - range.startMin) * ROOMS_KANBAN_PIXELS_PER_MIN}px` }}
-                    />
-                  ))}
                   {column.appointments.map((item) => {
                     const startMin = appointmentMinutesOfDay(item.startsAt, timezone);
-                    if (startMin === null) {
-                      return null;
-                    }
+                    if (startMin === null) return null;
                     const duration = appointmentDurationMinutes(item);
                     const top = Math.max(
                       0,
-                      (startMin - range.startMin) * ROOMS_KANBAN_PIXELS_PER_MIN
+                      (startMin - range.startMin) * (ROOMS_GRID_SLOT_PX / ROOMS_GRID_SLOT_MIN)
                     );
                     const height = Math.max(
-                      40,
-                      duration * ROOMS_KANBAN_PIXELS_PER_MIN - 2
+                      ROOMS_GRID_SLOT_PX * 0.95,
+                      duration * (ROOMS_GRID_SLOT_PX / ROOMS_GRID_SLOT_MIN) - 2
                     );
                     const dragOk =
                       draggable &&
@@ -708,11 +753,12 @@ function RoomsKanban({
 
                     return (
                       <article
-                        key={`kanban-${column.key}-${item.id}`}
-                        className={`rooms-kanban-card status-${item.status || "pending"}${
+                        key={`event-${column.key}-${item.id}`}
+                        className={`rooms-grid-event status-${item.status || "pending"}${
                           dragOk ? " is-draggable" : ""
                         }${isPending ? " is-pending" : ""}`}
                         style={{ top: `${top}px`, height: `${height}px` }}
+                        data-status={item.status || "pending"}
                         draggable={dragOk && !isMutating ? "true" : undefined}
                         onDragStart={(event) => handleDragStart(event, item)}
                         onDragEnd={clearDrag}
@@ -729,33 +775,23 @@ function RoomsKanban({
                           item.client?.fullName || ""
                         }`}
                       >
-                        <header className="rooms-kanban-card-head">
-                          <span className="rooms-kanban-card-time">
-                            {formatClock(item.startsAt, timezone)} —{" "}
-                            {formatClock(item.endsAt, timezone)}
-                          </span>
-                          <StatusChip status={item.status} />
-                        </header>
-                        <p className="rooms-kanban-card-client">
+                        <span className="rooms-grid-event-time">
+                          {formatClock(item.startsAt, timezone)} – {formatClock(item.endsAt, timezone)}
+                        </span>
+                        <span className="rooms-grid-event-name">
                           {item.client?.fullName || "Sin cliente"}
-                        </p>
-                        <p className="rooms-kanban-card-line">
-                          {item.therapist?.name || "Sin terapeuta"}
-                          {item.room?.name ? ` · Sala ${item.room.name}` : ""}
-                        </p>
-                        <p className="rooms-kanban-card-line">
-                          {item.service?.name || "Servicio"} · {duration} min
-                        </p>
-                        <p className="rooms-kanban-card-line subtle">
-                          {item.publicCode || `ID ${item.id}`}
-                        </p>
+                        </span>
+                        <span className="rooms-grid-event-meta">
+                          {item.service?.name || "Servicio"}
+                          {item.therapist?.name ? ` · ${shortFirstName(item.therapist.name)}` : ""}
+                        </span>
                       </article>
                     );
                   })}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
@@ -3143,6 +3179,7 @@ function AdminApp() {
                           ) : null}
                           <RoomsKanban
                             appointments={listAppointments}
+                            rooms={payload?.rooms || []}
                             timezone={timezone}
                             onSelect={openDrawer}
                             onMoveToRoom={handleRoomKanbanMove}
