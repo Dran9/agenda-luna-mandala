@@ -446,9 +446,10 @@ function TimelineView({ appointments, timezone, onSelect }) {
 }
 
 const ROOMS_GRID_SLOT_MIN = 30;
-const ROOMS_GRID_SLOT_PX = 28;
+const ROOMS_GRID_SLOT_PX = 42;
 const ROOMS_GRID_DEFAULT_START_HOUR = 8;
 const ROOMS_GRID_DEFAULT_END_HOUR = 19;
+const ROOMS_GRID_THREE_LINE_THRESHOLD_PX = 60;
 
 function clampMinutesOfDay(value) {
   if (!Number.isFinite(value)) {
@@ -751,6 +752,7 @@ function RoomsKanban({
                       pendingAppointmentId === item.id &&
                       Number(pendingTargetRoomId) === Number(column.roomId);
 
+                    const showMeta = height >= ROOMS_GRID_THREE_LINE_THRESHOLD_PX;
                     return (
                       <article
                         key={`event-${column.key}-${item.id}`}
@@ -781,10 +783,12 @@ function RoomsKanban({
                         <span className="rooms-grid-event-name">
                           {item.client?.fullName || "Sin cliente"}
                         </span>
-                        <span className="rooms-grid-event-meta">
-                          {item.service?.name || "Servicio"}
-                          {item.therapist?.name ? ` · ${shortFirstName(item.therapist.name)}` : ""}
-                        </span>
+                        {showMeta ? (
+                          <span className="rooms-grid-event-meta">
+                            {item.service?.name || "Servicio"}
+                            {item.therapist?.name ? ` · ${shortFirstName(item.therapist.name)}` : ""}
+                          </span>
+                        ) : null}
                       </article>
                     );
                   })}
