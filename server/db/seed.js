@@ -35,7 +35,8 @@ const SERVICES = [
 const ROOMS = [
   { slug: "sala-luna", name: "Sala Luna", capacity: 1 },
   { slug: "sala-sol", name: "Sala Sol", capacity: 1 },
-  { slug: "sala-aurora", name: "Sala Aurora", capacity: 1 }
+  { slug: "sala-aurora", name: "Sala Aurora", capacity: 1 },
+  { slug: "sala-silencio", name: "Sala Silencio", capacity: 1 }
 ];
 
 const THERAPISTS = [

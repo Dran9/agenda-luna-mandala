@@ -842,6 +842,20 @@ async function listAdminAppointments({
     [center.id, rowLimit]
   );
 
+  const [roomRows] = await connection.query(
+    `SELECT
+      id,
+      slug,
+      name,
+      capacity,
+      is_active AS isActive
+     FROM rooms
+     WHERE center_id = ?
+       AND is_active = 1
+     ORDER BY name ASC, id ASC`,
+    [center.id]
+  );
+
   return {
     generatedAt: nowDate.toISOString(),
     center,
@@ -854,6 +868,12 @@ async function listAdminAppointments({
     today: todayRows.map(mapAppointmentRow),
     upcoming: upcomingRows.map(mapAppointmentRow),
     recentCreated: recentRows.map(mapAppointmentRow),
+    rooms: roomRows.map((row) => ({
+      id: Number(row.id),
+      slug: row.slug,
+      name: row.name,
+      capacity: Number(row.capacity || 1)
+    })),
     metadata: {
       dbNow: formatDateTimeForDbLocal(nowDate, DEFAULT_DB_OFFSET)
     }

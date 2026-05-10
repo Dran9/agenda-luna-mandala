@@ -200,6 +200,24 @@ function createServiceConnection(seed) {
         return [rows];
       }
 
+      if (
+        normalizedSql.includes("FROM rooms") &&
+        normalizedSql.includes("WHERE center_id = ?") &&
+        normalizedSql.includes("ORDER BY name ASC")
+      ) {
+        const rows = this.state.rooms
+          .filter((entry) => entry.isActive !== 0)
+          .map((entry) => ({
+            id: entry.id,
+            slug: entry.slug || `sala-${entry.id}`,
+            name: entry.name,
+            capacity: entry.capacity || 1,
+            isActive: 1
+          }))
+          .sort((left, right) => String(left.name).localeCompare(String(right.name)));
+        return [rows];
+      }
+
       if (normalizedSql.includes("SELECT status, COUNT(*) AS total") && normalizedSql.includes("FROM appointments")) {
         const [centerId, dayStart] = params;
         const dayEnd = params.length > 2 ? params[2] : null;
