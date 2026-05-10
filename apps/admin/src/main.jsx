@@ -13,6 +13,7 @@ import {
   Sparkle,
   Sun,
   Trash,
+  User,
   UserCircle,
   UserGear,
   UsersThree,
@@ -445,50 +446,6 @@ function TimelineView({ appointments, timezone, onSelect }) {
   );
 }
 
-const ROOMS_GRID_SLOT_MIN = 30;
-const ROOMS_GRID_SLOT_PX = 42;
-const ROOMS_GRID_DEFAULT_START_HOUR = 8;
-const ROOMS_GRID_DEFAULT_END_HOUR = 19;
-const ROOMS_GRID_THREE_LINE_THRESHOLD_PX = 60;
-
-function clampMinutesOfDay(value) {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-  if (value < 0) return 0;
-  if (value > 24 * 60) return 24 * 60;
-  return value;
-}
-
-function appointmentMinutesOfDay(value, timezone) {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-
-  try {
-    const formatter = new Intl.DateTimeFormat("es-BO", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: timezone || undefined
-    });
-    const parts = formatter.formatToParts(parsed);
-    const hourPart = parts.find((entry) => entry.type === "hour");
-    const minutePart = parts.find((entry) => entry.type === "minute");
-    const hours = Number.parseInt(hourPart?.value || "0", 10);
-    const minutes = Number.parseInt(minutePart?.value || "0", 10);
-    return clampMinutesOfDay(hours * 60 + minutes);
-  } catch {
-    return clampMinutesOfDay(parsed.getUTCHours() * 60 + parsed.getUTCMinutes());
-  }
-}
-
-function formatHourLabel(minutesOfDay) {
-  const hours = Math.floor(minutesOfDay / 60);
-  const hh = String(hours).padStart(2, "0");
-  return `${hh}:00`;
-}
-
 function appointmentDurationMinutes(appointment) {
   const start = appointment.startsAt ? new Date(appointment.startsAt) : null;
   const end = appointment.endsAt ? new Date(appointment.endsAt) : null;
@@ -499,12 +456,7 @@ function appointmentDurationMinutes(appointment) {
   return Math.max(15, minutes);
 }
 
-function shortFirstName(value) {
-  if (!value) return "";
-  return String(value).split(/\s+/)[0];
-}
-
-function buildRoomGridModel({ appointments, rooms, timezone }) {
+function buildRoomColumnsModel({ appointments, rooms }) {
   const knownRooms = Array.isArray(rooms) ? rooms : [];
   const map = new Map();
 
@@ -540,45 +492,11 @@ function buildRoomGridModel({ appointments, rooms, timezone }) {
     column.appointments = sortByStartsAt(column.appointments);
   }
 
-  const columns = Array.from(map.values()).sort((left, right) => {
+  return Array.from(map.values()).sort((left, right) => {
     if (left.roomId === null && right.roomId !== null) return 1;
     if (left.roomId !== null && right.roomId === null) return -1;
     return String(left.roomName).localeCompare(String(right.roomName));
   });
-
-  let minHour = ROOMS_GRID_DEFAULT_START_HOUR;
-  let maxHour = ROOMS_GRID_DEFAULT_END_HOUR;
-
-  for (const item of appointments) {
-    const startMin = appointmentMinutesOfDay(item.startsAt, timezone);
-    if (startMin === null) continue;
-    const duration = appointmentDurationMinutes(item);
-    const endMin = startMin + duration;
-    const startHour = Math.floor(startMin / 60);
-    const endHour = Math.ceil(endMin / 60);
-    if (startHour < minHour) minHour = Math.max(0, startHour);
-    if (endHour > maxHour) maxHour = Math.min(24, endHour);
-  }
-
-  if (maxHour - minHour < 6) {
-    maxHour = Math.min(24, minHour + 6);
-  }
-
-  const startMin = minHour * 60;
-  const endMin = maxHour * 60;
-  const totalMinutes = endMin - startMin;
-  const slotsCount = totalMinutes / ROOMS_GRID_SLOT_MIN;
-  const totalHeight = slotsCount * ROOMS_GRID_SLOT_PX;
-  const hourTicks = [];
-  for (let h = minHour; h <= maxHour; h += 1) {
-    hourTicks.push(h * 60);
-  }
-
-  return {
-    columns,
-    range: { startMin, endMin, totalHeight },
-    hourTicks
-  };
 }
 
 function RoomsKanban({
@@ -595,9 +513,9 @@ function RoomsKanban({
   const [dragState, setDragState] = useState(null);
   const [hoverRoomKey, setHoverRoomKey] = useState(null);
 
-  const { columns, range, hourTicks } = useMemo(
-    () => buildRoomGridModel({ appointments, rooms, timezone }),
-    [appointments, rooms, timezone]
+  const columns = useMemo(
+    () => buildRoomColumnsModel({ appointments, rooms }),
+    [appointments, rooms]
   );
 
   if (!columns.length) {
@@ -660,106 +578,51 @@ function RoomsKanban({
     onMoveToRoom?.(appointmentId, targetRoomId, column.roomName);
   }
 
-  const totalSlots = (range.endMin - range.startMin) / ROOMS_GRID_SLOT_MIN;
-
   return (
-    <div className="rooms-grid" role="region" aria-label="Salas timeline">
-      <div className="rooms-grid-scroll">
-        <div className="rooms-grid-head">
-          <div className="rooms-grid-head-spacer" />
-          {columns.map((column) => (
-            <div
-              key={`head-${column.key}`}
-              className={`rooms-grid-head-cell${
+    <div className="rooms-board" role="region" aria-label="Salas">
+      <div className="rooms-board-track">
+        {columns.map((column) => {
+          const isHover = hoverRoomKey === column.key && draggable && column.roomId !== null;
+          const count = column.appointments.length;
+          return (
+            <article
+              key={column.key}
+              className={`rooms-board-col${isHover ? " is-drop-target" : ""}${
                 column.roomId === null ? " is-disabled-target" : ""
               }`}
+              onDragOver={(event) => handleColumnDragOver(event, column)}
+              onDragLeave={(event) => handleColumnDragLeave(event, column)}
+              onDrop={(event) => handleColumnDrop(event, column)}
             >
-              <Door size={14} weight="regular" aria-hidden="true" />
-              <span>{column.roomName}</span>
-              <span className="rooms-grid-head-count">{column.appointments.length}</span>
-            </div>
-          ))}
-        </div>
+              <header className="rooms-board-col-head">
+                <h3 className="rooms-board-col-name">{column.roomName}</h3>
+                <p className="rooms-board-col-stats">
+                  {count} cita{count === 1 ? "" : "s"} hoy
+                </p>
+              </header>
 
-        <div
-          className="rooms-grid-body"
-          style={{
-            "--rooms-grid-rooms": columns.length,
-            "--rooms-grid-slot-px": `${ROOMS_GRID_SLOT_PX}px`,
-            height: `${range.totalHeight}px`
-          }}
-        >
-          <div className="rooms-grid-axis">
-            {hourTicks.map((tick) => (
-              <div
-                key={`tick-${tick}`}
-                className="rooms-grid-axis-tick"
-                style={{ top: `${(tick - range.startMin) * (ROOMS_GRID_SLOT_PX / ROOMS_GRID_SLOT_MIN)}px` }}
-              >
-                {formatHourLabel(tick)}
-              </div>
-            ))}
-          </div>
-
-          {Array.from({ length: totalSlots }).map((_, slotIndex) => {
-            const minutesFromStart = slotIndex * ROOMS_GRID_SLOT_MIN;
-            const isHourBoundary = minutesFromStart % 60 === 0;
-            return (
-              <div
-                key={`row-${slotIndex}`}
-                className={`rooms-grid-row${isHourBoundary ? " is-hour-start" : ""}`}
-                style={{ top: `${slotIndex * ROOMS_GRID_SLOT_PX}px` }}
-              >
-                {columns.map((column) => (
-                  <div
-                    key={`cell-${slotIndex}-${column.key}`}
-                    className="rooms-grid-cell"
-                  />
-                ))}
-              </div>
-            );
-          })}
-
-          <div className="rooms-grid-columns">
-            {columns.map((column) => {
-              const isHover = hoverRoomKey === column.key && draggable && column.roomId !== null;
-              return (
-                <div
-                  key={column.key}
-                  className={`rooms-grid-column${isHover ? " is-drop-target" : ""}${
-                    column.roomId === null ? " is-disabled-target" : ""
-                  }`}
-                  onDragOver={(event) => handleColumnDragOver(event, column)}
-                  onDragLeave={(event) => handleColumnDragLeave(event, column)}
-                  onDrop={(event) => handleColumnDrop(event, column)}
-                >
-                  {column.appointments.map((item) => {
-                    const startMin = appointmentMinutesOfDay(item.startsAt, timezone);
-                    if (startMin === null) return null;
-                    const duration = appointmentDurationMinutes(item);
-                    const top = Math.max(
-                      0,
-                      (startMin - range.startMin) * (ROOMS_GRID_SLOT_PX / ROOMS_GRID_SLOT_MIN)
-                    );
-                    const height = Math.max(
-                      ROOMS_GRID_SLOT_PX * 0.95,
-                      duration * (ROOMS_GRID_SLOT_PX / ROOMS_GRID_SLOT_MIN) - 2
-                    );
+              <div className="rooms-board-col-body">
+                {count === 0 ? (
+                  <p className="rooms-board-empty">
+                    {column.roomId === null
+                      ? "Citas sin sala asignada"
+                      : "Sala libre. Arrastra una cita aqui."}
+                  </p>
+                ) : (
+                  column.appointments.map((item) => {
                     const dragOk =
                       draggable &&
                       (item.status === "pending" || item.status === "confirmed");
                     const isPending =
                       pendingAppointmentId === item.id &&
                       Number(pendingTargetRoomId) === Number(column.roomId);
-
-                    const showMeta = height >= ROOMS_GRID_THREE_LINE_THRESHOLD_PX;
+                    const duration = appointmentDurationMinutes(item);
                     return (
                       <article
                         key={`event-${column.key}-${item.id}`}
-                        className={`rooms-grid-event status-${item.status || "pending"}${
+                        className={`rooms-board-card status-${item.status || "pending"}${
                           dragOk ? " is-draggable" : ""
                         }${isPending ? " is-pending" : ""}`}
-                        style={{ top: `${top}px`, height: `${height}px` }}
                         data-status={item.status || "pending"}
                         draggable={dragOk && !isMutating ? "true" : undefined}
                         onDragStart={(event) => handleDragStart(event, item)}
@@ -777,26 +640,42 @@ function RoomsKanban({
                           item.client?.fullName || ""
                         }`}
                       >
-                        <span className="rooms-grid-event-time">
+                        <p className="rooms-board-card-time">
+                          <span className="rooms-board-card-bullet" aria-hidden="true" />
                           {formatClock(item.startsAt, timezone)} – {formatClock(item.endsAt, timezone)}
-                        </span>
-                        <span className="rooms-grid-event-name">
+                        </p>
+                        <h4 className="rooms-board-card-client">
                           {item.client?.fullName || "Sin cliente"}
-                        </span>
-                        {showMeta ? (
-                          <span className="rooms-grid-event-meta">
-                            {item.service?.name || "Servicio"}
-                            {item.therapist?.name ? ` · ${shortFirstName(item.therapist.name)}` : ""}
+                        </h4>
+                        <p className="rooms-board-card-row">
+                          <User size={14} weight="regular" aria-hidden="true" />
+                          <span>{item.therapist?.name || "Sin terapeuta"}</span>
+                          {item.room?.name ? (
+                            <>
+                              <Door size={14} weight="regular" aria-hidden="true" />
+                              <span>{item.room.name}</span>
+                            </>
+                          ) : null}
+                        </p>
+                        <p className="rooms-board-card-row">
+                          <span className="rooms-board-card-service">
+                            {item.service?.name || "Servicio"} · {duration} min
                           </span>
-                        ) : null}
+                        </p>
+                        <footer className="rooms-board-card-footer">
+                          <span className="rooms-board-card-code">
+                            {item.publicCode || `ID ${item.id}`}
+                          </span>
+                          <StatusChip status={item.status} />
+                        </footer>
                       </article>
                     );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                  })
+                )}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
@@ -3172,11 +3051,8 @@ function AdminApp() {
                       {activeTab === "rooms" ? (
                         <section className="panel rooms-panel" aria-label="Vista por salas">
                           <div className="panel-heading">
-                            <h2>Salas</h2>
-                            <p>
-                              {listAppointments.length} citas · arrastra una cita para moverla de
-                              sala
-                            </p>
+                            <h2>Kanban de salas</h2>
+                            <p>Arrastra una cita entre salas para reasignarla.</p>
                           </div>
                           {kanbanError ? (
                             <p className="feedback error compact-feedback">{kanbanError}</p>
