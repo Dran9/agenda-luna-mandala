@@ -6,12 +6,12 @@ import {
   Clock,
   Door,
   Lightning,
+  MagnifyingGlass,
   Moon,
   SignOut,
   SlidersHorizontal,
   Sparkle,
   Sun,
-  Table,
   Trash,
   UserCircle,
   UserGear,
@@ -32,8 +32,15 @@ const MENU = [
 const VIEW_TABS = [
   { id: "today", label: "Hoy", Icon: CalendarCheck },
   { id: "timeline", label: "Timeline", Icon: Clock },
-  { id: "rooms", label: "Salas", Icon: Door },
-  { id: "list", label: "Lista", Icon: Table }
+  { id: "rooms", label: "Salas", Icon: Door }
+];
+
+const SEARCH_FILTERS = [
+  { id: "all", label: "Todo" },
+  { id: "clients", label: "Clientes" },
+  { id: "appointments", label: "Citas" },
+  { id: "cases", label: "Casos" },
+  { id: "rooms", label: "Salas" }
 ];
 
 const STATUS_META = {
@@ -438,51 +445,319 @@ function TimelineView({ appointments, timezone, onSelect }) {
   );
 }
 
-function RoomsView({ appointments, timezone, onSelect }) {
-  const groups = useMemo(() => {
-    const map = new Map();
+const ROOMS_KANBAN_PIXELS_PER_MIN = 1.4;
+const ROOMS_KANBAN_DEFAULT_START_MIN = 8 * 60;
+const ROOMS_KANBAN_DEFAULT_END_MIN = 19 * 60;
+const ROOMS_KANBAN_HOUR_GAP = 60;
 
-    for (const item of appointments) {
-      const key = item.room?.name || "Sin sala";
+function clampMinutesOfDay(value) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  if (value < 0) return 0;
+  if (value > 24 * 60) return 24 * 60;
+  return value;
+}
 
-      if (!map.has(key)) {
-        map.set(key, []);
-      }
+function appointmentMinutesOfDay(value, timezone) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
 
-      map.get(key).push(item);
+  try {
+    const formatter = new Intl.DateTimeFormat("es-BO", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: timezone || undefined
+    });
+    const parts = formatter.formatToParts(parsed);
+    const hourPart = parts.find((entry) => entry.type === "hour");
+    const minutePart = parts.find((entry) => entry.type === "minute");
+    const hours = Number.parseInt(hourPart?.value || "0", 10);
+    const minutes = Number.parseInt(minutePart?.value || "0", 10);
+    return clampMinutesOfDay(hours * 60 + minutes);
+  } catch {
+    return clampMinutesOfDay(parsed.getUTCHours() * 60 + parsed.getUTCMinutes());
+  }
+}
+
+function formatHourLabel(minutesOfDay) {
+  const hours = Math.floor(minutesOfDay / 60);
+  const minutes = minutesOfDay % 60;
+  const hh = String(hours).padStart(2, "0");
+  const mm = String(minutes).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function appointmentDurationMinutes(appointment) {
+  const start = appointment.startsAt ? new Date(appointment.startsAt) : null;
+  const end = appointment.endsAt ? new Date(appointment.endsAt) : null;
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return 60;
+  }
+  const minutes = Math.round((end.getTime() - start.getTime()) / 60000);
+  return Math.max(15, minutes);
+}
+
+function buildRoomColumns(appointments, timezone) {
+  const map = new Map();
+
+  for (const item of appointments) {
+    const room = item.room || null;
+    const id = room && Number(room.id) > 0 ? Number(room.id) : null;
+    const name = room?.name || "Sin sala";
+    const key = id !== null ? String(id) : `__no_room_${name}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        roomId: id,
+        roomName: name,
+        appointments: []
+      });
     }
+    map.get(key).appointments.push(item);
+  }
 
-    return Array.from(map.entries()).map(([roomName, roomAppointments]) => ({
-      roomName,
-      appointments: sortByStartsAt(roomAppointments)
-    }));
-  }, [appointments]);
+  for (const column of map.values()) {
+    column.appointments = sortByStartsAt(column.appointments);
+  }
 
-  if (!groups.length) {
-    return <p className="empty-state">No hay citas para agrupar por sala.</p>;
+  const columns = Array.from(map.values()).sort((left, right) => {
+    if (left.roomId === null && right.roomId !== null) return 1;
+    if (left.roomId !== null && right.roomId === null) return -1;
+    return String(left.roomName).localeCompare(String(right.roomName));
+  });
+
+  let minStart = ROOMS_KANBAN_DEFAULT_START_MIN;
+  let maxEnd = ROOMS_KANBAN_DEFAULT_END_MIN;
+
+  for (const item of appointments) {
+    const startMin = appointmentMinutesOfDay(item.startsAt, timezone);
+    if (startMin === null) continue;
+    const duration = appointmentDurationMinutes(item);
+    const endMin = startMin + duration;
+    if (startMin < minStart) minStart = Math.max(0, Math.floor(startMin / 30) * 30);
+    if (endMin > maxEnd) maxEnd = Math.min(24 * 60, Math.ceil(endMin / 30) * 30);
+  }
+
+  if (maxEnd - minStart < 6 * 60) {
+    maxEnd = minStart + 6 * 60;
+  }
+
+  return { columns, range: { startMin: minStart, endMin: maxEnd } };
+}
+
+function RoomsKanban({
+  appointments,
+  timezone,
+  onSelect,
+  onMoveToRoom,
+  draggable,
+  isMutating,
+  pendingAppointmentId,
+  pendingTargetRoomId
+}) {
+  const [dragState, setDragState] = useState(null);
+  const [hoverRoomKey, setHoverRoomKey] = useState(null);
+
+  const { columns, range } = useMemo(
+    () => buildRoomColumns(appointments, timezone),
+    [appointments, timezone]
+  );
+
+  const totalMinutes = Math.max(60, range.endMin - range.startMin);
+  const totalHeight = totalMinutes * ROOMS_KANBAN_PIXELS_PER_MIN;
+  const hourTicks = useMemo(() => {
+    const ticks = [];
+    for (let m = range.startMin; m <= range.endMin; m += ROOMS_KANBAN_HOUR_GAP) {
+      ticks.push(m);
+    }
+    return ticks;
+  }, [range.startMin, range.endMin]);
+
+  if (!appointments.length) {
+    return <p className="empty-state">No hay citas para esta vista.</p>;
+  }
+
+  function clearDrag() {
+    setDragState(null);
+    setHoverRoomKey(null);
+  }
+
+  function handleDragStart(event, item) {
+    if (!draggable) {
+      event.preventDefault();
+      return;
+    }
+    if (item.status !== "pending" && item.status !== "confirmed") {
+      event.preventDefault();
+      return;
+    }
+    try {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", String(item.id));
+    } catch {
+      // ignore browsers without dataTransfer
+    }
+    setDragState({
+      appointmentId: item.id,
+      sourceRoomId: item.room?.id ? Number(item.room.id) : null
+    });
+  }
+
+  function handleColumnDragOver(event, column) {
+    if (!draggable || !dragState) return;
+    if (column.roomId === null) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setHoverRoomKey(column.key);
+  }
+
+  function handleColumnDragLeave(event, column) {
+    if (!draggable) return;
+    const next = event.relatedTarget;
+    if (next && event.currentTarget.contains(next)) return;
+    if (hoverRoomKey === column.key) {
+      setHoverRoomKey(null);
+    }
+  }
+
+  function handleColumnDrop(event, column) {
+    if (!draggable || !dragState) return;
+    event.preventDefault();
+    const targetRoomId = column.roomId;
+    const sourceRoomId = dragState.sourceRoomId;
+    const appointmentId = dragState.appointmentId;
+    clearDrag();
+    if (!targetRoomId || !appointmentId || targetRoomId === sourceRoomId) {
+      return;
+    }
+    onMoveToRoom?.(appointmentId, targetRoomId, column.roomName);
   }
 
   return (
-    <div className="rooms-grid">
-      {groups.map((group) => (
-        <article key={group.roomName} className="room-panel">
-          <div className="panel-heading">
-            <h3>{group.roomName}</h3>
-            <p>{group.appointments.length} citas</p>
-          </div>
-          <ul className="room-list">
-            {group.appointments.map((item) => (
-              <li key={`room-${group.roomName}-${item.id}`}>
-                <button type="button" className="room-item" onClick={() => onSelect(item.id)}>
-                  <span className="room-hour">{formatClock(item.startsAt, timezone)}</span>
-                  <span className="room-client">{item.client.fullName || "Sin nombre"}</span>
-                  <StatusChip status={item.status} />
-                </button>
-              </li>
+    <div className="rooms-kanban" role="region" aria-label="Salas timeline">
+      <div className="rooms-kanban-scroll">
+        <div className="rooms-kanban-axis" aria-hidden="true">
+          <div className="rooms-kanban-axis-spacer" />
+          <div
+            className="rooms-kanban-axis-track"
+            style={{ height: `${totalHeight}px` }}
+          >
+            {hourTicks.map((tick) => (
+              <div
+                key={`tick-${tick}`}
+                className="rooms-kanban-axis-tick"
+                style={{ top: `${(tick - range.startMin) * ROOMS_KANBAN_PIXELS_PER_MIN}px` }}
+              >
+                {formatHourLabel(tick)}
+              </div>
             ))}
-          </ul>
-        </article>
-      ))}
+          </div>
+        </div>
+
+        <div className="rooms-kanban-columns">
+          {columns.map((column) => {
+            const isHover = hoverRoomKey === column.key && draggable;
+            return (
+              <div
+                key={column.key}
+                className={`rooms-kanban-col${isHover ? " is-drop-target" : ""}${
+                  column.roomId === null ? " is-disabled-target" : ""
+                }`}
+                onDragOver={(event) => handleColumnDragOver(event, column)}
+                onDragLeave={(event) => handleColumnDragLeave(event, column)}
+                onDrop={(event) => handleColumnDrop(event, column)}
+              >
+                <div className="rooms-kanban-col-head">
+                  <h3>{column.roomName}</h3>
+                  <p>{column.appointments.length}</p>
+                </div>
+                <div
+                  className="rooms-kanban-col-track"
+                  style={{ height: `${totalHeight}px` }}
+                >
+                  {hourTicks.map((tick) => (
+                    <div
+                      key={`grid-${column.key}-${tick}`}
+                      className="rooms-kanban-grid-line"
+                      style={{ top: `${(tick - range.startMin) * ROOMS_KANBAN_PIXELS_PER_MIN}px` }}
+                    />
+                  ))}
+                  {column.appointments.map((item) => {
+                    const startMin = appointmentMinutesOfDay(item.startsAt, timezone);
+                    if (startMin === null) {
+                      return null;
+                    }
+                    const duration = appointmentDurationMinutes(item);
+                    const top = Math.max(
+                      0,
+                      (startMin - range.startMin) * ROOMS_KANBAN_PIXELS_PER_MIN
+                    );
+                    const height = Math.max(
+                      40,
+                      duration * ROOMS_KANBAN_PIXELS_PER_MIN - 2
+                    );
+                    const dragOk =
+                      draggable &&
+                      (item.status === "pending" || item.status === "confirmed");
+                    const isPending =
+                      pendingAppointmentId === item.id &&
+                      Number(pendingTargetRoomId) === Number(column.roomId);
+
+                    return (
+                      <article
+                        key={`kanban-${column.key}-${item.id}`}
+                        className={`rooms-kanban-card status-${item.status || "pending"}${
+                          dragOk ? " is-draggable" : ""
+                        }${isPending ? " is-pending" : ""}`}
+                        style={{ top: `${top}px`, height: `${height}px` }}
+                        draggable={dragOk && !isMutating ? "true" : undefined}
+                        onDragStart={(event) => handleDragStart(event, item)}
+                        onDragEnd={clearDrag}
+                        onClick={() => onSelect?.(item.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            onSelect?.(item.id);
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Cita ${item.publicCode || item.id} ${
+                          item.client?.fullName || ""
+                        }`}
+                      >
+                        <header className="rooms-kanban-card-head">
+                          <span className="rooms-kanban-card-time">
+                            {formatClock(item.startsAt, timezone)} —{" "}
+                            {formatClock(item.endsAt, timezone)}
+                          </span>
+                          <StatusChip status={item.status} />
+                        </header>
+                        <p className="rooms-kanban-card-client">
+                          {item.client?.fullName || "Sin cliente"}
+                        </p>
+                        <p className="rooms-kanban-card-line">
+                          {item.therapist?.name || "Sin terapeuta"}
+                          {item.room?.name ? ` · Sala ${item.room.name}` : ""}
+                        </p>
+                        <p className="rooms-kanban-card-line">
+                          {item.service?.name || "Servicio"} · {duration} min
+                        </p>
+                        <p className="rooms-kanban-card-line subtle">
+                          {item.publicCode || `ID ${item.id}`}
+                        </p>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1036,6 +1311,286 @@ function ClientDrawer({ open, detail, loading, error, timezone, onClose }) {
   );
 }
 
+const TYPE_LABELS = {
+  client: "Cliente",
+  appointment: "Cita",
+  case: "Caso",
+  room: "Sala"
+};
+
+function GlobalSearchModal({
+  open,
+  onClose,
+  authToken,
+  onUnauthorized,
+  onResolveAction
+}) {
+  const [draftQuery, setDraftQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [results, setResults] = useState([]);
+  const [groups, setGroups] = useState({
+    clients: [],
+    appointments: [],
+    cases: [],
+    rooms: []
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const inputRef = useRef(null);
+  const listRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) {
+      setDraftQuery("");
+      setActiveFilter("all");
+      setResults([]);
+      setGroups({ clients: [], appointments: [], cases: [], rooms: [] });
+      setError("");
+      setActiveIndex(0);
+      setLoading(false);
+      return undefined;
+    }
+
+    const focusTimer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 30);
+
+    return () => clearTimeout(focusTimer);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !authToken) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const trimmed = draftQuery.trim();
+    const debounceMs = trimmed.length === 0 ? 0 : 220;
+
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const params = new URLSearchParams();
+        if (trimmed) params.set("q", trimmed);
+        params.set("type", activeFilter);
+        params.set("limit", "10");
+
+        const response = await fetch(`/api/admin/search?${params.toString()}`, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${authToken}` },
+          signal: controller.signal
+        });
+
+        const payload = await response.json();
+
+        if (response.status === 401) {
+          onUnauthorized?.();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(getErrorMessage(payload));
+        }
+
+        const safeResults = Array.isArray(payload?.results) ? payload.results : [];
+        const safeGroups = payload?.groups || {
+          clients: [],
+          appointments: [],
+          cases: [],
+          rooms: []
+        };
+
+        setResults(safeResults);
+        setGroups({
+          clients: safeGroups.clients || [],
+          appointments: safeGroups.appointments || [],
+          cases: safeGroups.cases || [],
+          rooms: safeGroups.rooms || []
+        });
+        setActiveIndex(0);
+      } catch (requestError) {
+        if (requestError?.name === "AbortError") {
+          return;
+        }
+        setError(requestError.message || "No se pudo buscar.");
+      } finally {
+        setLoading(false);
+      }
+    }, debounceMs);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [open, authToken, draftQuery, activeFilter, onUnauthorized]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function onKeyDown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose?.();
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setActiveIndex((index) => {
+          if (!results.length) return 0;
+          return Math.min(index + 1, results.length - 1);
+        });
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setActiveIndex((index) => Math.max(index - 1, 0));
+        return;
+      }
+
+      if (event.key === "Enter") {
+        if (!results.length) return;
+        const target = results[Math.min(activeIndex, results.length - 1)];
+        if (target?.action) {
+          event.preventDefault();
+          onResolveAction?.(target.action);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose, onResolveAction, results, activeIndex]);
+
+  if (!open) {
+    return null;
+  }
+
+  function handleResultClick(action) {
+    if (!action) return;
+    onResolveAction?.(action);
+  }
+
+  const showSuggestionsHint = !draftQuery.trim();
+
+  return (
+    <div
+      className="global-search-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose?.();
+        }
+      }}
+    >
+      <div
+        className="global-search-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Busqueda global admin"
+      >
+        <header className="global-search-header">
+          <div>
+            <p className="global-search-eyebrow">Busqueda global</p>
+            <p className="global-search-subtitle">Clientes, citas, casos y salas</p>
+          </div>
+          <button
+            type="button"
+            className="global-search-close"
+            onClick={onClose}
+            aria-label="Cerrar busqueda"
+          >
+            <X size={18} weight="regular" aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="global-search-input-row">
+          <MagnifyingGlass size={20} weight="regular" aria-hidden="true" />
+          <input
+            ref={inputRef}
+            type="search"
+            value={draftQuery}
+            onChange={(event) => setDraftQuery(event.target.value)}
+            placeholder="Buscar cliente, cita, codigo, sala..."
+            aria-label="Termino de busqueda"
+            autoComplete="off"
+          />
+          {loading ? <CircleNotch size={18} className="spin" aria-hidden="true" /> : null}
+        </div>
+
+        <nav className="global-search-filters" aria-label="Filtros de busqueda">
+          {SEARCH_FILTERS.map((filter) => (
+            <button
+              key={filter.id}
+              type="button"
+              className={`global-search-filter${activeFilter === filter.id ? " is-active" : ""}`}
+              onClick={() => setActiveFilter(filter.id)}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </nav>
+
+        {error ? <p className="feedback error compact-feedback">{error}</p> : null}
+
+        {showSuggestionsHint && !loading ? (
+          <p className="global-search-hint">
+            Sugerencias en vivo. Escribe para filtrar por nombre, codigo, WhatsApp o sala.
+          </p>
+        ) : null}
+
+        <div className="global-search-results" ref={listRef} role="listbox">
+          {results.length === 0 && !loading ? (
+            <p className="empty-state compact">Sin resultados.</p>
+          ) : null}
+
+          {results.map((result, index) => {
+            const active = index === activeIndex;
+            return (
+              <button
+                key={result.id}
+                type="button"
+                className={`global-search-result${active ? " is-active" : ""}`}
+                onClick={() => handleResultClick(result.action)}
+                onMouseEnter={() => setActiveIndex(index)}
+                role="option"
+                aria-selected={active}
+              >
+                <span className="global-search-result-type">
+                  {TYPE_LABELS[result.type] || result.type}
+                </span>
+                <span className="global-search-result-body">
+                  <span className="global-search-result-title">{result.title}</span>
+                  <span className="global-search-result-subtitle">{result.subtitle}</span>
+                </span>
+                {result.meta ? (
+                  <span className="global-search-result-meta">{result.meta}</span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+
+        <footer className="global-search-footer">
+          <span>
+            <kbd>↑</kbd>
+            <kbd>↓</kbd> navegar
+          </span>
+          <span>
+            <kbd>Enter</kbd> abrir
+          </span>
+          <span>
+            <kbd>Esc</kbd> cerrar
+          </span>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function AdminApp() {
   const [theme, setTheme] = useState(readTheme);
   const [authToken, setAuthToken] = useState(readStoredToken);
@@ -1065,6 +1620,10 @@ function AdminApp() {
   const [mutationError, setMutationError] = useState("");
   const [roomMutationLoading, setRoomMutationLoading] = useState(false);
   const [roomMutationError, setRoomMutationError] = useState("");
+  const [kanbanMoving, setKanbanMoving] = useState(false);
+  const [kanbanPending, setKanbanPending] = useState(null);
+  const [kanbanError, setKanbanError] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [deleteAppointmentsLoading, setDeleteAppointmentsLoading] = useState(false);
   const [deleteAppointmentsError, setDeleteAppointmentsError] = useState("");
   const [selectedAppointmentIds, setSelectedAppointmentIds] = useState([]);
@@ -1124,6 +1683,55 @@ function AdminApp() {
       document.documentElement.removeAttribute("data-theme");
     };
   }, [theme]);
+
+  useEffect(() => {
+    if (activeTab === "list") {
+      setActiveTab("today");
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!authToken) {
+      setSearchOpen(false);
+    }
+  }, [authToken]);
+
+  useEffect(() => {
+    function isEditableTarget(target) {
+      if (!target) return false;
+      if (target instanceof HTMLInputElement) return true;
+      if (target instanceof HTMLTextAreaElement) return true;
+      if (target instanceof HTMLSelectElement) return true;
+      if (target instanceof HTMLElement && target.isContentEditable) return true;
+      return false;
+    }
+
+    function onKeyDown(event) {
+      if (!authToken) return;
+
+      const isMacShortcut = event.key === "k" && (event.metaKey || event.ctrlKey);
+      if (isMacShortcut) {
+        event.preventDefault();
+        setSearchOpen((value) => !value);
+        return;
+      }
+
+      if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        if (isEditableTarget(event.target)) return;
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [authToken]);
+
+  useEffect(() => {
+    if (activeTab !== "rooms") {
+      setKanbanError("");
+    }
+  }, [activeTab]);
 
   const handleUnauthorized = useCallback(() => {
     clearAuthStorage();
@@ -1607,6 +2215,57 @@ function AdminApp() {
     setConfirmBulkClientsDelete(false);
   }, []);
 
+  const handleSearchAction = useCallback(
+    (action) => {
+      if (!action || !action.kind) return;
+
+      if (action.kind === "openAppointment") {
+        const appointmentId = Number(action.appointmentId);
+        if (!Number.isInteger(appointmentId) || appointmentId <= 0) return;
+        setActiveSection("control");
+        setActiveTab("today");
+        setClientDrawerOpen(false);
+        setSelectedClientId(null);
+        setClientDetailPayload(null);
+        setSelectedAppointmentId(appointmentId);
+        setDrawerOpen(true);
+        setDetailPayload(null);
+        setDetailError("");
+        setMutationError("");
+        setRoomMutationError("");
+        setSearchOpen(false);
+        return;
+      }
+
+      if (action.kind === "openClient") {
+        const clientId = Number(action.clientId);
+        if (!Number.isInteger(clientId) || clientId <= 0) return;
+        setActiveSection("clientes");
+        setDrawerOpen(false);
+        setSelectedAppointmentId(null);
+        setDetailPayload(null);
+        setSelectedClientId(clientId);
+        setClientDrawerOpen(true);
+        setClientDetailPayload(null);
+        setClientDetailError("");
+        setSearchOpen(false);
+        return;
+      }
+
+      if (action.kind === "openRooms") {
+        setActiveSection("control");
+        setActiveTab("rooms");
+        setDrawerOpen(false);
+        setClientDrawerOpen(false);
+        setSelectedAppointmentId(null);
+        setSelectedClientId(null);
+        setSearchOpen(false);
+        return;
+      }
+    },
+    []
+  );
+
   const closeClientDrawer = useCallback(() => {
     setClientDrawerOpen(false);
     setSelectedClientId(null);
@@ -1747,6 +2406,74 @@ function AdminApp() {
       setMutationLoading(false);
     }
   }
+
+  const handleRoomKanbanMove = useCallback(
+    async (appointmentId, nextRoomId, roomLabel) => {
+      if (!authToken || !appointmentId || !nextRoomId || kanbanMoving) {
+        return;
+      }
+      const numericRoomId = Number(nextRoomId);
+      const numericAppointmentId = Number(appointmentId);
+      if (!Number.isInteger(numericAppointmentId) || numericAppointmentId <= 0) return;
+      if (!Number.isInteger(numericRoomId) || numericRoomId <= 0) return;
+
+      const confirmLabel = roomLabel
+        ? `¿Mover esta cita a Sala ${roomLabel}?`
+        : "¿Mover esta cita de sala?";
+      const confirmed = window.confirm(confirmLabel);
+      if (!confirmed) return;
+
+      setKanbanError("");
+      setKanbanMoving(true);
+      setKanbanPending({ appointmentId: numericAppointmentId, roomId: numericRoomId });
+
+      try {
+        const response = await fetch(
+          `/api/admin/appointments/${numericAppointmentId}/room`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ roomId: numericRoomId })
+          }
+        );
+
+        const responsePayload = await response.json();
+
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(getErrorMessage(responsePayload));
+        }
+
+        setRefreshTick((value) => value + 1);
+        if (
+          drawerOpen &&
+          Number(selectedAppointmentId) === numericAppointmentId &&
+          responsePayload?.appointment
+        ) {
+          setDetailPayload(responsePayload);
+        }
+      } catch (error) {
+        setKanbanError(error.message || "No se pudo mover la cita.");
+      } finally {
+        setKanbanMoving(false);
+        setKanbanPending(null);
+      }
+    },
+    [
+      authToken,
+      drawerOpen,
+      handleUnauthorized,
+      kanbanMoving,
+      selectedAppointmentId
+    ]
+  );
 
   async function handleRoomChange(nextRoomId) {
     if (!selectedAppointmentId || !nextRoomId || roomMutationLoading) {
@@ -2089,6 +2816,19 @@ function AdminApp() {
           </div>
 
           <div className="controls">
+            {authToken ? (
+              <button
+                type="button"
+                className="search-button"
+                onClick={() => setSearchOpen(true)}
+                aria-label="Abrir busqueda global"
+              >
+                <MagnifyingGlass size={16} weight="regular" aria-hidden="true" />
+                <span>Buscar</span>
+                <kbd className="search-button-kbd">/</kbd>
+              </button>
+            ) : null}
+
             {authToken && authAdmin ? (
               <div className="auth-chip" aria-label="Sesion activa">
                 <UserCircle size={18} weight="regular" aria-hidden="true" />
@@ -2390,35 +3130,26 @@ function AdminApp() {
                       ) : null}
 
                       {activeTab === "rooms" ? (
-                        <section className="panel" aria-label="Vista por salas">
+                        <section className="panel rooms-panel" aria-label="Vista por salas">
                           <div className="panel-heading">
                             <h2>Salas</h2>
-                            <p>{listAppointments.length} citas visibles</p>
+                            <p>
+                              {listAppointments.length} citas · arrastra una cita para moverla de
+                              sala
+                            </p>
                           </div>
-                          <RoomsView
+                          {kanbanError ? (
+                            <p className="feedback error compact-feedback">{kanbanError}</p>
+                          ) : null}
+                          <RoomsKanban
                             appointments={listAppointments}
                             timezone={timezone}
                             onSelect={openDrawer}
-                          />
-                        </section>
-                      ) : null}
-
-                      {activeTab === "list" ? (
-                        <section className="panel" aria-label="Lista completa">
-                          <div className="panel-heading">
-                            <h2>Lista</h2>
-                            <p>{listAppointments.length} citas</p>
-                          </div>
-                          <AppointmentTable
-                            appointments={listAppointments}
-                            timezone={timezone}
-                            onSelect={openDrawer}
-                            selectedIds={selectedAppointmentIdsSet}
-                            onToggleSelect={toggleAppointmentSelection}
-                            onToggleSelectAll={toggleAppointmentSelectionGroup}
-                            onDeleteOne={handleDeleteAppointmentButton}
-                            armedDeleteId={armedDeleteAppointmentId}
-                            deleteLoading={deleteAppointmentsLoading}
+                            onMoveToRoom={handleRoomKanbanMove}
+                            draggable={!kanbanMoving}
+                            isMutating={kanbanMoving}
+                            pendingAppointmentId={kanbanPending?.appointmentId || null}
+                            pendingTargetRoomId={kanbanPending?.roomId || null}
                           />
                         </section>
                       ) : null}
@@ -2570,6 +3301,14 @@ function AdminApp() {
         error={clientDetailError}
         timezone={timezone}
         onClose={closeClientDrawer}
+      />
+
+      <GlobalSearchModal
+        open={searchOpen && Boolean(authToken)}
+        onClose={() => setSearchOpen(false)}
+        authToken={authToken}
+        onUnauthorized={handleUnauthorized}
+        onResolveAction={handleSearchAction}
       />
     </div>
   );
