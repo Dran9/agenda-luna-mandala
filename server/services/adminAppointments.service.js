@@ -114,6 +114,29 @@ function parseAppointmentId(rawValue) {
   return parsed;
 }
 
+function parseAppointmentIds(rawValue) {
+  if (!Array.isArray(rawValue)) {
+    throw new ValidationError("ids invalido", {
+      field: "ids",
+      expected: "array<number>"
+    });
+  }
+
+  const parsedIds = Array.from(
+    new Set(
+      rawValue.map((entry) => parseAppointmentId(entry))
+    )
+  );
+
+  if (parsedIds.length === 0) {
+    throw new ValidationError("ids vacio", {
+      field: "ids"
+    });
+  }
+
+  return parsedIds;
+}
+
 function parseRoomId(rawValue) {
   const parsed = Number.parseInt(rawValue, 10);
 
@@ -837,6 +860,96 @@ async function listAdminAppointments({
   };
 }
 
+async function deleteAdminAppointments({
+  connection,
+  tenantSlug,
+  appointmentIds,
+  now = new Date(),
+  adminSession,
+  releaseClaims = releaseAppointmentClaims
+}) {
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+  const ids = parseAppointmentIds(appointmentIds);
+  const nowDate = toDate(now);
+  const inClause = buildInClause(ids);
+  let startedTransaction = false;
+
+  try {
+    await connection.beginTransaction();
+    startedTransaction = true;
+
+    const [rows] = await connection.query(
+      `SELECT id
+       FROM appointments
+       WHERE center_id = ?
+         AND id IN ${inClause.sql}
+       FOR UPDATE`,
+      [center.id, ...inClause.values]
+    );
+
+    const foundIds = new Set(rows.map((entry) => Number(entry.id)));
+    const missingIds = ids.filter((entry) => !foundIds.has(entry));
+
+    if (missingIds.length > 0) {
+      throw new AdminAppointmentsError({
+        status: 404,
+        code: "APPOINTMENT_NOT_FOUND",
+        message: "Una o mas citas no existen para este centro",
+        details: {
+          missingIds
+        }
+      });
+    }
+
+    for (const appointmentId of ids) {
+      await releaseClaims({
+        connection,
+        appointmentId,
+        manageTransaction: false
+      });
+    }
+
+    await connection.query(
+      `DELETE FROM payments
+       WHERE center_id = ?
+         AND appointment_id IN ${inClause.sql}`,
+      [center.id, ...inClause.values]
+    );
+
+    const [deleteResult] = await connection.query(
+      `DELETE FROM appointments
+       WHERE center_id = ?
+         AND id IN ${inClause.sql}`,
+      [center.id, ...inClause.values]
+    );
+
+    if (Number(deleteResult?.affectedRows || 0) !== ids.length) {
+      throw new AdminAppointmentsError({
+        status: 409,
+        code: "APPOINTMENT_DELETE_CONFLICT",
+        message: "No se pudieron borrar todas las citas solicitadas"
+      });
+    }
+
+    await connection.commit();
+
+    return {
+      generatedAt: nowDate.toISOString(),
+      center,
+      deleted: {
+        appointmentIds: ids,
+        total: ids.length
+      }
+    };
+  } catch (error) {
+    if (startedTransaction) {
+      await connection.rollback();
+    }
+
+    throw error;
+  }
+}
+
 async function getAdminAppointmentDetail({
   connection,
   appointmentId,
@@ -1209,6 +1322,7 @@ module.exports = {
   AdminAppointmentsError,
   listAdminAppointments,
   getAdminAppointmentDetail,
+  deleteAdminAppointments,
   updateAdminAppointmentStatus,
   updateAdminAppointmentRoom
 };

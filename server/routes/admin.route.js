@@ -3,6 +3,7 @@ const { Router } = require("express");
 const { createPool } = require("../db/pool");
 const {
   AdminAppointmentsError,
+  deleteAdminAppointments,
   getAdminAppointmentDetail,
   listAdminAppointments,
   updateAdminAppointmentRoom,
@@ -10,6 +11,7 @@ const {
 } = require("../services/adminAppointments.service");
 const {
   AdminClientsError,
+  deleteAdminClients,
   getAdminClientDetail,
   listAdminClients
 } = require("../services/adminClients.service");
@@ -109,10 +111,12 @@ function createAdminRouter({
   getPool = getSharedPool,
   listAppointments = listAdminAppointments,
   getAppointmentById = getAdminAppointmentDetail,
+  removeAppointments = deleteAdminAppointments,
   setAppointmentStatus = updateAdminAppointmentStatus,
   setAppointmentRoom = updateAdminAppointmentRoom,
   listClients = listAdminClients,
   getClientById = getAdminClientDetail,
+  removeClients = deleteAdminClients,
   login = loginAdmin,
   verifyToken = verifyAdminToken
 } = {}) {
@@ -234,6 +238,46 @@ function createAdminRouter({
     });
   });
 
+  router.delete("/appointments/:id", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await removeAppointments({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        appointmentIds: [req.params.id],
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.delete("/appointments", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await removeAppointments({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        appointmentIds: req.body?.ids,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
   router.get("/clients", async (req, res) => {
     const adminSession = authenticateAdmin(req, res, verifyToken);
 
@@ -268,6 +312,46 @@ function createAdminRouter({
         connection,
         tenantSlug: req.query.tenantSlug,
         clientId: req.params.id,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.delete("/clients/:id", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await removeClients({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        clientIds: [req.params.id],
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.delete("/clients", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await removeClients({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        clientIds: req.body?.ids,
         now: new Date(),
         adminSession
       });

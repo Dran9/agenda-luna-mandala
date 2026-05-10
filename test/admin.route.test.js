@@ -700,6 +700,90 @@ test("POST /api/admin/appointments/:id/room without token returns 401", async ()
   assert.equal(requestedConnection, false);
 });
 
+test("DELETE /api/admin/appointments/:id borra una cita con token", async () => {
+  const connection = {
+    release() {}
+  };
+  let receivedArgs = null;
+
+  const router = createAdminRouter({
+    getPool: () => ({
+      async getConnection() {
+        return connection;
+      }
+    }),
+    verifyToken: () => ({ adminId: 2, centerId: 1, email: "admin@luna.com", role: "admin" }),
+    removeAppointments: async (args) => {
+      receivedArgs = args;
+      return {
+        deleted: {
+          appointmentIds: [88],
+          total: 1
+        }
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/appointments/:id", "delete");
+  const req = {
+    params: { id: "88" },
+    query: {},
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(receivedArgs.appointmentIds, ["88"]);
+  assert.equal(receivedArgs.now instanceof Date, true);
+  assert.equal(receivedArgs.adminSession.role, "admin");
+  assert.equal(res.payload.deleted.total, 1);
+});
+
+test("DELETE /api/admin/appointments borra citas en masa con token", async () => {
+  const connection = {
+    release() {}
+  };
+  let receivedArgs = null;
+
+  const router = createAdminRouter({
+    getPool: () => ({
+      async getConnection() {
+        return connection;
+      }
+    }),
+    verifyToken: () => ({ adminId: 2, centerId: 1, email: "admin@luna.com", role: "admin" }),
+    removeAppointments: async (args) => {
+      receivedArgs = args;
+      return {
+        deleted: {
+          appointmentIds: [88, 89],
+          total: 2
+        }
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/appointments", "delete");
+  const req = {
+    body: { ids: [88, 89] },
+    query: {},
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(receivedArgs.appointmentIds, [88, 89]);
+  assert.equal(res.payload.deleted.total, 2);
+});
+
 test("GET /api/admin/clients without token returns 401", async () => {
   let requestedConnection = false;
 
@@ -865,4 +949,87 @@ test("GET /api/admin/clients/:id returns 404 for missing client", async () => {
 
   assert.equal(res.statusCode, 404);
   assert.equal(res.payload.error.code, "CLIENT_NOT_FOUND");
+});
+
+test("DELETE /api/admin/clients/:id borra un cliente con token", async () => {
+  const connection = {
+    release() {}
+  };
+  let receivedArgs = null;
+
+  const router = createAdminRouter({
+    getPool: () => ({
+      async getConnection() {
+        return connection;
+      }
+    }),
+    verifyToken: () => ({ adminId: 7, centerId: 2, email: "owner@luna.com", role: "owner" }),
+    removeClients: async (args) => {
+      receivedArgs = args;
+      return {
+        deleted: {
+          clientIds: [12],
+          total: 1
+        }
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/clients/:id", "delete");
+  const req = {
+    params: { id: "12" },
+    query: {},
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(receivedArgs.clientIds, ["12"]);
+  assert.equal(receivedArgs.adminSession.centerId, 2);
+  assert.equal(res.payload.deleted.total, 1);
+});
+
+test("DELETE /api/admin/clients borra clientes en masa con token", async () => {
+  const connection = {
+    release() {}
+  };
+  let receivedArgs = null;
+
+  const router = createAdminRouter({
+    getPool: () => ({
+      async getConnection() {
+        return connection;
+      }
+    }),
+    verifyToken: () => ({ adminId: 7, centerId: 2, email: "owner@luna.com", role: "owner" }),
+    removeClients: async (args) => {
+      receivedArgs = args;
+      return {
+        deleted: {
+          clientIds: [12, 13],
+          total: 2
+        }
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/clients", "delete");
+  const req = {
+    body: { ids: [12, 13] },
+    query: {},
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(receivedArgs.clientIds, [12, 13]);
+  assert.equal(res.payload.deleted.total, 2);
 });

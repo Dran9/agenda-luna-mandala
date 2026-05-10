@@ -12,6 +12,7 @@ import {
   Sparkle,
   Sun,
   Table,
+  Trash,
   UserCircle,
   UserGear,
   UsersThree,
@@ -279,10 +280,22 @@ function SummaryCard({ label, value, className }) {
   );
 }
 
-function AppointmentTable({ appointments, timezone, onSelect }) {
+function AppointmentTable({
+  appointments,
+  timezone,
+  onSelect,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
+  onDeleteOne,
+  armedDeleteId,
+  deleteLoading
+}) {
   if (!appointments.length) {
     return <p className="empty-state">No hay citas para este bloque.</p>;
   }
+
+  const allSelected = appointments.length > 0 && appointments.every((item) => selectedIds.has(item.id));
 
   return (
     <>
@@ -290,6 +303,19 @@ function AppointmentTable({ appointments, timezone, onSelect }) {
         <table className="appointments-table">
           <thead>
             <tr>
+              <th className="cell-check">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={(event) =>
+                    onToggleSelectAll(
+                      appointments.map((item) => item.id),
+                      event.target.checked
+                    )
+                  }
+                  aria-label="Seleccionar citas visibles"
+                />
+              </th>
               <th>Cliente</th>
               <th>Fecha/Hora</th>
               <th>WhatsApp</th>
@@ -299,11 +325,20 @@ function AppointmentTable({ appointments, timezone, onSelect }) {
               <th>Estado</th>
               <th>Public code</th>
               <th>Creada</th>
+              <th>Accion</th>
             </tr>
           </thead>
           <tbody>
             {appointments.map((item) => (
               <tr key={item.id}>
+                <td className="cell-check">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(item.id)}
+                    onChange={(event) => onToggleSelect(item.id, event.target.checked)}
+                    aria-label={`Seleccionar cita ${item.publicCode || item.id}`}
+                  />
+                </td>
                 <td>
                   <button
                     type="button"
@@ -324,6 +359,17 @@ function AppointmentTable({ appointments, timezone, onSelect }) {
                 </td>
                 <td>{item.publicCode || "-"}</td>
                 <td>{formatDateTime(item.createdAt, timezone)}</td>
+                <td>
+                  <button
+                    type="button"
+                    className={`danger-button${armedDeleteId === item.id ? " is-armed" : ""}`}
+                    onClick={() => onDeleteOne(item.id)}
+                    disabled={deleteLoading}
+                  >
+                    <Trash size={14} weight="regular" aria-hidden="true" />
+                    <span>{armedDeleteId === item.id ? "¿Borrar?" : "Borrar"}</span>
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -333,6 +379,14 @@ function AppointmentTable({ appointments, timezone, onSelect }) {
       <ul className="appointments-cards" aria-label="Lista de citas mobile">
         {appointments.map((item) => (
           <li key={`mobile-${item.id}`} className="appointment-card">
+            <label className="inline-check">
+              <input
+                type="checkbox"
+                checked={selectedIds.has(item.id)}
+                onChange={(event) => onToggleSelect(item.id, event.target.checked)}
+              />
+              <span>Seleccionar</span>
+            </label>
             <button type="button" className="card-open" onClick={() => onSelect(item.id)}>
               <span className="appointment-title">{item.client.fullName || "Sin nombre"}</span>
               <StatusChip status={item.status} />
@@ -344,6 +398,15 @@ function AppointmentTable({ appointments, timezone, onSelect }) {
             <p className="appointment-line">Sala: {item.room.name || "-"}</p>
             <p className="appointment-line">Public code: {item.publicCode || "-"}</p>
             <p className="appointment-line">Creada: {formatDateTime(item.createdAt, timezone)}</p>
+            <button
+              type="button"
+              className={`danger-button${armedDeleteId === item.id ? " is-armed" : ""}`}
+              onClick={() => onDeleteOne(item.id)}
+              disabled={deleteLoading}
+            >
+              <Trash size={14} weight="regular" aria-hidden="true" />
+              <span>{armedDeleteId === item.id ? "¿Borrar?" : "Borrar"}</span>
+            </button>
           </li>
         ))}
       </ul>
@@ -695,10 +758,22 @@ function AppointmentDrawer({
   );
 }
 
-function ClientTable({ clients, timezone, onSelect }) {
+function ClientTable({
+  clients,
+  timezone,
+  onSelect,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
+  onDeleteOne,
+  armedDeleteId,
+  deleteLoading
+}) {
   if (!clients.length) {
     return <p className="empty-state">No hay clientes para este filtro.</p>;
   }
+
+  const allSelected = clients.length > 0 && clients.every((client) => selectedIds.has(client.id));
 
   return (
     <>
@@ -706,6 +781,19 @@ function ClientTable({ clients, timezone, onSelect }) {
         <table className="appointments-table clients-table">
           <thead>
             <tr>
+              <th className="cell-check">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={(event) =>
+                    onToggleSelectAll(
+                      clients.map((client) => client.id),
+                      event.target.checked
+                    )
+                  }
+                  aria-label="Seleccionar clientes visibles"
+                />
+              </th>
               <th>Cliente</th>
               <th>WhatsApp</th>
               <th>Onboarding</th>
@@ -717,11 +805,20 @@ function ClientTable({ clients, timezone, onSelect }) {
               <th>No show</th>
               <th>Proxima cita</th>
               <th>Ultima cita</th>
+              <th>Accion</th>
             </tr>
           </thead>
           <tbody>
             {clients.map((client) => (
               <tr key={client.id}>
+                <td className="cell-check">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(client.id)}
+                    onChange={(event) => onToggleSelect(client.id, event.target.checked)}
+                    aria-label={`Seleccionar cliente ${client.fullName || client.id}`}
+                  />
+                </td>
                 <td>
                   <button
                     type="button"
@@ -746,6 +843,17 @@ function ClientTable({ clients, timezone, onSelect }) {
                 <td>
                   {client.lastAppointment ? formatDateTime(client.lastAppointment.startsAt, timezone) : "-"}
                 </td>
+                <td>
+                  <button
+                    type="button"
+                    className={`danger-button${armedDeleteId === client.id ? " is-armed" : ""}`}
+                    onClick={() => onDeleteOne(client.id)}
+                    disabled={deleteLoading}
+                  >
+                    <Trash size={14} weight="regular" aria-hidden="true" />
+                    <span>{armedDeleteId === client.id ? "¿Borrar?" : "Borrar"}</span>
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -755,6 +863,14 @@ function ClientTable({ clients, timezone, onSelect }) {
       <ul className="appointments-cards" aria-label="Lista de clientes mobile">
         {clients.map((client) => (
           <li key={`client-mobile-${client.id}`} className="appointment-card">
+            <label className="inline-check">
+              <input
+                type="checkbox"
+                checked={selectedIds.has(client.id)}
+                onChange={(event) => onToggleSelect(client.id, event.target.checked)}
+              />
+              <span>Seleccionar</span>
+            </label>
             <button type="button" className="card-open" onClick={() => onSelect(client.id)}>
               <span className="appointment-title">{client.fullName || "Sin nombre"}</span>
               <StatusChip status={client.onboardingComplete ? "confirmed" : "pending"} />
@@ -767,6 +883,15 @@ function ClientTable({ clients, timezone, onSelect }) {
             <p className="appointment-line">
               Ultima: {client.lastAppointment ? formatDateTime(client.lastAppointment.startsAt, timezone) : "-"}
             </p>
+            <button
+              type="button"
+              className={`danger-button${armedDeleteId === client.id ? " is-armed" : ""}`}
+              onClick={() => onDeleteOne(client.id)}
+              disabled={deleteLoading}
+            >
+              <Trash size={14} weight="regular" aria-hidden="true" />
+              <span>{armedDeleteId === client.id ? "¿Borrar?" : "Borrar"}</span>
+            </button>
           </li>
         ))}
       </ul>
@@ -940,6 +1065,11 @@ function AdminApp() {
   const [mutationError, setMutationError] = useState("");
   const [roomMutationLoading, setRoomMutationLoading] = useState(false);
   const [roomMutationError, setRoomMutationError] = useState("");
+  const [deleteAppointmentsLoading, setDeleteAppointmentsLoading] = useState(false);
+  const [deleteAppointmentsError, setDeleteAppointmentsError] = useState("");
+  const [selectedAppointmentIds, setSelectedAppointmentIds] = useState([]);
+  const [armedDeleteAppointmentId, setArmedDeleteAppointmentId] = useState(null);
+  const [confirmBulkAppointmentsDelete, setConfirmBulkAppointmentsDelete] = useState(false);
   const [clientsDraft, setClientsDraft] = useState({
     q: "",
     onboarding: "all",
@@ -955,6 +1085,11 @@ function AdminApp() {
   const [clientsRefreshing, setClientsRefreshing] = useState(false);
   const [clientsError, setClientsError] = useState("");
   const [clientsPayload, setClientsPayload] = useState(null);
+  const [deleteClientsLoading, setDeleteClientsLoading] = useState(false);
+  const [deleteClientsError, setDeleteClientsError] = useState("");
+  const [selectedClientIds, setSelectedClientIds] = useState([]);
+  const [armedDeleteClientId, setArmedDeleteClientId] = useState(null);
+  const [confirmBulkClientsDelete, setConfirmBulkClientsDelete] = useState(false);
   const [clientDrawerOpen, setClientDrawerOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [clientDetailLoading, setClientDetailLoading] = useState(false);
@@ -999,10 +1134,20 @@ function AdminApp() {
     setIsRefreshing(false);
     setDrawerOpen(false);
     setSelectedAppointmentId(null);
+    setSelectedAppointmentIds([]);
+    setArmedDeleteAppointmentId(null);
+    setConfirmBulkAppointmentsDelete(false);
+    setDeleteAppointmentsLoading(false);
+    setDeleteAppointmentsError("");
     setDetailPayload(null);
     setClientsPayload(null);
     setClientsLoading(false);
     setClientsRefreshing(false);
+    setSelectedClientIds([]);
+    setArmedDeleteClientId(null);
+    setConfirmBulkClientsDelete(false);
+    setDeleteClientsLoading(false);
+    setDeleteClientsError("");
     setClientDrawerOpen(false);
     setSelectedClientId(null);
     setClientDetailPayload(null);
@@ -1371,6 +1516,37 @@ function AdminApp() {
 
   const listedClients = clientsPayload?.clients || [];
 
+  const selectedAppointmentIdsSet = useMemo(
+    () => new Set(selectedAppointmentIds),
+    [selectedAppointmentIds]
+  );
+  const selectedClientIdsSet = useMemo(
+    () => new Set(selectedClientIds),
+    [selectedClientIds]
+  );
+
+  useEffect(() => {
+    const availableAppointmentIds = new Set(listAppointments.map((entry) => Number(entry.id)));
+    setSelectedAppointmentIds((current) =>
+      current.filter((entry) => availableAppointmentIds.has(Number(entry)))
+    );
+  }, [listAppointments]);
+
+  useEffect(() => {
+    setConfirmBulkAppointmentsDelete(false);
+  }, [selectedAppointmentIds.length]);
+
+  useEffect(() => {
+    const availableClientIds = new Set(listedClients.map((entry) => Number(entry.id)));
+    setSelectedClientIds((current) =>
+      current.filter((entry) => availableClientIds.has(Number(entry)))
+    );
+  }, [listedClients]);
+
+  useEffect(() => {
+    setConfirmBulkClientsDelete(false);
+  }, [selectedClientIds.length]);
+
   const activateSection = useCallback((sectionId) => {
     if (sectionId !== "control" && sectionId !== "clientes") {
       return;
@@ -1383,10 +1559,16 @@ function AdminApp() {
     setDetailError("");
     setMutationError("");
     setRoomMutationError("");
+    setDeleteAppointmentsError("");
+    setArmedDeleteAppointmentId(null);
+    setConfirmBulkAppointmentsDelete(false);
     setClientDrawerOpen(false);
     setSelectedClientId(null);
     setClientDetailPayload(null);
     setClientDetailError("");
+    setDeleteClientsError("");
+    setArmedDeleteClientId(null);
+    setConfirmBulkClientsDelete(false);
   }, []);
 
   const openDrawer = useCallback((appointmentId) => {
@@ -1396,6 +1578,9 @@ function AdminApp() {
     setDetailError("");
     setMutationError("");
     setRoomMutationError("");
+    setDeleteAppointmentsError("");
+    setArmedDeleteAppointmentId(null);
+    setConfirmBulkAppointmentsDelete(false);
   }, []);
 
   const closeDrawer = useCallback(() => {
@@ -1407,6 +1592,9 @@ function AdminApp() {
     setMutationError("");
     setRoomMutationLoading(false);
     setRoomMutationError("");
+    setDeleteAppointmentsError("");
+    setArmedDeleteAppointmentId(null);
+    setConfirmBulkAppointmentsDelete(false);
   }, []);
 
   const openClientDrawer = useCallback((clientId) => {
@@ -1414,6 +1602,9 @@ function AdminApp() {
     setClientDrawerOpen(true);
     setClientDetailPayload(null);
     setClientDetailError("");
+    setDeleteClientsError("");
+    setArmedDeleteClientId(null);
+    setConfirmBulkClientsDelete(false);
   }, []);
 
   const closeClientDrawer = useCallback(() => {
@@ -1421,6 +1612,9 @@ function AdminApp() {
     setSelectedClientId(null);
     setClientDetailPayload(null);
     setClientDetailError("");
+    setDeleteClientsError("");
+    setArmedDeleteClientId(null);
+    setConfirmBulkClientsDelete(false);
   }, []);
 
   async function handleLogin(event) {
@@ -1484,10 +1678,20 @@ function AdminApp() {
     setDetailError("");
     setMutationError("");
     setRoomMutationError("");
+    setDeleteAppointmentsError("");
+    setDeleteAppointmentsLoading(false);
+    setSelectedAppointmentIds([]);
+    setArmedDeleteAppointmentId(null);
+    setConfirmBulkAppointmentsDelete(false);
     setClientsPayload(null);
     setClientsLoading(false);
     setClientsRefreshing(false);
     setClientsError("");
+    setDeleteClientsError("");
+    setDeleteClientsLoading(false);
+    setSelectedClientIds([]);
+    setArmedDeleteClientId(null);
+    setConfirmBulkClientsDelete(false);
     setClientDrawerOpen(false);
     setSelectedClientId(null);
     setClientDetailPayload(null);
@@ -1580,6 +1784,223 @@ function AdminApp() {
     } finally {
       setRoomMutationLoading(false);
     }
+  }
+
+  function toggleAppointmentSelection(appointmentId, checked) {
+    const normalizedId = Number(appointmentId);
+    setSelectedAppointmentIds((current) => {
+      const currentSet = new Set(current.map((entry) => Number(entry)));
+
+      if (checked) {
+        currentSet.add(normalizedId);
+      } else {
+        currentSet.delete(normalizedId);
+      }
+
+      return Array.from(currentSet.values());
+    });
+  }
+
+  function toggleAppointmentSelectionGroup(ids, checked) {
+    const normalizedIds = ids.map((entry) => Number(entry)).filter((entry) => Number.isInteger(entry) && entry > 0);
+    setSelectedAppointmentIds((current) => {
+      const currentSet = new Set(current.map((entry) => Number(entry)));
+
+      for (const id of normalizedIds) {
+        if (checked) {
+          currentSet.add(id);
+        } else {
+          currentSet.delete(id);
+        }
+      }
+
+      return Array.from(currentSet.values());
+    });
+  }
+
+  async function requestDeleteAppointments(ids) {
+    if (!ids.length || deleteAppointmentsLoading) {
+      return;
+    }
+
+    setDeleteAppointmentsLoading(true);
+    setDeleteAppointmentsError("");
+
+    try {
+      const response = await fetch("/api/admin/appointments", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ ids })
+      });
+      const payloadResponse = await response.json();
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(payloadResponse));
+      }
+
+      setArmedDeleteAppointmentId(null);
+      setConfirmBulkAppointmentsDelete(false);
+      setSelectedAppointmentIds((current) => current.filter((entry) => !ids.includes(Number(entry))));
+
+      if (selectedAppointmentId && ids.includes(Number(selectedAppointmentId))) {
+        closeDrawer();
+      }
+
+      setRefreshTick((value) => value + 1);
+    } catch (deleteError) {
+      setDeleteAppointmentsError(deleteError.message || "No se pudieron borrar las citas seleccionadas.");
+    } finally {
+      setDeleteAppointmentsLoading(false);
+    }
+  }
+
+  function handleDeleteAppointmentButton(appointmentId) {
+    if (deleteAppointmentsLoading) {
+      return;
+    }
+
+    const normalizedId = Number(appointmentId);
+
+    if (armedDeleteAppointmentId === normalizedId) {
+      requestDeleteAppointments([normalizedId]);
+      return;
+    }
+
+    setDeleteAppointmentsError("");
+    setConfirmBulkAppointmentsDelete(false);
+    setArmedDeleteAppointmentId(normalizedId);
+  }
+
+  function handleBulkDeleteAppointmentsButton() {
+    if (deleteAppointmentsLoading || selectedAppointmentIds.length === 0) {
+      return;
+    }
+
+    if (confirmBulkAppointmentsDelete) {
+      requestDeleteAppointments(selectedAppointmentIds.map((entry) => Number(entry)));
+      return;
+    }
+
+    setDeleteAppointmentsError("");
+    setArmedDeleteAppointmentId(null);
+    setConfirmBulkAppointmentsDelete(true);
+  }
+
+  function toggleClientSelection(clientId, checked) {
+    const normalizedId = Number(clientId);
+    setSelectedClientIds((current) => {
+      const currentSet = new Set(current.map((entry) => Number(entry)));
+
+      if (checked) {
+        currentSet.add(normalizedId);
+      } else {
+        currentSet.delete(normalizedId);
+      }
+
+      return Array.from(currentSet.values());
+    });
+  }
+
+  function toggleClientSelectionGroup(ids, checked) {
+    const normalizedIds = ids.map((entry) => Number(entry)).filter((entry) => Number.isInteger(entry) && entry > 0);
+    setSelectedClientIds((current) => {
+      const currentSet = new Set(current.map((entry) => Number(entry)));
+
+      for (const id of normalizedIds) {
+        if (checked) {
+          currentSet.add(id);
+        } else {
+          currentSet.delete(id);
+        }
+      }
+
+      return Array.from(currentSet.values());
+    });
+  }
+
+  async function requestDeleteClients(ids) {
+    if (!ids.length || deleteClientsLoading) {
+      return;
+    }
+
+    setDeleteClientsLoading(true);
+    setDeleteClientsError("");
+
+    try {
+      const response = await fetch("/api/admin/clients", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ ids })
+      });
+      const payloadResponse = await response.json();
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(payloadResponse));
+      }
+
+      setArmedDeleteClientId(null);
+      setConfirmBulkClientsDelete(false);
+      setSelectedClientIds((current) => current.filter((entry) => !ids.includes(Number(entry))));
+
+      if (selectedClientId && ids.includes(Number(selectedClientId))) {
+        closeClientDrawer();
+      }
+
+      setClientsRefreshTick((value) => value + 1);
+      setRefreshTick((value) => value + 1);
+    } catch (deleteError) {
+      setDeleteClientsError(deleteError.message || "No se pudieron borrar los clientes seleccionados.");
+    } finally {
+      setDeleteClientsLoading(false);
+    }
+  }
+
+  function handleDeleteClientButton(clientId) {
+    if (deleteClientsLoading) {
+      return;
+    }
+
+    const normalizedId = Number(clientId);
+
+    if (armedDeleteClientId === normalizedId) {
+      requestDeleteClients([normalizedId]);
+      return;
+    }
+
+    setDeleteClientsError("");
+    setConfirmBulkClientsDelete(false);
+    setArmedDeleteClientId(normalizedId);
+  }
+
+  function handleBulkDeleteClientsButton() {
+    if (deleteClientsLoading || selectedClientIds.length === 0) {
+      return;
+    }
+
+    if (confirmBulkClientsDelete) {
+      requestDeleteClients(selectedClientIds.map((entry) => Number(entry)));
+      return;
+    }
+
+    setDeleteClientsError("");
+    setArmedDeleteClientId(null);
+    setConfirmBulkClientsDelete(true);
   }
 
   function handleClientSearchSubmit(event) {
@@ -1721,7 +2142,39 @@ function AdminApp() {
                       ? "Error en ultima actualizacion"
                       : controlRefreshLabel}
                 </p>
+
+                {selectedAppointmentIds.length ? (
+                  <button
+                    type="button"
+                    className={`danger-button${confirmBulkAppointmentsDelete ? " is-armed" : ""}`}
+                    disabled={deleteAppointmentsLoading}
+                    onClick={handleBulkDeleteAppointmentsButton}
+                  >
+                    <Trash size={14} weight="regular" aria-hidden="true" />
+                    <span>
+                      {confirmBulkAppointmentsDelete
+                        ? `¿Borrar ${selectedAppointmentIds.length}?`
+                        : `Borrar citas (${selectedAppointmentIds.length})`}
+                    </span>
+                  </button>
+                ) : null}
               </>
+            ) : null}
+
+            {authToken && isClientsSection && selectedClientIds.length ? (
+              <button
+                type="button"
+                className={`danger-button${confirmBulkClientsDelete ? " is-armed" : ""}`}
+                disabled={deleteClientsLoading}
+                onClick={handleBulkDeleteClientsButton}
+              >
+                <Trash size={14} weight="regular" aria-hidden="true" />
+                <span>
+                  {confirmBulkClientsDelete
+                    ? `¿Borrar ${selectedClientIds.length}?`
+                    : `Borrar clientes (${selectedClientIds.length})`}
+                </span>
+              </button>
             ) : null}
 
             {authToken ? (
@@ -1811,6 +2264,9 @@ function AdminApp() {
                   {error && hasControlData ? (
                     <p className="feedback error">No se pudo actualizar el tablero. Mostrando ultima carga valida.</p>
                   ) : null}
+                  {deleteAppointmentsError ? (
+                    <p className="feedback error">{deleteAppointmentsError}</p>
+                  ) : null}
 
                   {hasControlData ? (
                     <>
@@ -1870,6 +2326,12 @@ function AdminApp() {
                               appointments={todayAppointments}
                               timezone={timezone}
                               onSelect={openDrawer}
+                              selectedIds={selectedAppointmentIdsSet}
+                              onToggleSelect={toggleAppointmentSelection}
+                              onToggleSelectAll={toggleAppointmentSelectionGroup}
+                              onDeleteOne={handleDeleteAppointmentButton}
+                              armedDeleteId={armedDeleteAppointmentId}
+                              deleteLoading={deleteAppointmentsLoading}
                             />
                           </section>
 
@@ -1883,6 +2345,12 @@ function AdminApp() {
                                 appointments={upcomingAppointments}
                                 timezone={timezone}
                                 onSelect={openDrawer}
+                                selectedIds={selectedAppointmentIdsSet}
+                                onToggleSelect={toggleAppointmentSelection}
+                                onToggleSelectAll={toggleAppointmentSelectionGroup}
+                                onDeleteOne={handleDeleteAppointmentButton}
+                                armedDeleteId={armedDeleteAppointmentId}
+                                deleteLoading={deleteAppointmentsLoading}
                               />
                             </section>
                           ) : null}
@@ -1896,6 +2364,12 @@ function AdminApp() {
                               appointments={recentAppointments}
                               timezone={timezone}
                               onSelect={openDrawer}
+                              selectedIds={selectedAppointmentIdsSet}
+                              onToggleSelect={toggleAppointmentSelection}
+                              onToggleSelectAll={toggleAppointmentSelectionGroup}
+                              onDeleteOne={handleDeleteAppointmentButton}
+                              armedDeleteId={armedDeleteAppointmentId}
+                              deleteLoading={deleteAppointmentsLoading}
                             />
                           </section>
                         </>
@@ -1939,6 +2413,12 @@ function AdminApp() {
                             appointments={listAppointments}
                             timezone={timezone}
                             onSelect={openDrawer}
+                            selectedIds={selectedAppointmentIdsSet}
+                            onToggleSelect={toggleAppointmentSelection}
+                            onToggleSelectAll={toggleAppointmentSelectionGroup}
+                            onDeleteOne={handleDeleteAppointmentButton}
+                            armedDeleteId={armedDeleteAppointmentId}
+                            deleteLoading={deleteAppointmentsLoading}
                           />
                         </section>
                       ) : null}
@@ -2038,6 +2518,9 @@ function AdminApp() {
                   {clientsRefreshing ? (
                     <p className="feedback subtle">Actualizando clientes en segundo plano...</p>
                   ) : null}
+                  {deleteClientsError ? (
+                    <p className="feedback error">{deleteClientsError}</p>
+                  ) : null}
 
                   {hasClientsData ? (
                     <section className="panel" aria-label="Listado de clientes">
@@ -2049,6 +2532,12 @@ function AdminApp() {
                         clients={listedClients}
                         timezone={timezone}
                         onSelect={openClientDrawer}
+                        selectedIds={selectedClientIdsSet}
+                        onToggleSelect={toggleClientSelection}
+                        onToggleSelectAll={toggleClientSelectionGroup}
+                        onDeleteOne={handleDeleteClientButton}
+                        armedDeleteId={armedDeleteClientId}
+                        deleteLoading={deleteClientsLoading}
                       />
                     </section>
                   ) : null}

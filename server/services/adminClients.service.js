@@ -1,4 +1,5 @@
 const { toDate } = require("../utils/dates");
+const { releaseAppointmentClaims } = require("./claims.service");
 const { ValidationError } = require("./errors");
 
 const DEFAULT_LIMIT = 20;
@@ -94,6 +95,25 @@ function parseClientId(rawValue) {
   }
 
   return parsed;
+}
+
+function parseClientIds(rawValue) {
+  if (!Array.isArray(rawValue)) {
+    throw new ValidationError("ids invalido", {
+      field: "ids",
+      expected: "array<number>"
+    });
+  }
+
+  const ids = Array.from(new Set(rawValue.map((entry) => parseClientId(entry))));
+
+  if (ids.length === 0) {
+    throw new ValidationError("ids vacio", {
+      field: "ids"
+    });
+  }
+
+  return ids;
 }
 
 function parseAdminCenterId(adminSession) {
@@ -583,8 +603,129 @@ async function getAdminClientDetail({
   };
 }
 
+async function deleteAdminClients({
+  connection,
+  tenantSlug,
+  clientIds,
+  now = new Date(),
+  adminSession,
+  releaseClaims = releaseAppointmentClaims
+}) {
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+  const ids = parseClientIds(clientIds);
+  const nowDate = toDate(now);
+  const placeholders = makeInClausePlaceholders(ids);
+  let startedTransaction = false;
+
+  try {
+    await connection.beginTransaction();
+    startedTransaction = true;
+
+    const [clientRows] = await connection.query(
+      `SELECT id
+       FROM clients
+       WHERE center_id = ?
+         AND is_active = 1
+         AND id IN (${placeholders})
+       FOR UPDATE`,
+      [center.id, ...ids]
+    );
+
+    const foundClientIds = new Set(clientRows.map((entry) => Number(entry.id)));
+    const missingClientIds = ids.filter((entry) => !foundClientIds.has(entry));
+
+    if (missingClientIds.length > 0) {
+      throw new AdminClientsError({
+        status: 404,
+        code: "CLIENT_NOT_FOUND",
+        message: "Uno o mas clientes no existen para este centro",
+        details: {
+          missingIds: missingClientIds
+        }
+      });
+    }
+
+    const [appointmentRows] = await connection.query(
+      `SELECT id
+       FROM appointments
+       WHERE center_id = ?
+         AND client_id IN (${placeholders})
+       FOR UPDATE`,
+      [center.id, ...ids]
+    );
+
+    const appointmentIds = Array.from(
+      new Set(appointmentRows.map((entry) => Number(entry.id)).filter((entry) => Number.isInteger(entry) && entry > 0))
+    );
+
+    if (appointmentIds.length > 0) {
+      const appointmentPlaceholders = makeInClausePlaceholders(appointmentIds);
+
+      for (const appointmentId of appointmentIds) {
+        await releaseClaims({
+          connection,
+          appointmentId,
+          manageTransaction: false
+        });
+      }
+
+      await connection.query(
+        `DELETE FROM payments
+         WHERE center_id = ?
+           AND appointment_id IN (${appointmentPlaceholders})`,
+        [center.id, ...appointmentIds]
+      );
+
+      await connection.query(
+        `DELETE FROM appointments
+         WHERE center_id = ?
+           AND id IN (${appointmentPlaceholders})`,
+        [center.id, ...appointmentIds]
+      );
+    }
+
+    const [clientUpdateResult] = await connection.query(
+      `UPDATE clients
+       SET
+         is_active = 0,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE center_id = ?
+         AND id IN (${placeholders})
+         AND is_active = 1`,
+      [center.id, ...ids]
+    );
+
+    if (Number(clientUpdateResult?.affectedRows || 0) !== ids.length) {
+      throw new AdminClientsError({
+        status: 409,
+        code: "CLIENT_DELETE_CONFLICT",
+        message: "No se pudieron borrar todos los clientes solicitados"
+      });
+    }
+
+    await connection.commit();
+
+    return {
+      generatedAt: nowDate.toISOString(),
+      center,
+      deleted: {
+        clientIds: ids,
+        appointmentsDeleted: appointmentIds.length,
+        total: ids.length
+      }
+    };
+  } catch (error) {
+    if (startedTransaction) {
+      await connection.rollback();
+    }
+
+    throw error;
+  }
+}
+
 module.exports = {
   AdminClientsError,
   listAdminClients,
-  getAdminClientDetail
+  getAdminClientDetail,
+  deleteAdminClients
 };

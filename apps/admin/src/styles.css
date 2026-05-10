@@ -335,6 +335,32 @@ select {
   cursor: pointer;
 }
 
+.danger-button {
+  min-height: 40px;
+  border: 1px solid rgba(220, 38, 38, 0.32);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+  font-size: 0.84rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.danger-button.is-armed {
+  border-color: rgba(220, 38, 38, 0.5);
+  background: rgba(220, 38, 38, 0.16);
+  color: #991b1b;
+}
+
+.danger-button:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
 .canvas {
   padding: 16px 20px 24px;
   display: grid;
@@ -637,6 +663,10 @@ select {
   word-break: break-word;
 }
 
+.cell-check {
+  width: 42px;
+}
+
 .appointments-table th {
   font-weight: 600;
   color: var(--muted);
@@ -696,6 +726,14 @@ select {
   padding: 10px;
   display: grid;
   gap: 6px;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 .card-open {
@@ -1115,6 +1153,7 @@ select {
 .theme-toggle:focus-visible,
 .control-input:focus-visible,
 .refresh-button:focus-visible,
+.danger-button:focus-visible,
 .logout-button:focus-visible,
 .auth-field input:focus-visible,
 .login-button:focus-visible,
