@@ -15,6 +15,7 @@ const {
   getAdminClientDetail,
   listAdminClients
 } = require("../services/adminClients.service");
+const { searchAdmin } = require("../services/adminSearch.service");
 const { ValidationError } = require("../services/errors");
 const { AdminAuthError, loginAdmin, verifyAdminToken } = require("../services/adminAuth.service");
 const { env } = require("../utils/env");
@@ -117,6 +118,7 @@ function createAdminRouter({
   listClients = listAdminClients,
   getClientById = getAdminClientDetail,
   removeClients = deleteAdminClients,
+  search = searchAdmin,
   login = loginAdmin,
   verifyToken = verifyAdminToken
 } = {}) {
@@ -332,6 +334,27 @@ function createAdminRouter({
         connection,
         tenantSlug: req.query.tenantSlug,
         clientIds: [req.params.id],
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.get("/search", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await search({
+        connection,
+        q: req.query.q,
+        type: req.query.type,
+        limit: req.query.limit,
         now: new Date(),
         adminSession
       });

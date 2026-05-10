@@ -1033,3 +1033,125 @@ test("DELETE /api/admin/clients borra clientes en masa con token", async () => {
   assert.deepEqual(receivedArgs.clientIds, [12, 13]);
   assert.equal(res.payload.deleted.total, 2);
 });
+
+test("GET /api/admin/search without token returns 401", async () => {
+  let requestedConnection = false;
+  const pool = {
+    async getConnection() {
+      requestedConnection = true;
+      return { release() {} };
+    }
+  };
+
+  const router = createAdminRouter({ getPool: () => pool });
+
+  const handler = getRouteHandler(router, "/search", "get");
+  const req = {
+    query: {},
+    get() {
+      return undefined;
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.payload.error.code, "ADMIN_TOKEN_REQUIRED");
+  assert.equal(requestedConnection, false);
+});
+
+test("GET /api/admin/search with token forwards filters and adminSession", async () => {
+  const connection = {
+    released: false,
+    release() {
+      this.released = true;
+    }
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({
+      adminId: 1,
+      centerId: 7,
+      email: "admin.dev@lunamandala.local",
+      role: "owner"
+    }),
+    search: async (args) => {
+      receivedArgs = args;
+      return {
+        generatedAt: "2026-05-08T12:00:00.000Z",
+        center: { id: 7, slug: "demo", displayName: "Luna Mandala", timezone: "America/La_Paz" },
+        query: { q: "lia", type: "clients", limit: 5 },
+        results: [],
+        groups: { clients: [], appointments: [], cases: [], rooms: [] }
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/search", "get");
+  const req = {
+    query: {
+      q: "lia",
+      type: "clients",
+      limit: "5"
+    },
+    get(headerName) {
+      if (headerName === "Authorization") {
+        return "Bearer token-demo";
+      }
+      return undefined;
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(connection.released, true);
+  assert.equal(receivedArgs.q, "lia");
+  assert.equal(receivedArgs.type, "clients");
+  assert.equal(receivedArgs.limit, "5");
+  assert.equal(receivedArgs.adminSession.centerId, 7);
+  assert.equal(receivedArgs.now instanceof Date, true);
+});
+
+test("GET /api/admin/search maps ValidationError type invalido a 400", async () => {
+  const { ValidationError: ServiceValidationError } = require("../server/services/errors");
+  const connection = { release() {} };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 7, email: "x", role: "owner" }),
+    search: async () => {
+      throw new ServiceValidationError("type invalido", { field: "type" });
+    }
+  });
+
+  const handler = getRouteHandler(router, "/search", "get");
+  const req = {
+    query: { q: "x", type: "team" },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.payload.error.code, "VALIDATION_ERROR");
+  assert.equal(res.payload.error.details.field, "type");
+});
