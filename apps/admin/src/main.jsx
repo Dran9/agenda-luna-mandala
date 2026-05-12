@@ -51,7 +51,9 @@ const STATUS_META = {
   confirmed: { label: "Confirmada", className: "status-confirmed" },
   cancelled: { label: "Cancelada", className: "status-cancelled" },
   completed: { label: "Completada", className: "status-completed" },
-  no_show: { label: "No show", className: "status-no-show" }
+  no_show: { label: "No show", className: "status-no-show" },
+  active: { label: "Activo", className: "status-active" },
+  inactive: { label: "Inactivo", className: "status-inactive" }
 };
 
 const STATUS_ACTIONS = {
@@ -182,6 +184,29 @@ function formatClock(value, timezone) {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false
+    }).format(parsed);
+  }
+}
+
+function formatDateOnly(value, timezone) {
+  if (!value) {
+    return "-";
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+
+  try {
+    return new Intl.DateTimeFormat("es-BO", {
+      dateStyle: "medium",
+      timeZone: timezone || undefined
+    }).format(parsed);
+  } catch {
+    return new Intl.DateTimeFormat("es-BO", {
+      dateStyle: "medium"
     }).format(parsed);
   }
 }
@@ -488,33 +513,33 @@ function HistoryTable({ appointments, timezone }) {
         <table className="appointments-table history-table">
           <thead>
             <tr>
-              <th>Cliente</th>
-              <th>WhatsApp</th>
-              <th>Fecha atencion</th>
-              <th>Horario</th>
-              <th>Terapeuta</th>
-              <th>Terapia</th>
-              <th>Sala</th>
-              <th>Estado final</th>
-              <th>Origen</th>
-              <th>Creada</th>
+              <th className="col-client">Cliente</th>
+              <th className="col-phone">WhatsApp</th>
+              <th className="col-date">Fecha cita</th>
+              <th className="col-time">Horario</th>
+              <th className="col-therapist">Terapeuta</th>
+              <th className="col-service">Terapia</th>
+              <th className="col-room">Sala</th>
+              <th className="col-status">Estado final</th>
+              <th className="col-origin">Origen</th>
+              <th className="col-created">Creada</th>
             </tr>
           </thead>
           <tbody>
             {appointments.map((item) => (
               <tr key={`history-${item.id}`}>
-                <td>{item.client.fullName || "Sin nombre"}</td>
-                <td>{item.client.whatsapp || "-"}</td>
-                <td>{formatDateTime(item.startsAt, timezone)}</td>
-                <td>{formatClock(item.startsAt, timezone)} - {formatClock(item.endsAt, timezone)}</td>
-                <td>{item.therapist.name || "-"}</td>
-                <td>{item.service.name || "-"}</td>
-                <td>{item.room.name || "-"}</td>
-                <td>
+                <td className="col-client">{item.client.fullName || "Sin nombre"}</td>
+                <td className="col-phone">{item.client.whatsapp || "-"}</td>
+                <td className="col-date">{formatDateOnly(item.startsAt, timezone)}</td>
+                <td className="col-time">{formatClock(item.startsAt, timezone)} - {formatClock(item.endsAt, timezone)}</td>
+                <td className="col-therapist">{item.therapist.name || "-"}</td>
+                <td className="col-service">{item.service.name || "-"}</td>
+                <td className="col-room">{item.room.name || "-"}</td>
+                <td className="col-status">
                   <StatusChip status={item.status} />
                 </td>
-                <td>{item.source || "-"}</td>
-                <td>{formatDateTime(item.createdAt, timezone)}</td>
+                <td className="col-origin">{item.source || "-"}</td>
+                <td className="col-created">{formatDateTime(item.createdAt, timezone)}</td>
               </tr>
             ))}
           </tbody>
@@ -1353,6 +1378,25 @@ function ClientDrawer({ open, detail, loading, error, timezone, onClose }) {
   );
 }
 
+function compactSchedulesByDay(schedules) {
+  const groups = new Map();
+
+  for (const slot of schedules || []) {
+    const dayLabel = slot?.dayLabel || "-";
+    const range = `${slot?.startTime || "--:--"}-${slot?.endTime || "--:--"}`;
+    const existing = groups.get(dayLabel) || [];
+    if (!existing.includes(range)) {
+      existing.push(range);
+      groups.set(dayLabel, existing);
+    }
+  }
+
+  return Array.from(groups.entries()).map(([dayLabel, ranges]) => ({
+    dayLabel,
+    ranges
+  }));
+}
+
 function TherapistsTable({ therapists, onSelect }) {
   if (!therapists.length) {
     return <p className="empty-state">No hay terapeutas para este filtro.</p>;
@@ -1364,58 +1408,109 @@ function TherapistsTable({ therapists, onSelect }) {
         <table className="appointments-table therapists-table">
           <thead>
             <tr>
-              <th>Terapeuta</th>
-              <th>Estado</th>
-              <th>Servicios</th>
-              <th>Telefono</th>
-              <th>Telegram</th>
-              <th>Horario base</th>
+              <th className="col-therapist-main">Terapeuta</th>
+              <th className="col-status">Estado</th>
+              <th className="col-services">Servicios</th>
+              <th className="col-schedule">Horario base</th>
             </tr>
           </thead>
           <tbody>
-            {therapists.map((therapist) => (
-              <tr key={`therapist-${therapist.id}`}>
-                <td>
-                  <button
-                    type="button"
-                    className="table-open"
-                    onClick={() => onSelect?.(therapist.id)}
-                    title="Abrir ficha terapeuta"
-                  >
-                    {therapist.displayName || therapist.fullName || `Terapeuta ${therapist.id}`}
-                  </button>
-                </td>
-                <td>
-                  <StatusChip status={therapist.isActive ? "confirmed" : "cancelled"} />
-                </td>
-                <td>{therapist.services?.length ? therapist.services.join(", ") : "-"}</td>
-                <td>{therapist.phone || "-"}</td>
-                <td>{therapist.telegramChatId || "-"}</td>
-                <td>
-                  {therapist.schedules?.length
-                    ? therapist.schedules.map((slot) => `${slot.dayLabel} ${slot.startTime}-${slot.endTime}`).join(" · ")
-                    : "-"}
-                </td>
-              </tr>
-            ))}
+            {therapists.map((therapist) => {
+              const scheduleGroups = compactSchedulesByDay(therapist.schedules || []);
+
+              return (
+                <tr key={`therapist-${therapist.id}`}>
+                  <td className="col-therapist-main">
+                    <button
+                      type="button"
+                      className="table-open"
+                      onClick={() => onSelect?.(therapist.id)}
+                      title="Abrir ficha terapeuta"
+                    >
+                      {therapist.displayName || therapist.fullName || `Terapeuta ${therapist.id}`}
+                    </button>
+                    <div className="resource-meta-lines">
+                      {therapist.phone ? <span>{therapist.phone}</span> : null}
+                      {therapist.telegramChatId ? <span>Telegram: {therapist.telegramChatId}</span> : null}
+                      {!therapist.phone && !therapist.telegramChatId ? <span>-</span> : null}
+                    </div>
+                  </td>
+                  <td className="col-status">
+                    <StatusChip status={therapist.isActive ? "active" : "inactive"} />
+                  </td>
+                  <td className="col-services">
+                    {therapist.services?.length ? (
+                      <div className="inline-tag-list">
+                        {therapist.services.map((serviceName) => (
+                          <span key={`${therapist.id}-${serviceName}`} className="inline-tag">
+                            {serviceName}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="col-schedule">
+                    {scheduleGroups.length ? (
+                      <div className="schedule-chip-list">
+                        {scheduleGroups.map((group) => (
+                          <span
+                            key={`${therapist.id}-schedule-${group.dayLabel}`}
+                            className="schedule-chip"
+                          >
+                            <strong>{group.dayLabel}</strong>
+                            <span>{group.ranges.join(" · ")}</span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       <ul className="appointments-cards" aria-label="Lista de terapeutas mobile">
-        {therapists.map((therapist) => (
-          <li key={`therapist-mobile-${therapist.id}`} className="appointment-card">
-            <button type="button" className="card-open" onClick={() => onSelect?.(therapist.id)}>
-              <span className="appointment-title">
-                {therapist.displayName || therapist.fullName || `Terapeuta ${therapist.id}`}
-              </span>
-              <StatusChip status={therapist.isActive ? "confirmed" : "cancelled"} />
-            </button>
-            <p className="appointment-line">Servicios: {therapist.services?.length ? therapist.services.join(", ") : "-"}</p>
-            <p className="appointment-line">Telefono: {therapist.phone || "-"}</p>
-            <p className="appointment-line">Telegram: {therapist.telegramChatId || "-"}</p>
-          </li>
-        ))}
+        {therapists.map((therapist) => {
+          const scheduleGroups = compactSchedulesByDay(therapist.schedules || []);
+
+          return (
+            <li key={`therapist-mobile-${therapist.id}`} className="appointment-card">
+              <button type="button" className="card-open" onClick={() => onSelect?.(therapist.id)}>
+                <span className="appointment-title">
+                  {therapist.displayName || therapist.fullName || `Terapeuta ${therapist.id}`}
+                </span>
+                <StatusChip status={therapist.isActive ? "active" : "inactive"} />
+              </button>
+              <p className="appointment-line">Telefono: {therapist.phone || "-"}</p>
+              <p className="appointment-line">Telegram: {therapist.telegramChatId || "-"}</p>
+              <div className="inline-tag-list">
+                {therapist.services?.length
+                  ? therapist.services.map((serviceName) => (
+                      <span key={`mobile-${therapist.id}-${serviceName}`} className="inline-tag">
+                        {serviceName}
+                      </span>
+                    ))
+                  : <span className="inline-tag is-empty">Sin servicios</span>}
+              </div>
+              {scheduleGroups.length ? (
+                <div className="schedule-chip-list">
+                  {scheduleGroups.map((group) => (
+                    <span key={`mobile-${therapist.id}-${group.dayLabel}`} className="schedule-chip">
+                      <strong>{group.dayLabel}</strong>
+                      <span>{group.ranges.join(" · ")}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
     </>
   );
@@ -1517,13 +1612,13 @@ function ResourcesReadonlyView({ resources }) {
 
   return (
     <>
-      <section className="panel" aria-label="Servicios read-only">
+      <section className="panel resources-panel" aria-label="Servicios read-only">
         <div className="panel-heading">
           <h2>Servicios</h2>
           <p>{services.length} registros</p>
         </div>
         <div className="table-wrap">
-          <table className="appointments-table">
+          <table className="appointments-table resources-table">
             <thead>
               <tr>
                 <th>Servicio</th>
@@ -1538,7 +1633,7 @@ function ResourcesReadonlyView({ resources }) {
                   <td>{service.name}</td>
                   <td>{service.durationMinutes} min</td>
                   <td>{service.priceAmount} {service.currencyCode}</td>
-                  <td><StatusChip status={service.isActive ? "confirmed" : "cancelled"} /></td>
+                  <td><StatusChip status={service.isActive ? "active" : "inactive"} /></td>
                 </tr>
               ))}
             </tbody>
@@ -1546,13 +1641,13 @@ function ResourcesReadonlyView({ resources }) {
         </div>
       </section>
 
-      <section className="panel" aria-label="Salas read-only">
+      <section className="panel resources-panel" aria-label="Salas read-only">
         <div className="panel-heading">
           <h2>Salas</h2>
           <p>{rooms.length} registros</p>
         </div>
         <div className="table-wrap">
-          <table className="appointments-table">
+          <table className="appointments-table resources-table">
             <thead>
               <tr>
                 <th>Sala</th>
@@ -1565,7 +1660,7 @@ function ResourcesReadonlyView({ resources }) {
                 <tr key={`room-${room.id}`}>
                   <td>{room.name}</td>
                   <td>{room.capacity}</td>
-                  <td><StatusChip status={room.isActive ? "confirmed" : "cancelled"} /></td>
+                  <td><StatusChip status={room.isActive ? "active" : "inactive"} /></td>
                 </tr>
               ))}
             </tbody>
@@ -1573,13 +1668,13 @@ function ResourcesReadonlyView({ resources }) {
         </div>
       </section>
 
-      <section className="panel" aria-label="Compatibilidades servicio-sala read-only">
+      <section className="panel resources-panel" aria-label="Compatibilidades servicio-sala read-only">
         <div className="panel-heading">
           <h2>Compatibilidades</h2>
           <p>{compatibilities.length} relaciones</p>
         </div>
         <div className="table-wrap">
-          <table className="appointments-table">
+          <table className="appointments-table resources-table">
             <thead>
               <tr>
                 <th>Servicio</th>
@@ -1592,7 +1687,7 @@ function ResourcesReadonlyView({ resources }) {
                 <tr key={`compat-${entry.serviceId}-${entry.roomId}-${index}`}>
                   <td>{entry.serviceName}</td>
                   <td>{entry.roomName}</td>
-                  <td><StatusChip status={entry.isActive ? "confirmed" : "cancelled"} /></td>
+                  <td><StatusChip status={entry.isActive ? "active" : "inactive"} /></td>
                 </tr>
               ))}
             </tbody>
@@ -1600,19 +1695,19 @@ function ResourcesReadonlyView({ resources }) {
         </div>
       </section>
 
-      <section className="panel" aria-label="Horarios base read-only">
+      <section className="panel resources-panel" aria-label="Horarios base read-only">
         <div className="panel-heading">
-          <h2>Horarios resource_schedules</h2>
+          <h2>Horarios base</h2>
           <p>{schedules.length} bloques</p>
         </div>
         <div className="table-wrap">
-          <table className="appointments-table">
+          <table className="appointments-table resources-table">
             <thead>
               <tr>
                 <th>Tipo</th>
                 <th>Recurso</th>
                 <th>Dia</th>
-                <th>Rango</th>
+                <th>Horario</th>
                 <th>Slot</th>
                 <th>Estado</th>
               </tr>
@@ -1625,7 +1720,7 @@ function ResourcesReadonlyView({ resources }) {
                   <td>{slot.dayLabel}</td>
                   <td>{slot.startTime} - {slot.endTime}</td>
                   <td>{slot.slotMinutes} min</td>
-                  <td><StatusChip status={slot.isActive ? "confirmed" : "cancelled"} /></td>
+                  <td><StatusChip status={slot.isActive ? "active" : "inactive"} /></td>
                 </tr>
               ))}
             </tbody>
@@ -4054,10 +4149,10 @@ function AdminApp() {
 
                   {activeTab === "history" && hasHistoryData ? (
                     <>
-                      <section className="panel" aria-label="Filtros historial admin">
-                        <form className="history-command-bar" onSubmit={handleHistoryFiltersSubmit}>
-                          <label className="client-filter-field" htmlFor="history-search">
-                            <span>Buscar</span>
+                      <section className="panel history-filters-panel" aria-label="Filtros historial admin">
+                        <form className="history-toolbar" onSubmit={handleHistoryFiltersSubmit}>
+                          <label className="history-search-field" htmlFor="history-search">
+                            <MagnifyingGlass size={16} weight="regular" aria-hidden="true" />
                             <input
                               id="history-search"
                               type="search"
@@ -4065,11 +4160,27 @@ function AdminApp() {
                               onChange={(event) =>
                                 setHistoryDraft((value) => ({ ...value, q: event.target.value }))
                               }
-                              placeholder="Nombre o WhatsApp"
+                              placeholder="Buscar por nombre o WhatsApp"
                             />
                           </label>
 
-                          <label className="client-filter-field" htmlFor="history-order">
+                          <nav className="history-status-pills" aria-label="Filtro por estado historial">
+                            {HISTORY_STATUS_FILTERS.map((filter) => {
+                              const active = historyFilters.status === filter.id;
+                              return (
+                                <button
+                                  key={filter.id}
+                                  type="button"
+                                  className={`history-pill${active ? " is-active" : ""}`}
+                                  onClick={() => handleHistoryStatusFilter(filter.id)}
+                                >
+                                  {filter.label}
+                                </button>
+                              );
+                            })}
+                          </nav>
+
+                          <label className="history-toolbar-select" htmlFor="history-order">
                             <span>Orden</span>
                             <select
                               id="history-order"
@@ -4087,8 +4198,8 @@ function AdminApp() {
                             </select>
                           </label>
 
-                          <label className="client-filter-field" htmlFor="history-limit">
-                            <span>Limit</span>
+                          <label className="history-toolbar-select" htmlFor="history-limit">
+                            <span>Ver</span>
                             <select
                               id="history-limit"
                               className="control-input"
@@ -4107,8 +4218,8 @@ function AdminApp() {
                             </select>
                           </label>
 
-                          <div className="client-command-actions">
-                            <button type="submit" className="refresh-button">Buscar</button>
+                          <div className="history-toolbar-actions">
+                            <button type="submit" className="refresh-button">Aplicar</button>
                             <button
                               type="button"
                               className="logout-button"
@@ -4117,29 +4228,15 @@ function AdminApp() {
                               Limpiar
                             </button>
                           </div>
-                        </form>
 
-                        <nav className="history-status-pills" aria-label="Filtro por estado historial">
-                          {HISTORY_STATUS_FILTERS.map((filter) => {
-                            const active = historyFilters.status === filter.id;
-                            return (
-                              <button
-                                key={filter.id}
-                                type="button"
-                                className={`history-pill${active ? " is-active" : ""}`}
-                                onClick={() => handleHistoryStatusFilter(filter.id)}
-                              >
-                                {filter.label}
-                              </button>
-                            );
-                          })}
-                        </nav>
+                          <p className="history-visible-count">{historyAppointments.length} visibles</p>
+                        </form>
                       </section>
 
-                      <section className="panel" aria-label="Historial de atenciones">
-                        <div className="panel-heading">
+                      <section className="panel history-results-panel" aria-label="Historial de atenciones">
+                        <div className="panel-heading panel-heading-compact">
                           <h2>Historial</h2>
-                          <p>{historyAppointments.length} visibles</p>
+                          <p>Actualizado: {historyGeneratedAtLabel}</p>
                         </div>
                         <HistoryTable appointments={historyAppointments} timezone={timezone} />
                       </section>
