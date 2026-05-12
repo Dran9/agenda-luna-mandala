@@ -1600,134 +1600,179 @@ function TherapistDrawer({ open, detail, loading, error, onClose }) {
   );
 }
 
-function ResourcesReadonlyView({ resources }) {
+function ResourcesReadonlyView({ resources, timezone }) {
   if (!resources) {
     return null;
   }
+
+  const RESOURCE_TYPE_LABELS = {
+    all: "Todos",
+    service: "Servicios",
+    room: "Salas",
+    therapist: "Terapeutas"
+  };
 
   const services = resources.services || [];
   const rooms = resources.rooms || [];
   const compatibilities = resources.serviceRoomCompatibilities || [];
   const schedules = resources.resourceSchedules || [];
+  const activeFilter = String(resources?.filters?.resourceType || "all").toLowerCase();
+  const activeFilterLabel = RESOURCE_TYPE_LABELS[activeFilter] || activeFilter;
+  const generatedAt = resources.generatedAt ? formatDateTime(resources.generatedAt, timezone) : "-";
 
   return (
-    <>
-      <section className="panel resources-panel" aria-label="Servicios read-only">
-        <div className="panel-heading">
-          <h2>Servicios</h2>
-          <p>{services.length} registros</p>
+    <section className="settings-readonly-shell" aria-label="Ajustes operativos read-only">
+      <header className="settings-readonly-head">
+        <div>
+          <h2>Ajustes operativos</h2>
+          <p>Servicios, salas, compatibilidades y horarios base en modo lectura.</p>
         </div>
-        <div className="table-wrap">
-          <table className="appointments-table resources-table">
-            <thead>
-              <tr>
-                <th>Servicio</th>
-                <th>Duracion</th>
-                <th>Precio</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {services.map((service) => (
-                <tr key={`service-${service.id}`}>
-                  <td>{service.name}</td>
-                  <td>{service.durationMinutes} min</td>
-                  <td>{service.priceAmount} {service.currencyCode}</td>
-                  <td><StatusChip status={service.isActive ? "active" : "inactive"} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="settings-readonly-meta">
+          <span className="settings-meta-chip">Filtro: {activeFilterLabel}</span>
+          <span className="settings-meta-chip">Actualizado: {generatedAt}</span>
         </div>
-      </section>
+      </header>
 
-      <section className="panel resources-panel" aria-label="Salas read-only">
-        <div className="panel-heading">
-          <h2>Salas</h2>
-          <p>{rooms.length} registros</p>
-        </div>
-        <div className="table-wrap">
-          <table className="appointments-table resources-table">
-            <thead>
-              <tr>
-                <th>Sala</th>
-                <th>Capacidad</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rooms.map((room) => (
-                <tr key={`room-${room.id}`}>
-                  <td>{room.name}</td>
-                  <td>{room.capacity}</td>
-                  <td><StatusChip status={room.isActive ? "active" : "inactive"} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <div className="settings-readonly-layout">
+        <nav className="settings-local-nav" aria-label="Navegacion local de ajustes">
+          <p className="settings-local-nav-label">Operacion</p>
+          <a href="#settings-services" className="settings-local-link">
+            <span>Servicios</span>
+            <span className="settings-local-count">{services.length}</span>
+          </a>
+          <a href="#settings-rooms" className="settings-local-link">
+            <span>Salas</span>
+            <span className="settings-local-count">{rooms.length}</span>
+          </a>
+          <a href="#settings-compat" className="settings-local-link">
+            <span>Compatibilidades</span>
+            <span className="settings-local-count">{compatibilities.length}</span>
+          </a>
+          <a href="#settings-schedules" className="settings-local-link">
+            <span>Horarios</span>
+            <span className="settings-local-count">{schedules.length}</span>
+          </a>
+        </nav>
 
-      <section className="panel resources-panel" aria-label="Compatibilidades servicio-sala read-only">
-        <div className="panel-heading">
-          <h2>Compatibilidades</h2>
-          <p>{compatibilities.length} relaciones</p>
-        </div>
-        <div className="table-wrap">
-          <table className="appointments-table resources-table">
-            <thead>
-              <tr>
-                <th>Servicio</th>
-                <th>Sala</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {compatibilities.map((entry, index) => (
-                <tr key={`compat-${entry.serviceId}-${entry.roomId}-${index}`}>
-                  <td>{entry.serviceName}</td>
-                  <td>{entry.roomName}</td>
-                  <td><StatusChip status={entry.isActive ? "active" : "inactive"} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+        <div className="settings-readonly-content">
+          <section id="settings-services" className="panel resources-panel" aria-label="Servicios read-only">
+            <div className="panel-heading">
+              <h2>Servicios</h2>
+              <p>{services.length} registros</p>
+            </div>
+            <div className="table-wrap">
+              <table className="appointments-table resources-table">
+                <thead>
+                  <tr>
+                    <th>Servicio</th>
+                    <th>Duracion</th>
+                    <th>Precio</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {services.map((service) => (
+                    <tr key={`service-${service.id}`}>
+                      <td>{service.name}</td>
+                      <td>{service.durationMinutes} min</td>
+                      <td>{service.priceAmount} {service.currencyCode}</td>
+                      <td><StatusChip status={service.isActive ? "active" : "inactive"} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-      <section className="panel resources-panel" aria-label="Horarios base read-only">
-        <div className="panel-heading">
-          <h2>Horarios base</h2>
-          <p>{schedules.length} bloques</p>
+          <section id="settings-rooms" className="panel resources-panel" aria-label="Salas read-only">
+            <div className="panel-heading">
+              <h2>Salas</h2>
+              <p>{rooms.length} registros</p>
+            </div>
+            <div className="table-wrap">
+              <table className="appointments-table resources-table">
+                <thead>
+                  <tr>
+                    <th>Sala</th>
+                    <th>Capacidad</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rooms.map((room) => (
+                    <tr key={`room-${room.id}`}>
+                      <td>{room.name}</td>
+                      <td>{room.capacity}</td>
+                      <td><StatusChip status={room.isActive ? "active" : "inactive"} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="settings-compat" className="panel resources-panel" aria-label="Compatibilidades servicio-sala read-only">
+            <div className="panel-heading">
+              <h2>Compatibilidades</h2>
+              <p>{compatibilities.length} relaciones</p>
+            </div>
+            <div className="table-wrap">
+              <table className="appointments-table resources-table">
+                <thead>
+                  <tr>
+                    <th>Servicio</th>
+                    <th>Sala</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {compatibilities.map((entry, index) => (
+                    <tr key={`compat-${entry.serviceId}-${entry.roomId}-${index}`}>
+                      <td>{entry.serviceName}</td>
+                      <td>{entry.roomName}</td>
+                      <td><StatusChip status={entry.isActive ? "active" : "inactive"} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="settings-schedules" className="panel resources-panel" aria-label="Horarios base read-only">
+            <div className="panel-heading">
+              <h2>Horarios base</h2>
+              <p>{schedules.length} bloques</p>
+            </div>
+            <div className="table-wrap">
+              <table className="appointments-table resources-table">
+                <thead>
+                  <tr>
+                    <th>Recurso</th>
+                    <th>Tipo</th>
+                    <th>Dia</th>
+                    <th>Horario</th>
+                    <th>Slot</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {schedules.map((slot) => (
+                    <tr key={`schedule-${slot.id}`}>
+                      <td>{slot.resourceName || slot.resourceId}</td>
+                      <td>{RESOURCE_TYPE_LABELS[String(slot.resourceType || "").toLowerCase()] || slot.resourceType}</td>
+                      <td>{slot.dayLabel}</td>
+                      <td>{slot.startTime} - {slot.endTime}</td>
+                      <td>{slot.slotMinutes} min</td>
+                      <td><StatusChip status={slot.isActive ? "active" : "inactive"} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
-        <div className="table-wrap">
-          <table className="appointments-table resources-table">
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Recurso</th>
-                <th>Dia</th>
-                <th>Horario</th>
-                <th>Slot</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {schedules.map((slot) => (
-                <tr key={`schedule-${slot.id}`}>
-                  <td>{slot.resourceType}</td>
-                  <td>{slot.resourceName || slot.resourceId}</td>
-                  <td>{slot.dayLabel}</td>
-                  <td>{slot.startTime} - {slot.endTime}</td>
-                  <td>{slot.slotMinutes} min</td>
-                  <td><StatusChip status={slot.isActive ? "active" : "inactive"} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </>
+      </div>
+    </section>
   );
 }
 
@@ -2893,9 +2938,6 @@ function AdminApp() {
     : "-";
   const therapistsGeneratedAtLabel = therapistsPayload
     ? formatDateTime(therapistsPayload.generatedAt, timezone)
-    : "-";
-  const resourcesGeneratedAtLabel = resourcesPayload
-    ? formatDateTime(resourcesPayload.generatedAt, timezone)
     : "-";
   const controlRefreshLabel = lastRefreshedAt
     ? `Datos actualizados ${formatClock(lastRefreshedAt, timezone)}`
@@ -4765,15 +4807,6 @@ function AdminApp() {
 
               {isSettingsSection ? (
                 <>
-                  <section className="meta-strip" aria-label="Estado recursos read-only">
-                    <p>
-                      Recurso: <strong>{resourcesPayload?.filters?.resourceType || "all"}</strong>
-                    </p>
-                    <p>
-                      Ultima carga: <strong>{resourcesGeneratedAtLabel}</strong>
-                    </p>
-                  </section>
-
                   {resourcesLoading && !hasResourcesData ? (
                     <p className="feedback">Cargando recursos...</p>
                   ) : null}
@@ -4787,7 +4820,7 @@ function AdminApp() {
                     <p className="feedback subtle">Actualizando recursos en segundo plano...</p>
                   ) : null}
 
-                  {hasResourcesData ? <ResourcesReadonlyView resources={resourcesPayload} /> : null}
+                  {hasResourcesData ? <ResourcesReadonlyView resources={resourcesPayload} timezone={timezone} /> : null}
                 </>
               ) : null}
             </>
