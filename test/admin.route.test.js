@@ -1412,11 +1412,19 @@ test("GET /api/admin/resources with token returns read-only resources payload", 
       receivedArgs = args;
       return {
         generatedAt: "2026-05-12T11:00:00.000Z",
-        filters: { resourceType: "all" },
-        services: [],
-        rooms: [],
-        serviceRoomCompatibilities: [],
-        resourceSchedules: []
+        center: { id: 3, slug: "demo", displayName: "Luna Mandala", timezone: "America/La_Paz" },
+        settings: {
+          services: [],
+          rooms: [],
+          compatibilities: [],
+          schedules: []
+        },
+        summary: {
+          servicesTotal: 0,
+          roomsTotal: 0,
+          compatibilitiesTotal: 0,
+          schedulesTotal: 0
+        }
       };
     }
   });
@@ -1436,5 +1444,6 @@ test("GET /api/admin/resources with token returns read-only resources payload", 
   assert.equal(receivedArgs.resourceType, "all");
   assert.equal(receivedArgs.adminSession.centerId, 3);
   assert.equal(receivedArgs.now instanceof Date, true);
-  assert.equal(Array.isArray(res.payload.services), true);
+  assert.equal(Array.isArray(res.payload.settings.services), true);
+  assert.equal(res.payload.summary.compatibilitiesTotal, 0);
 });

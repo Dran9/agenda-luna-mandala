@@ -70,6 +70,13 @@ Nunca mezclar cambios en esos archivos con features de admin, booking, pagos o U
 - No borrar ramas o archivos no propios.
 - Antes de push: `npm test`, `npm run build`, `npm start`, `/api/health`.
 
+## Decision Con Daniel
+
+- Si Daniel pide una direccion concreta de producto, UX, arquitectura o deploy, no reemplazarla por criterio propio sin consultarle antes.
+- Si el agente cree que conviene hacer algo distinto, pausar y explicar la recomendacion con claridad antes de implementarla o lanzarla.
+- Si una entrega visual/producto no cumple la referencia o contrato pedido, no tratar `npm test` o `npm run build` como suficiente.
+- Antes de push o entrega final de UI, incluir evidencia visual cuando aplique: screenshots desktop/mobile o explicar explicitamente por que no se pudieron generar.
+
 ## Calidad
 
 Una tarea no esta lista si:
@@ -80,5 +87,6 @@ Una tarea no esta lista si:
 - requiere Redis/BullMQ;
 - mezcla deploy y feature;
 - no tiene tests proporcionales;
+- ignora una referencia visual o solicitud explicita de Daniel sin consultarle;
+- entrega UI sin QA visual cuando la tarea era de producto/interfaz;
 - toca DB remota sin permiso.
-

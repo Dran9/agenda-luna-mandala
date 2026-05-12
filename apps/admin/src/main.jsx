@@ -45,6 +45,17 @@ const SEARCH_FILTERS = [
   { id: "cases", label: "Casos" },
   { id: "rooms", label: "Salas" }
 ];
+const SETTINGS_MODULES = [
+  { id: "services", label: "Servicios" },
+  { id: "rooms", label: "Salas" },
+  { id: "compatibilities", label: "Compatibilidades" },
+  { id: "schedules", label: "Horarios" }
+];
+const SETTINGS_STATUS_FILTERS = [
+  { id: "all", label: "Todos" },
+  { id: "active", label: "Activos" },
+  { id: "inactive", label: "Inactivos" }
+];
 
 const STATUS_META = {
   pending: { label: "Pendiente", className: "status-pending" },
@@ -134,6 +145,193 @@ function clearAuthStorage() {
 
 function toBoolLabel(value) {
   return value ? "Si" : "No";
+}
+
+function normalizeResourceStatus(value, fallbackIsActive = false) {
+  const normalized = String(value || "").trim().toUpperCase();
+
+  if (normalized === "ACTIVE" || normalized === "ACTIVO") {
+    return "ACTIVE";
+  }
+
+  if (normalized === "INACTIVE" || normalized === "INACTIVO") {
+    return "INACTIVE";
+  }
+
+  return fallbackIsActive ? "ACTIVE" : "INACTIVE";
+}
+
+function getStatusLabelFromValue(statusValue) {
+  return statusValue === "ACTIVE" ? "Activo" : "Inactivo";
+}
+
+function statusToChipKey(statusValue) {
+  return statusValue === "ACTIVE" ? "active" : "inactive";
+}
+
+function compactTimeLabel(value) {
+  if (!value) {
+    return "--:--";
+  }
+
+  const raw = String(value).trim();
+  const match = raw.match(/^(\d{2}:\d{2})/);
+  if (match) {
+    return match[1];
+  }
+
+  return raw;
+}
+
+function compactDateLabel(value) {
+  if (!value) {
+    return null;
+  }
+
+  return String(value).slice(0, 10);
+}
+
+function buildValidityLabel(validFrom, validTo) {
+  if (validFrom && validTo) {
+    return `${validFrom} a ${validTo}`;
+  }
+
+  if (validFrom) {
+    return `Desde ${validFrom}`;
+  }
+
+  if (validTo) {
+    return `Hasta ${validTo}`;
+  }
+
+  return "Sin vigencia";
+}
+
+function normalizeSettingsPayload(resources) {
+  const safeResources = resources && typeof resources === "object" ? resources : {};
+  const safeSettings = safeResources.settings && typeof safeResources.settings === "object"
+    ? safeResources.settings
+    : {};
+
+  const servicesSource = Array.isArray(safeSettings.services)
+    ? safeSettings.services
+    : Array.isArray(safeResources.services)
+      ? safeResources.services
+      : [];
+  const roomsSource = Array.isArray(safeSettings.rooms)
+    ? safeSettings.rooms
+    : Array.isArray(safeResources.rooms)
+      ? safeResources.rooms
+      : [];
+  const compatibilitiesSource = Array.isArray(safeSettings.compatibilities)
+    ? safeSettings.compatibilities
+    : Array.isArray(safeResources.serviceRoomCompatibilities)
+      ? safeResources.serviceRoomCompatibilities
+      : [];
+  const schedulesSource = Array.isArray(safeSettings.schedules)
+    ? safeSettings.schedules
+    : Array.isArray(safeResources.resourceSchedules)
+      ? safeResources.resourceSchedules
+      : [];
+
+  const services = servicesSource.map((entry) => {
+    const durationMinutes = Number(entry?.durationMinutes || 0);
+    const status = normalizeResourceStatus(entry?.status, entry?.isActive === true);
+    const priceAmount = Number(entry?.priceAmount || 0);
+    const currencyCode = String(entry?.currencyCode || "BOB").toUpperCase();
+    const priceLabel = entry?.priceLabel
+      ? String(entry.priceLabel)
+      : `${Number.isInteger(priceAmount) ? priceAmount : priceAmount.toFixed(2).replace(/\.?0+$/, "")} ${currencyCode}`;
+
+    return {
+      id: Number(entry?.id || 0),
+      name: entry?.name || `Servicio ${entry?.id || "-"}`,
+      durationMinutes,
+      durationLabel: entry?.durationLabel || `${durationMinutes} min`,
+      priceAmount,
+      priceLabel,
+      status,
+      statusLabel: entry?.statusLabel || getStatusLabelFromValue(status),
+      compatibleRoomsCount: Number(entry?.compatibleRoomsCount || 0)
+    };
+  });
+
+  const rooms = roomsSource.map((entry) => {
+    const capacity = Number(entry?.capacity || 0);
+    const status = normalizeResourceStatus(entry?.status, entry?.isActive === true);
+    const capacityLabel = entry?.capacityLabel
+      ? String(entry.capacityLabel)
+      : capacity === 1
+        ? "1 persona"
+        : `${capacity} personas`;
+
+    return {
+      id: Number(entry?.id || 0),
+      name: entry?.name || `Sala ${entry?.id || "-"}`,
+      capacity,
+      capacityLabel,
+      status,
+      statusLabel: entry?.statusLabel || getStatusLabelFromValue(status),
+      compatibleServicesCount: Number(entry?.compatibleServicesCount || 0)
+    };
+  });
+
+  const compatibilities = compatibilitiesSource.map((entry) => {
+    const serviceId = Number(entry?.serviceId || 0);
+    const roomId = Number(entry?.roomId || 0);
+    const status = normalizeResourceStatus(entry?.status, entry?.isActive === true);
+
+    return {
+      id: entry?.id || `${serviceId}-${roomId}`,
+      serviceId,
+      serviceLabel: entry?.serviceLabel || entry?.serviceName || `Servicio ${serviceId}`,
+      roomId,
+      roomLabel: entry?.roomLabel || entry?.roomName || `Sala ${roomId}`,
+      status,
+      statusLabel: entry?.statusLabel || getStatusLabelFromValue(status)
+    };
+  });
+
+  const schedules = schedulesSource.map((entry) => {
+    const resourceType = String(entry?.resourceType || "").trim().toLowerCase();
+    const resourceTypeLabel = entry?.resourceTypeLabel ||
+      (resourceType === "therapist" ? "Terapeuta" : resourceType === "room" ? "Sala" : "Recurso");
+    const status = normalizeResourceStatus(entry?.status, entry?.isActive === true);
+    const startLabel = compactTimeLabel(entry?.startTime);
+    const endLabel = compactTimeLabel(entry?.endTime);
+    const validFrom = compactDateLabel(entry?.validFrom);
+    const validTo = compactDateLabel(entry?.validTo);
+    const slotMinutes = Number(entry?.slotMinutes || 0);
+
+    return {
+      id: Number(entry?.id || 0),
+      resourceType,
+      resourceTypeLabel,
+      resourceId: Number(entry?.resourceId || 0),
+      resourceLabel: entry?.resourceLabel || entry?.resourceName || `${resourceTypeLabel} ${entry?.resourceId || "-"}`,
+      weekday: Number(entry?.weekday || 0),
+      dayLabel: entry?.dayLabel || "-",
+      timeRangeLabel: entry?.timeRangeLabel || `${startLabel} - ${endLabel}`,
+      slotMinutes,
+      slotLabel: entry?.slotLabel || `${slotMinutes} min`,
+      validityLabel: entry?.validityLabel || buildValidityLabel(validFrom, validTo),
+      status,
+      statusLabel: entry?.statusLabel || getStatusLabelFromValue(status)
+    };
+  });
+
+  return {
+    services,
+    rooms,
+    compatibilities,
+    schedules,
+    summary: {
+      servicesTotal: Number(safeResources?.summary?.servicesTotal ?? services.length),
+      roomsTotal: Number(safeResources?.summary?.roomsTotal ?? rooms.length),
+      compatibilitiesTotal: Number(safeResources?.summary?.compatibilitiesTotal ?? compatibilities.length),
+      schedulesTotal: Number(safeResources?.summary?.schedulesTotal ?? schedules.length)
+    }
+  };
 }
 
 function formatDateTime(value, timezone) {
@@ -1600,178 +1798,360 @@ function TherapistDrawer({ open, detail, loading, error, onClose }) {
   );
 }
 
-function ResourcesReadonlyView({ resources, timezone }) {
-  if (!resources) {
-    return null;
-  }
+function ResourcesReadonlyView({
+  resources,
+  timezone,
+  onRefresh,
+  isLoading,
+  isRefreshing,
+  isStale,
+  errorMessage
+}) {
+  const normalizedSettings = useMemo(
+    () => normalizeSettingsPayload(resources),
+    [resources]
+  );
+  const [activeModule, setActiveModule] = useState("services");
+  const [searchValue, setSearchValue] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  const RESOURCE_TYPE_LABELS = {
-    all: "Todos",
-    service: "Servicios",
-    room: "Salas",
-    therapist: "Terapeutas"
+  const moduleRows = useMemo(() => {
+    if (activeModule === "rooms") return normalizedSettings.rooms;
+    if (activeModule === "compatibilities") return normalizedSettings.compatibilities;
+    if (activeModule === "schedules") return normalizedSettings.schedules;
+    return normalizedSettings.services;
+  }, [activeModule, normalizedSettings]);
+
+  const filteredRows = useMemo(() => {
+    const statusFilterValue = String(statusFilter || "all").trim().toLowerCase();
+    const query = String(searchValue || "").trim().toLowerCase();
+
+    return moduleRows.filter((entry) => {
+      const normalizedStatus = normalizeResourceStatus(entry?.status, entry?.isActive === true);
+      const matchesStatus = statusFilterValue === "all" ||
+        (statusFilterValue === "active" && normalizedStatus === "ACTIVE") ||
+        (statusFilterValue === "inactive" && normalizedStatus === "INACTIVE");
+
+      if (!matchesStatus) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      if (activeModule === "services") {
+        const haystack = [
+          entry?.name,
+          entry?.durationLabel,
+          entry?.priceLabel,
+          entry?.statusLabel
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(query);
+      }
+
+      if (activeModule === "rooms") {
+        const haystack = [
+          entry?.name,
+          entry?.capacityLabel,
+          entry?.statusLabel
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(query);
+      }
+
+      if (activeModule === "compatibilities") {
+        const haystack = [
+          entry?.serviceLabel,
+          entry?.roomLabel,
+          entry?.statusLabel
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(query);
+      }
+
+      const scheduleHaystack = [
+        entry?.resourceLabel,
+        entry?.resourceTypeLabel,
+        entry?.dayLabel,
+        entry?.timeRangeLabel,
+        entry?.slotLabel,
+        entry?.validityLabel,
+        entry?.statusLabel
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return scheduleHaystack.includes(query);
+    });
+  }, [activeModule, moduleRows, searchValue, statusFilter]);
+
+  const generatedAtLabel = resources?.generatedAt
+    ? formatDateTime(resources.generatedAt, timezone)
+    : "-";
+
+  const totalByModule = {
+    services: normalizedSettings.summary.servicesTotal,
+    rooms: normalizedSettings.summary.roomsTotal,
+    compatibilities: normalizedSettings.summary.compatibilitiesTotal,
+    schedules: normalizedSettings.summary.schedulesTotal
   };
 
-  const services = resources.services || [];
-  const rooms = resources.rooms || [];
-  const compatibilities = resources.serviceRoomCompatibilities || [];
-  const schedules = resources.resourceSchedules || [];
-  const activeFilter = String(resources?.filters?.resourceType || "all").toLowerCase();
-  const activeFilterLabel = RESOURCE_TYPE_LABELS[activeFilter] || activeFilter;
-  const generatedAt = resources.generatedAt ? formatDateTime(resources.generatedAt, timezone) : "-";
-
   return (
-    <section className="settings-readonly-shell" aria-label="Ajustes operativos read-only">
-      <header className="settings-readonly-head">
+    <section className="settings-shell" aria-label="Ajustes operativos">
+      <header className="settings-header">
         <div>
-          <h2>Ajustes operativos</h2>
-          <p>Servicios, salas, compatibilidades y horarios base en modo lectura.</p>
+          <h2>Ajustes</h2>
+          <p>Configuracion operativa de servicios, salas, compatibilidades y horarios base.</p>
         </div>
-        <div className="settings-readonly-meta">
-          <span className="settings-meta-chip">Filtro: {activeFilterLabel}</span>
-          <span className="settings-meta-chip">Actualizado: {generatedAt}</span>
+        <div className="settings-header-meta">
+          <span className="settings-chip">Actualizado: {generatedAtLabel}</span>
+          <span className="settings-chip">Modulo: {SETTINGS_MODULES.find((item) => item.id === activeModule)?.label || "Servicios"}</span>
         </div>
       </header>
 
-      <div className="settings-readonly-layout">
-        <nav className="settings-local-nav" aria-label="Navegacion local de ajustes">
-          <p className="settings-local-nav-label">Operacion</p>
-          <a href="#settings-services" className="settings-local-link">
-            <span>Servicios</span>
-            <span className="settings-local-count">{services.length}</span>
-          </a>
-          <a href="#settings-rooms" className="settings-local-link">
-            <span>Salas</span>
-            <span className="settings-local-count">{rooms.length}</span>
-          </a>
-          <a href="#settings-compat" className="settings-local-link">
-            <span>Compatibilidades</span>
-            <span className="settings-local-count">{compatibilities.length}</span>
-          </a>
-          <a href="#settings-schedules" className="settings-local-link">
-            <span>Horarios</span>
-            <span className="settings-local-count">{schedules.length}</span>
-          </a>
-        </nav>
+      <nav className="settings-tab-nav" aria-label="Navegacion local ajustes">
+        {SETTINGS_MODULES.map((module) => (
+          <button
+            key={`settings-module-${module.id}`}
+            type="button"
+            className={`settings-tab-button${activeModule === module.id ? " is-active" : ""}`}
+            onClick={() => setActiveModule(module.id)}
+            aria-current={activeModule === module.id ? "page" : undefined}
+          >
+            <span>{module.label}</span>
+            <span className="settings-tab-count">{totalByModule[module.id] || 0}</span>
+          </button>
+        ))}
+      </nav>
 
-        <div className="settings-readonly-content">
-          <section id="settings-services" className="panel resources-panel" aria-label="Servicios read-only">
-            <div className="panel-heading">
-              <h2>Servicios</h2>
-              <p>{services.length} registros</p>
-            </div>
-            <div className="table-wrap">
-              <table className="appointments-table resources-table">
-                <thead>
-                  <tr>
-                    <th>Servicio</th>
-                    <th>Duracion</th>
-                    <th>Precio</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {services.map((service) => (
-                    <tr key={`service-${service.id}`}>
-                      <td>{service.name}</td>
-                      <td>{service.durationMinutes} min</td>
-                      <td>{service.priceAmount} {service.currencyCode}</td>
-                      <td><StatusChip status={service.isActive ? "active" : "inactive"} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+      <section className="panel settings-panel" aria-label="Tabla de ajustes">
+        <div className="settings-toolbar">
+          <label className="settings-search-field" htmlFor="settings-search">
+            <MagnifyingGlass size={16} aria-hidden="true" />
+            <input
+              id="settings-search"
+              type="search"
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
+              placeholder="Buscar en modulo activo"
+            />
+          </label>
 
-          <section id="settings-rooms" className="panel resources-panel" aria-label="Salas read-only">
-            <div className="panel-heading">
-              <h2>Salas</h2>
-              <p>{rooms.length} registros</p>
-            </div>
-            <div className="table-wrap">
-              <table className="appointments-table resources-table">
-                <thead>
-                  <tr>
-                    <th>Sala</th>
-                    <th>Capacidad</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rooms.map((room) => (
-                    <tr key={`room-${room.id}`}>
-                      <td>{room.name}</td>
-                      <td>{room.capacity}</td>
-                      <td><StatusChip status={room.isActive ? "active" : "inactive"} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <label className="settings-status-field" htmlFor="settings-status-filter">
+            <span>Estado</span>
+            <select
+              id="settings-status-filter"
+              className="control-input"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+            >
+              {SETTINGS_STATUS_FILTERS.map((filterOption) => (
+                <option key={`settings-status-${filterOption.id}`} value={filterOption.id}>
+                  {filterOption.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-          <section id="settings-compat" className="panel resources-panel" aria-label="Compatibilidades servicio-sala read-only">
-            <div className="panel-heading">
-              <h2>Compatibilidades</h2>
-              <p>{compatibilities.length} relaciones</p>
-            </div>
-            <div className="table-wrap">
-              <table className="appointments-table resources-table">
-                <thead>
-                  <tr>
-                    <th>Servicio</th>
-                    <th>Sala</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {compatibilities.map((entry, index) => (
-                    <tr key={`compat-${entry.serviceId}-${entry.roomId}-${index}`}>
-                      <td>{entry.serviceName}</td>
-                      <td>{entry.roomName}</td>
-                      <td><StatusChip status={entry.isActive ? "active" : "inactive"} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <p className="settings-counter" aria-live="polite">
+            {filteredRows.length} visibles
+          </p>
 
-          <section id="settings-schedules" className="panel resources-panel" aria-label="Horarios base read-only">
-            <div className="panel-heading">
-              <h2>Horarios base</h2>
-              <p>{schedules.length} bloques</p>
-            </div>
-            <div className="table-wrap">
-              <table className="appointments-table resources-table">
-                <thead>
-                  <tr>
-                    <th>Recurso</th>
-                    <th>Tipo</th>
-                    <th>Dia</th>
-                    <th>Horario</th>
-                    <th>Slot</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {schedules.map((slot) => (
-                    <tr key={`schedule-${slot.id}`}>
-                      <td>{slot.resourceName || slot.resourceId}</td>
-                      <td>{RESOURCE_TYPE_LABELS[String(slot.resourceType || "").toLowerCase()] || slot.resourceType}</td>
-                      <td>{slot.dayLabel}</td>
-                      <td>{slot.startTime} - {slot.endTime}</td>
-                      <td>{slot.slotMinutes} min</td>
-                      <td><StatusChip status={slot.isActive ? "active" : "inactive"} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <button
+            type="button"
+            className="refresh-button"
+            onClick={onRefresh}
+            disabled={isLoading || isRefreshing}
+          >
+            {isLoading || isRefreshing ? "Actualizando..." : "Actualizar"}
+          </button>
         </div>
-      </div>
+
+        {isRefreshing ? (
+          <p className="feedback subtle settings-feedback">Actualizando ajustes en segundo plano...</p>
+        ) : null}
+        {isStale ? (
+          <p className="feedback error settings-feedback">
+            No se pudo refrescar Ajustes. Mostrando la ultima carga valida.
+            {errorMessage ? ` (${errorMessage})` : ""}
+          </p>
+        ) : null}
+
+        {filteredRows.length === 0 ? (
+          <p className="empty-state">Sin registros para el filtro actual.</p>
+        ) : (
+          <>
+            {activeModule === "services" ? (
+              <>
+                <div className="table-wrap">
+                  <table className="appointments-table settings-table">
+                    <thead>
+                      <tr>
+                        <th>Servicio</th>
+                        <th>Duracion</th>
+                        <th>Precio</th>
+                        <th>Salas compatibles</th>
+                        <th>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRows.map((service) => (
+                        <tr key={`settings-service-${service.id}`}>
+                          <td>{service.name}</td>
+                          <td>{service.durationLabel}</td>
+                          <td>{service.priceLabel}</td>
+                          <td>{service.compatibleRoomsCount}</td>
+                          <td><StatusChip status={statusToChipKey(service.status)} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <ul className="settings-mobile-cards" aria-label="Servicios mobile">
+                  {filteredRows.map((service) => (
+                    <li key={`settings-service-mobile-${service.id}`} className="settings-mobile-card">
+                      <p className="settings-mobile-title">{service.name}</p>
+                      <p className="settings-mobile-line">Duracion: {service.durationLabel}</p>
+                      <p className="settings-mobile-line">Precio: {service.priceLabel}</p>
+                      <p className="settings-mobile-line">Salas compatibles: {service.compatibleRoomsCount}</p>
+                      <StatusChip status={statusToChipKey(service.status)} />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+
+            {activeModule === "rooms" ? (
+              <>
+                <div className="table-wrap">
+                  <table className="appointments-table settings-table">
+                    <thead>
+                      <tr>
+                        <th>Sala</th>
+                        <th>Capacidad</th>
+                        <th>Servicios compatibles</th>
+                        <th>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRows.map((room) => (
+                        <tr key={`settings-room-${room.id}`}>
+                          <td>{room.name}</td>
+                          <td>{room.capacityLabel}</td>
+                          <td>{room.compatibleServicesCount}</td>
+                          <td><StatusChip status={statusToChipKey(room.status)} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <ul className="settings-mobile-cards" aria-label="Salas mobile">
+                  {filteredRows.map((room) => (
+                    <li key={`settings-room-mobile-${room.id}`} className="settings-mobile-card">
+                      <p className="settings-mobile-title">{room.name}</p>
+                      <p className="settings-mobile-line">Capacidad: {room.capacityLabel}</p>
+                      <p className="settings-mobile-line">Servicios compatibles: {room.compatibleServicesCount}</p>
+                      <StatusChip status={statusToChipKey(room.status)} />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+
+            {activeModule === "compatibilities" ? (
+              <>
+                <div className="table-wrap">
+                  <table className="appointments-table settings-table">
+                    <thead>
+                      <tr>
+                        <th>Servicio</th>
+                        <th>Sala</th>
+                        <th>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRows.map((item) => (
+                        <tr key={`settings-compat-${item.id}`}>
+                          <td>{item.serviceLabel}</td>
+                          <td>{item.roomLabel}</td>
+                          <td><StatusChip status={statusToChipKey(item.status)} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <ul className="settings-mobile-cards" aria-label="Compatibilidades mobile">
+                  {filteredRows.map((item) => (
+                    <li key={`settings-compat-mobile-${item.id}`} className="settings-mobile-card">
+                      <p className="settings-mobile-title">{item.serviceLabel}</p>
+                      <p className="settings-mobile-line">Sala: {item.roomLabel}</p>
+                      <StatusChip status={statusToChipKey(item.status)} />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+
+            {activeModule === "schedules" ? (
+              <>
+                <div className="table-wrap">
+                  <table className="appointments-table settings-table settings-schedules-table">
+                    <thead>
+                      <tr>
+                        <th>Recurso</th>
+                        <th>Tipo</th>
+                        <th>Dia</th>
+                        <th>Horario</th>
+                        <th>Slot</th>
+                        <th>Vigencia</th>
+                        <th>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRows.map((slot) => (
+                        <tr key={`settings-schedule-${slot.id}`}>
+                          <td>{slot.resourceLabel}</td>
+                          <td>{slot.resourceTypeLabel}</td>
+                          <td>{slot.dayLabel}</td>
+                          <td>{slot.timeRangeLabel}</td>
+                          <td>{slot.slotLabel}</td>
+                          <td>{slot.validityLabel}</td>
+                          <td><StatusChip status={statusToChipKey(slot.status)} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <ul className="settings-mobile-cards" aria-label="Horarios mobile">
+                  {filteredRows.map((slot) => (
+                    <li key={`settings-schedule-mobile-${slot.id}`} className="settings-mobile-card">
+                      <p className="settings-mobile-title">{slot.resourceLabel}</p>
+                      <p className="settings-mobile-line">Tipo: {slot.resourceTypeLabel}</p>
+                      <p className="settings-mobile-line">Dia: {slot.dayLabel}</p>
+                      <p className="settings-mobile-line">Horario: {slot.timeRangeLabel}</p>
+                      <p className="settings-mobile-line">Slot: {slot.slotLabel}</p>
+                      <p className="settings-mobile-line">Vigencia: {slot.validityLabel}</p>
+                      <StatusChip status={statusToChipKey(slot.status)} />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </>
+        )}
+      </section>
     </section>
   );
 }
@@ -3002,13 +3382,17 @@ function AdminApp() {
   const listedClients = clientsPayload?.clients || [];
   const historyAppointments = historyPayload?.history || [];
   const listedTherapists = therapistsPayload?.therapists || [];
-  const manualServices = useMemo(
-    () => (resourcesPayload?.services || []).filter((service) => service.isActive),
+  const resourcesSettings = useMemo(
+    () => normalizeSettingsPayload(resourcesPayload),
     [resourcesPayload]
   );
+  const manualServices = useMemo(
+    () => resourcesSettings.services.filter((service) => service.status === "ACTIVE"),
+    [resourcesSettings]
+  );
   const manualRooms = useMemo(
-    () => (resourcesPayload?.rooms || []).filter((room) => room.isActive),
-    [resourcesPayload]
+    () => resourcesSettings.rooms.filter((room) => room.status === "ACTIVE"),
+    [resourcesSettings]
   );
   const manualTherapists = useMemo(() => {
     if (listedTherapists.length) {
@@ -4042,26 +4426,6 @@ function AdminApp() {
               </>
             ) : null}
 
-            {authToken && isSettingsSection ? (
-              <>
-                <button
-                  type="button"
-                  className="refresh-button"
-                  onClick={() => setResourcesRefreshTick((value) => value + 1)}
-                  disabled={resourcesLoading || resourcesRefreshing}
-                >
-                  {resourcesLoading || resourcesRefreshing ? "Actualizando..." : "Actualizar"}
-                </button>
-                <p className={`refresh-indicator${resourcesError ? " is-error" : ""}`}>
-                  {resourcesRefreshing
-                    ? "Actualizando recursos..."
-                    : resourcesError
-                      ? "Error en ultima actualizacion"
-                      : "Recursos al dia"}
-                </p>
-              </>
-            ) : null}
-
             {authToken ? (
               <button type="button" className="logout-button" onClick={handleLogout}>
                 <SignOut size={16} weight="regular" aria-hidden="true" />
@@ -4808,19 +5172,23 @@ function AdminApp() {
               {isSettingsSection ? (
                 <>
                   {resourcesLoading && !hasResourcesData ? (
-                    <p className="feedback">Cargando recursos...</p>
+                    <p className="feedback">Cargando Ajustes...</p>
                   ) : null}
                   {resourcesError && !hasResourcesData ? (
                     <p className="feedback error">{resourcesError}</p>
                   ) : null}
-                  {resourcesError && hasResourcesData ? (
-                    <p className="feedback error">No se pudo actualizar recursos. Mostrando ultima carga valida.</p>
-                  ) : null}
-                  {resourcesRefreshing ? (
-                    <p className="feedback subtle">Actualizando recursos en segundo plano...</p>
-                  ) : null}
 
-                  {hasResourcesData ? <ResourcesReadonlyView resources={resourcesPayload} timezone={timezone} /> : null}
+                  {hasResourcesData ? (
+                    <ResourcesReadonlyView
+                      resources={resourcesPayload}
+                      timezone={timezone}
+                      onRefresh={() => setResourcesRefreshTick((value) => value + 1)}
+                      isLoading={resourcesLoading}
+                      isRefreshing={resourcesRefreshing}
+                      isStale={Boolean(resourcesError)}
+                      errorMessage={resourcesError}
+                    />
+                  ) : null}
                 </>
               ) : null}
             </>
