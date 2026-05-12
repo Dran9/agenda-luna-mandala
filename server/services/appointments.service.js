@@ -76,6 +76,20 @@ function normalizeTherapistId(therapistId) {
   return normalizeNumericId(therapistId, "therapistId");
 }
 
+function normalizeAppointmentSource(value) {
+  const normalized = String(value || "public_booking").trim().toLowerCase();
+  const allowed = new Set(["public_booking", "admin_manual", "system"]);
+
+  if (!allowed.has(normalized)) {
+    throw new ValidationError("source invalido", {
+      field: "source",
+      allowed: Array.from(allowed)
+    });
+  }
+
+  return normalized;
+}
+
 function normalizeRequiredOnboardingText(value, fieldName) {
   const normalized = String(value || "").trim().replace(/\s+/g, " ");
 
@@ -551,6 +565,7 @@ async function createHoldAppointment({
   startsAt,
   therapistId,
   roomId,
+  source = "public_booking",
   now = new Date()
 }) {
   if (!connection) {
@@ -561,6 +576,7 @@ async function createHoldAppointment({
   const normalizedServiceId = normalizeNumericId(serviceId, "serviceId");
   const normalizedTherapistId = normalizeTherapistId(therapistId);
   const normalizedRoomId = normalizeRoomId(roomId);
+  const normalizedSource = normalizeAppointmentSource(source);
   const slotStart = toDate(startsAt);
 
   let startedTransaction = false;
@@ -651,7 +667,7 @@ async function createHoldAppointment({
         ends_at,
         status,
         source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'public_booking')`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
       [
         normalizedCenterId,
         publicCode,
@@ -662,8 +678,9 @@ async function createHoldAppointment({
         Number(selectedPair.therapistId),
         Number(selectedPair.roomId),
         slotStart,
-        slotEnd
-      ] 
+        slotEnd,
+        normalizedSource
+      ]
     );
 
     await createAppointmentClaims({

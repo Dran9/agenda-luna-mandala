@@ -3,8 +3,10 @@ const { Router } = require("express");
 const { createPool } = require("../db/pool");
 const {
   AdminAppointmentsError,
+  createAdminManualAppointment,
   deleteAdminAppointments,
   getAdminAppointmentDetail,
+  listAdminAppointmentHistory,
   listAdminAppointments,
   updateAdminAppointmentRoom,
   updateAdminAppointmentStatus
@@ -15,6 +17,15 @@ const {
   getAdminClientDetail,
   listAdminClients
 } = require("../services/adminClients.service");
+const {
+  AdminTherapistsError,
+  getAdminTherapistDetail,
+  listAdminTherapists
+} = require("../services/adminTherapists.service");
+const {
+  AdminResourcesError,
+  listAdminResources
+} = require("../services/adminResources.service");
 const { searchAdmin } = require("../services/adminSearch.service");
 const { ValidationError } = require("../services/errors");
 const { AdminAuthError, loginAdmin, verifyAdminToken } = require("../services/adminAuth.service");
@@ -68,6 +79,24 @@ function toErrorResponse(error) {
     };
   }
 
+  if (error instanceof AdminTherapistsError) {
+    return {
+      status: error.status || 400,
+      code: error.code || "ADMIN_THERAPISTS_ERROR",
+      message: error.message,
+      details: error.details || {}
+    };
+  }
+
+  if (error instanceof AdminResourcesError) {
+    return {
+      status: error.status || 400,
+      code: error.code || "ADMIN_RESOURCES_ERROR",
+      message: error.message,
+      details: error.details || {}
+    };
+  }
+
   return {
     status: 500,
     code: "ADMIN_ROUTE_ERROR",
@@ -111,6 +140,8 @@ function authenticateAdmin(req, res, verifyToken) {
 function createAdminRouter({
   getPool = getSharedPool,
   listAppointments = listAdminAppointments,
+  listAppointmentHistory = listAdminAppointmentHistory,
+  createManualAppointment = createAdminManualAppointment,
   getAppointmentById = getAdminAppointmentDetail,
   removeAppointments = deleteAdminAppointments,
   setAppointmentStatus = updateAdminAppointmentStatus,
@@ -118,6 +149,9 @@ function createAdminRouter({
   listClients = listAdminClients,
   getClientById = getAdminClientDetail,
   removeClients = deleteAdminClients,
+  listTherapists = listAdminTherapists,
+  getTherapistById = getAdminTherapistDetail,
+  listResources = listAdminResources,
   search = searchAdmin,
   login = loginAdmin,
   verifyToken = verifyAdminToken
@@ -172,6 +206,29 @@ function createAdminRouter({
         tenantSlug: req.query.tenantSlug,
         date: req.query.date,
         upcoming: req.query.upcoming,
+        limit: req.query.limit,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.get("/appointments/history", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await listAppointmentHistory({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        q: req.query.q,
+        status: req.query.status,
+        order: req.query.order,
         limit: req.query.limit,
         now: new Date(),
         adminSession
@@ -240,6 +297,31 @@ function createAdminRouter({
     });
   });
 
+  router.post("/appointments", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await createManualAppointment({
+        connection,
+        tenantSlug: req.body?.tenantSlug,
+        phoneE164: req.body?.phoneE164,
+        clientFullName: req.body?.clientFullName,
+        serviceId: req.body?.serviceId,
+        therapistId: req.body?.therapistId,
+        roomId: req.body?.roomId,
+        startsAt: req.body?.startsAt,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(201).json(payload);
+    });
+  });
+
   router.delete("/appointments/:id", async (req, res) => {
     const adminSession = authenticateAdmin(req, res, verifyToken);
 
@@ -294,6 +376,68 @@ function createAdminRouter({
         q: req.query.q,
         onboarding: req.query.onboarding,
         limit: req.query.limit,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.get("/therapists", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await listTherapists({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        q: req.query.q,
+        status: req.query.status,
+        limit: req.query.limit,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.get("/therapists/:id", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await getTherapistById({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        therapistId: req.params.id,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.get("/resources", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await listResources({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        resourceType: req.query.resourceType,
         now: new Date(),
         adminSession
       });

@@ -444,6 +444,32 @@ select {
   align-items: end;
 }
 
+.history-command-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(140px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.manual-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.manual-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.manual-form-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .client-filter-field {
   display: grid;
   gap: 6px;
@@ -672,6 +698,15 @@ select {
   color: var(--muted);
 }
 
+.history-table {
+  min-width: 1120px;
+}
+
+.history-table th,
+.history-table td {
+  white-space: nowrap;
+}
+
 .table-open {
   border: 0;
   padding: 0;
@@ -718,6 +753,30 @@ select {
   list-style: none;
   padding: 0;
   gap: 8px;
+}
+
+.history-status-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.history-pill {
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.history-pill.is-active {
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 .appointment-card {
@@ -1154,6 +1213,14 @@ select {
     grid-template-columns: 1fr 1fr;
   }
 
+  .history-command-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .manual-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .client-command-actions {
     grid-column: 1 / -1;
   }
@@ -1185,6 +1252,14 @@ select {
   }
 
   .client-command-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .history-command-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-form-grid {
     grid-template-columns: 1fr;
   }
 

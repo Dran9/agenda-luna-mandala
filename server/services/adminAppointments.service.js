@@ -4,14 +4,21 @@ const {
   createAppointmentClaims,
   releaseAppointmentClaims
 } = require("./claims.service");
+const { createHoldAppointment } = require("./appointments.service");
 const { SlotOccupiedError, ValidationError } = require("./errors");
 
 const DEFAULT_LIMIT = 20;
+const DEFAULT_HISTORY_LIMIT = 40;
 const MAX_LIMIT = 100;
 const DEFAULT_DB_OFFSET = process.env.DB_TIMEZONE || "-04:00";
 const STATUS_KEYS = ["pending", "confirmed", "cancelled", "completed", "no_show"];
 const TERMINAL_STATUSES = new Set(["cancelled", "completed", "no_show"]);
 const ROOM_MUTABLE_STATUSES = new Set(["pending", "confirmed"]);
+const ROOM_ACTIVE_STATUSES = new Set(["pending", "confirmed"]);
+const HISTORY_STATUS_FILTERS = new Set(["all", "completed", "cancelled", "no_show"]);
+const HISTORY_ORDER_KEYS = new Set(["date_desc", "date_asc"]);
+const LOCAL_MOBILE_PATTERN = /^[67]\d{7}$/;
+const LEGACY_LOCAL_8_DIGIT_PATTERN = /^\d{8}$/;
 const ALLOWED_STATUS_TRANSITIONS = {
   pending: new Set(["confirmed", "completed", "cancelled", "no_show"]),
   confirmed: new Set(["completed", "cancelled", "no_show"])
@@ -64,6 +71,14 @@ function parseLimit(rawLimit) {
   return parsed;
 }
 
+function parseHistoryLimit(rawLimit) {
+  if (rawLimit === undefined || rawLimit === null || rawLimit === "") {
+    return DEFAULT_HISTORY_LIMIT;
+  }
+
+  return parseLimit(rawLimit);
+}
+
 function parseUpcoming(rawUpcoming) {
   if (rawUpcoming === undefined || rawUpcoming === null || rawUpcoming === "") {
     return true;
@@ -99,6 +114,36 @@ function normalizeDateFilter(rawDate, now = new Date()) {
     field: "date",
     allowed: ["today", "YYYY-MM-DD"]
   });
+}
+
+function normalizeSearch(rawQuery) {
+  return String(rawQuery || "").trim();
+}
+
+function normalizeHistoryStatus(rawStatus) {
+  const normalized = String(rawStatus || "all").trim().toLowerCase();
+
+  if (!HISTORY_STATUS_FILTERS.has(normalized)) {
+    throw new ValidationError("status invalido", {
+      field: "status",
+      allowed: Array.from(HISTORY_STATUS_FILTERS)
+    });
+  }
+
+  return normalized;
+}
+
+function normalizeHistoryOrder(rawOrder) {
+  const normalized = String(rawOrder || "date_desc").trim().toLowerCase();
+
+  if (!HISTORY_ORDER_KEYS.has(normalized)) {
+    throw new ValidationError("order invalido", {
+      field: "order",
+      allowed: Array.from(HISTORY_ORDER_KEYS)
+    });
+  }
+
+  return normalized;
 }
 
 function parseAppointmentId(rawValue) {
@@ -150,6 +195,48 @@ function parseRoomId(rawValue) {
   return parsed;
 }
 
+function parseTherapistId(rawValue) {
+  const parsed = Number.parseInt(rawValue, 10);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new ValidationError("therapistId invalido", {
+      field: "therapistId",
+      value: rawValue
+    });
+  }
+
+  return parsed;
+}
+
+function parseServiceId(rawValue) {
+  const parsed = Number.parseInt(rawValue, 10);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new ValidationError("serviceId invalido", {
+      field: "serviceId",
+      value: rawValue
+    });
+  }
+
+  return parsed;
+}
+
+function normalizeOptionalRoomId(rawValue) {
+  if (rawValue === undefined || rawValue === null || rawValue === "") {
+    return null;
+  }
+
+  return parseRoomId(rawValue);
+}
+
+function normalizeOptionalTherapistId(rawValue) {
+  if (rawValue === undefined || rawValue === null || rawValue === "") {
+    return null;
+  }
+
+  return parseTherapistId(rawValue);
+}
+
 function normalizeTargetStatus(rawStatus) {
   const normalized = String(rawStatus || "").trim().toLowerCase();
 
@@ -161,6 +248,67 @@ function normalizeTargetStatus(rawStatus) {
   }
 
   return normalized;
+}
+
+function normalizePhoneE164(rawValue) {
+  const digits = String(rawValue || "").replace(/\D/g, "");
+
+  if (!digits) {
+    throw new ValidationError("phoneE164 invalido", {
+      field: "phoneE164"
+    });
+  }
+
+  if (digits.startsWith("591")) {
+    const localBoliviaNumber = digits.slice(3);
+    if (!LOCAL_MOBILE_PATTERN.test(localBoliviaNumber)) {
+      throw new ValidationError(
+        "En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7.",
+        { field: "phoneE164", country: "BO" }
+      );
+    }
+    return digits;
+  }
+
+  if (LOCAL_MOBILE_PATTERN.test(digits)) {
+    return `591${digits}`;
+  }
+
+  if (LEGACY_LOCAL_8_DIGIT_PATTERN.test(digits) && !LOCAL_MOBILE_PATTERN.test(digits)) {
+    throw new ValidationError(
+      "En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7.",
+      { field: "phoneE164", country: "BO" }
+    );
+  }
+
+  if (digits.length >= 10 && digits.length <= 15) {
+    return digits;
+  }
+
+  throw new ValidationError("phoneE164 invalido", {
+    field: "phoneE164"
+  });
+}
+
+function normalizeClientFullName(rawValue) {
+  const normalized = String(rawValue || "").trim().replace(/\s+/g, " ");
+  return normalized || null;
+}
+
+function normalizeStartsAt(rawValue) {
+  if (!rawValue) {
+    throw new ValidationError("startsAt invalido", {
+      field: "startsAt"
+    });
+  }
+
+  try {
+    return toDate(rawValue);
+  } catch {
+    throw new ValidationError("startsAt invalido", {
+      field: "startsAt"
+    });
+  }
 }
 
 function parseAdminCenterId(adminSession) {
@@ -192,6 +340,7 @@ function baseAppointmentSelectSql() {
     a.id,
     a.public_code AS publicCode,
     a.status,
+    a.source,
     a.starts_at AS startsAt,
     a.ends_at AS endsAt,
     a.created_at AS createdAt,
@@ -220,6 +369,7 @@ function mapAppointmentRow(row) {
     id: Number(row.id),
     publicCode: row.publicCode,
     status: row.status,
+    source: row.source || null,
     startsAt: toIso(row.startsAt),
     endsAt: toIso(row.endsAt),
     createdAt: toIso(row.createdAt),
@@ -404,6 +554,41 @@ function doActiveClaimsMatchExpected({ activeClaims, expectedClaims }) {
   }
 
   return true;
+}
+
+function mergeAppointmentRowsById(...groups) {
+  const map = new Map();
+
+  for (const group of groups) {
+    for (const row of group || []) {
+      map.set(Number(row.id), row);
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+function sortRowsByStartsAtAsc(rows) {
+  return [...rows].sort((left, right) => {
+    const leftTime = toDate(left.startsAt).getTime();
+    const rightTime = toDate(right.startsAt).getTime();
+
+    if (leftTime !== rightTime) {
+      return leftTime - rightTime;
+    }
+
+    return Number(left.id) - Number(right.id);
+  });
+}
+
+function isRoomActiveAppointmentRow(row, nowDate) {
+  const status = String(row.status || "").trim().toLowerCase();
+
+  if (!ROOM_ACTIVE_STATUSES.has(status)) {
+    return false;
+  }
+
+  return toDate(row.endsAt).getTime() > nowDate.getTime();
 }
 
 async function resolveCenter({ connection, tenantSlug, adminSession }) {
@@ -856,6 +1041,12 @@ async function listAdminAppointments({
     [center.id]
   );
 
+  const roomsActiveRows = sortRowsByStartsAtAsc(
+    mergeAppointmentRowsById(todayRows, upcomingRows, recentRows).filter((row) =>
+      isRoomActiveAppointmentRow(row, nowDate)
+    )
+  );
+
   return {
     generatedAt: nowDate.toISOString(),
     center,
@@ -868,6 +1059,7 @@ async function listAdminAppointments({
     today: todayRows.map(mapAppointmentRow),
     upcoming: upcomingRows.map(mapAppointmentRow),
     recentCreated: recentRows.map(mapAppointmentRow),
+    roomsActive: roomsActiveRows.map(mapAppointmentRow),
     rooms: roomRows.map((row) => ({
       id: Number(row.id),
       slug: row.slug,
@@ -877,6 +1069,147 @@ async function listAdminAppointments({
     metadata: {
       dbNow: formatDateTimeForDbLocal(nowDate, DEFAULT_DB_OFFSET)
     }
+  };
+}
+
+async function listAdminAppointmentHistory({
+  connection,
+  tenantSlug,
+  q,
+  status,
+  order,
+  limit,
+  now = new Date(),
+  adminSession
+}) {
+  const nowDate = toDate(now);
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+  const searchQuery = normalizeSearch(q);
+  const statusFilter = normalizeHistoryStatus(status);
+  const orderFilter = normalizeHistoryOrder(order);
+  const rowLimit = parseHistoryLimit(limit);
+  const nowDb = formatDateTimeForDbLocal(nowDate, DEFAULT_DB_OFFSET);
+
+  const whereSql = [
+    "a.center_id = ?",
+    "(a.ends_at <= ? OR a.status IN ('completed', 'cancelled', 'no_show'))"
+  ];
+  const params = [center.id, nowDb];
+
+  if (searchQuery) {
+    const qLike = `%${searchQuery.toLowerCase()}%`;
+    whereSql.push("(LOWER(c.full_name) LIKE ? OR LOWER(c.whatsapp_e164) LIKE ?)");
+    params.push(qLike, qLike);
+  }
+
+  if (statusFilter !== "all") {
+    whereSql.push("a.status = ?");
+    params.push(statusFilter);
+  }
+
+  const isAsc = orderFilter === "date_asc";
+  const orderDirection = isAsc ? "ASC" : "DESC";
+  const rowsOrderSql = `a.starts_at ${orderDirection}, a.id ${orderDirection}`;
+
+  const [historyRows] = await connection.query(
+    `${baseAppointmentSelectSql()}
+     WHERE ${whereSql.join(" AND ")}
+     ORDER BY ${rowsOrderSql}
+     LIMIT ?`,
+    [...params, rowLimit]
+  );
+
+  return {
+    generatedAt: nowDate.toISOString(),
+    center,
+    filters: {
+      q: searchQuery,
+      status: statusFilter,
+      order: orderFilter,
+      limit: rowLimit
+    },
+    history: historyRows.map(mapAppointmentRow),
+    visible: historyRows.length,
+    metadata: {
+      dbNow: nowDb
+    }
+  };
+}
+
+async function createAdminManualAppointment({
+  connection,
+  tenantSlug,
+  adminSession,
+  phoneE164,
+  clientFullName,
+  serviceId,
+  therapistId,
+  roomId,
+  startsAt,
+  now = new Date(),
+  createHold = createHoldAppointment,
+  confirmStatus = updateAdminAppointmentStatus
+}) {
+  const nowDate = toDate(now);
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+  const normalizedPhone = normalizePhoneE164(phoneE164);
+  const normalizedClientName = normalizeClientFullName(clientFullName);
+  const normalizedServiceId = parseServiceId(serviceId);
+  const normalizedTherapistId = normalizeOptionalTherapistId(therapistId);
+  const normalizedRoomId = normalizeOptionalRoomId(roomId);
+  const slotStart = normalizeStartsAt(startsAt);
+
+  if (slotStart.getTime() <= nowDate.getTime()) {
+    throw new ValidationError("startsAt debe ser futuro", {
+      field: "startsAt"
+    });
+  }
+
+  const hold = await createHold({
+    connection,
+    centerId: center.id,
+    serviceId: normalizedServiceId,
+    phoneE164: normalizedPhone,
+    startsAt: slotStart,
+    therapistId: normalizedTherapistId,
+    roomId: normalizedRoomId,
+    now: nowDate,
+    source: "admin_manual"
+  });
+
+  if (normalizedClientName) {
+    await connection.query(
+      `UPDATE clients
+       SET
+         full_name = ?,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?
+         AND center_id = ?
+       LIMIT 1`,
+      [normalizedClientName, Number(hold.client.id), center.id]
+    );
+  }
+
+  const confirmation = await confirmStatus({
+    connection,
+    appointmentId: hold.appointmentId,
+    status: "confirmed",
+    adminSession,
+    tenantSlug,
+    now: nowDate
+  });
+
+  return {
+    generatedAt: nowDate.toISOString(),
+    center,
+    creation: {
+      mode: "admin_manual",
+      appointmentId: Number(hold.appointmentId),
+      publicCode: hold.publicCode,
+      startsAt: hold.startsAt,
+      endsAt: hold.endsAt
+    },
+    appointment: confirmation.appointment
   };
 }
 
@@ -1341,6 +1674,8 @@ async function updateAdminAppointmentRoom({
 module.exports = {
   AdminAppointmentsError,
   listAdminAppointments,
+  listAdminAppointmentHistory,
+  createAdminManualAppointment,
   getAdminAppointmentDetail,
   deleteAdminAppointments,
   updateAdminAppointmentStatus,

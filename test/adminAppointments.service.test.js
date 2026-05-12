@@ -3,11 +3,14 @@ const test = require("node:test");
 
 const {
   AdminAppointmentsError,
+  createAdminManualAppointment,
   getAdminAppointmentDetail,
+  listAdminAppointmentHistory,
   listAdminAppointments,
   updateAdminAppointmentRoom,
   updateAdminAppointmentStatus
 } = require("../server/services/adminAppointments.service");
+const { ValidationError } = require("../server/services/errors");
 
 function toComparableTime(value) {
   if (value instanceof Date) {
@@ -169,6 +172,75 @@ function createServiceConnection(seed) {
             return startsAt >= toComparableTime(dayStart) && startsAt <= toComparableTime(dayEnd);
           })
           .sort((left, right) => toComparableTime(left.startsAt) - toComparableTime(right.startsAt) || left.id - right.id)
+          .slice(0, limit)
+          .map((entry) => toJoinedListRow(this.state, entry));
+
+        return [rows];
+      }
+
+      if (
+        normalizedSql.includes("FROM appointments a") &&
+        normalizedSql.includes("a.ends_at <= ? OR a.status IN ('completed', 'cancelled', 'no_show')") &&
+        normalizedSql.includes("ORDER BY a.starts_at") &&
+        normalizedSql.includes("LIMIT ?")
+      ) {
+        let index = 0;
+        const centerId = Number(params[index]);
+        index += 1;
+        const nowLimit = params[index];
+        index += 1;
+
+        let searchTerm = "";
+        if (normalizedSql.includes("LOWER(c.full_name) LIKE ? OR LOWER(c.whatsapp_e164) LIKE ?")) {
+          searchTerm = String(params[index] || "").toLowerCase().replaceAll("%", "");
+          index += 2;
+        }
+
+        let statusFilter = "all";
+        if (normalizedSql.includes("a.status = ?")) {
+          statusFilter = String(params[index] || "").toLowerCase();
+          index += 1;
+        }
+
+        const limit = Number(params[index]);
+        const isAscOrder = normalizedSql.includes("ORDER BY a.starts_at ASC, a.id ASC");
+
+        const rows = this.state.appointments
+          .filter((entry) => {
+            if (entry.centerId !== centerId) return false;
+
+            const isPast = toComparableTime(entry.endsAt) <= toComparableTime(nowLimit);
+            const isTerminal =
+              entry.status === "completed" ||
+              entry.status === "cancelled" ||
+              entry.status === "no_show";
+
+            if (!isPast && !isTerminal) {
+              return false;
+            }
+
+            if (searchTerm) {
+              const client = this.state.clients.find((item) => item.id === entry.clientId);
+              const fullName = String(client?.fullName || "").toLowerCase();
+              const whatsapp = String(client?.whatsapp || "").toLowerCase();
+              if (!fullName.includes(searchTerm) && !whatsapp.includes(searchTerm)) {
+                return false;
+              }
+            }
+
+            if (statusFilter !== "all" && entry.status !== statusFilter) {
+              return false;
+            }
+
+            return true;
+          })
+          .sort((left, right) => {
+            const timeDiff = toComparableTime(left.startsAt) - toComparableTime(right.startsAt);
+            if (isAscOrder) {
+              return timeDiff !== 0 ? timeDiff : left.id - right.id;
+            }
+            return timeDiff !== 0 ? -timeDiff : right.id - left.id;
+          })
           .slice(0, limit)
           .map((entry) => toJoinedListRow(this.state, entry));
 
@@ -634,6 +706,203 @@ test("listAdminAppointments incluye cita creada por booking en recentCreated aun
   assert.equal(payload.recentCreated[0].status, "confirmed");
 });
 
+test("listAdminAppointments filtra roomsActive por estados activos y end_at > ahora", async () => {
+  const seed = baseSeed();
+  seed.appointments = [
+    {
+      id: 150,
+      centerId: 1,
+      publicCode: "PUB-ROOMS-150",
+      status: "confirmed",
+      startsAt: "2026-05-08T11:00:00.000Z",
+      endsAt: "2026-05-08T12:30:00.000Z",
+      createdAt: "2026-05-08T09:00:00.000Z",
+      clientId: 1,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    },
+    {
+      id: 151,
+      centerId: 1,
+      publicCode: "PUB-ROOMS-151",
+      status: "confirmed",
+      startsAt: "2026-05-08T10:00:00.000Z",
+      endsAt: "2026-05-08T12:00:00.000Z",
+      createdAt: "2026-05-08T08:00:00.000Z",
+      clientId: 2,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    },
+    {
+      id: 152,
+      centerId: 1,
+      publicCode: "PUB-ROOMS-152",
+      status: "cancelled",
+      startsAt: "2026-05-08T13:00:00.000Z",
+      endsAt: "2026-05-08T14:00:00.000Z",
+      createdAt: "2026-05-08T07:00:00.000Z",
+      clientId: 1,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    }
+  ];
+
+  const connection = createServiceConnection(seed);
+  const payload = await listAdminAppointments({
+    connection,
+    date: "today",
+    upcoming: true,
+    limit: 20,
+    now: new Date("2026-05-08T12:00:00.000Z"),
+    adminSession: { centerId: 1 }
+  });
+
+  assert.deepEqual(payload.roomsActive.map((entry) => entry.id), [150]);
+});
+
+test("listAdminAppointmentHistory incluye cita pasada y excluye cita futura activa", async () => {
+  const seed = baseSeed();
+  seed.appointments = [
+    {
+      id: 200,
+      centerId: 1,
+      publicCode: "PUB-HISTORY-200",
+      status: "completed",
+      startsAt: "2026-05-06T10:00:00.000Z",
+      endsAt: "2026-05-06T11:00:00.000Z",
+      createdAt: "2026-05-05T10:00:00.000Z",
+      clientId: 1,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    },
+    {
+      id: 201,
+      centerId: 1,
+      publicCode: "PUB-HISTORY-201",
+      status: "confirmed",
+      startsAt: "2026-05-20T10:00:00.000Z",
+      endsAt: "2026-05-20T11:00:00.000Z",
+      createdAt: "2026-05-05T11:00:00.000Z",
+      clientId: 2,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    }
+  ];
+
+  const connection = createServiceConnection(seed);
+  const payload = await listAdminAppointmentHistory({
+    connection,
+    now: new Date("2026-05-10T12:00:00.000Z"),
+    adminSession: { centerId: 1 }
+  });
+
+  assert.equal(payload.history.some((entry) => entry.id === 200), true);
+  assert.equal(payload.history.some((entry) => entry.id === 201), false);
+});
+
+test("listAdminAppointmentHistory aplica filtros basicos y ordena por fecha descendente por defecto", async () => {
+  const seed = baseSeed();
+  seed.clients = [
+    {
+      id: 1,
+      fullName: "Mara Uno",
+      whatsapp: "59171111111",
+      firstName: "Mara",
+      lastName: "Uno",
+      age: 35,
+      city: "Cochabamba",
+      source: "Redes sociales",
+      onboardingCompletedAt: "2026-05-07T12:00:00.000Z"
+    },
+    {
+      id: 2,
+      fullName: "Mara Dos",
+      whatsapp: "59172222222",
+      firstName: "Mara",
+      lastName: "Dos",
+      age: 31,
+      city: "La Paz",
+      source: "Otro",
+      onboardingCompletedAt: "2026-05-08T12:00:00.000Z"
+    }
+  ];
+  seed.appointments = [
+    {
+      id: 300,
+      centerId: 1,
+      publicCode: "PUB-HISTORY-300",
+      status: "completed",
+      startsAt: "2026-05-08T12:00:00.000Z",
+      endsAt: "2026-05-08T13:00:00.000Z",
+      createdAt: "2026-05-06T11:00:00.000Z",
+      clientId: 1,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    },
+    {
+      id: 301,
+      centerId: 1,
+      publicCode: "PUB-HISTORY-301",
+      status: "completed",
+      startsAt: "2026-05-07T12:00:00.000Z",
+      endsAt: "2026-05-07T13:00:00.000Z",
+      createdAt: "2026-05-06T10:00:00.000Z",
+      clientId: 1,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    },
+    {
+      id: 302,
+      centerId: 1,
+      publicCode: "PUB-HISTORY-302",
+      status: "cancelled",
+      startsAt: "2026-05-09T12:00:00.000Z",
+      endsAt: "2026-05-09T13:00:00.000Z",
+      createdAt: "2026-05-06T09:00:00.000Z",
+      clientId: 2,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    }
+  ];
+
+  const connection = createServiceConnection(seed);
+
+  const filteredPayload = await listAdminAppointmentHistory({
+    connection,
+    q: "711111",
+    status: "completed",
+    now: new Date("2026-05-10T12:00:00.000Z"),
+    adminSession: { centerId: 1 }
+  });
+
+  assert.deepEqual(filteredPayload.history.map((entry) => entry.id), [300, 301]);
+  assert.deepEqual(filteredPayload.history.map((entry) => entry.status), ["completed", "completed"]);
+
+  const defaultOrderPayload = await listAdminAppointmentHistory({
+    connection,
+    now: new Date("2026-05-10T12:00:00.000Z"),
+    adminSession: { centerId: 1 }
+  });
+
+  assert.deepEqual(defaultOrderPayload.history.map((entry) => entry.id), [302, 300, 301]);
+});
+
 test("getAdminAppointmentDetail devuelve joins reales, claims y pagos", async () => {
   const seed = baseSeed();
   seed.appointments = [
@@ -699,6 +968,255 @@ test("getAdminAppointmentDetail devuelve joins reales, claims y pagos", async ()
   assert.equal(payload.appointment.clientContext.activeAppointments.length, 1);
   assert.equal(payload.appointment.roomOptions.length, 1);
   assert.equal(payload.appointment.roomOptions[0].available, true);
+});
+
+test("createAdminManualAppointment usa hold+confirm compartidos y source admin_manual", async () => {
+  const updates = [];
+  const connection = {
+    async query(sql, params = []) {
+      const normalizedSql = sql.replace(/\s+/g, " ").trim();
+
+      if (
+        normalizedSql.includes("FROM centers") &&
+        normalizedSql.includes("WHERE id = ?") &&
+        normalizedSql.includes("is_active = 1") &&
+        normalizedSql.includes("LIMIT 1")
+      ) {
+        return [[{ id: 1, slug: "demo", name: "Luna Mandala", timezone: "America/La_Paz" }]];
+      }
+
+      if (
+        normalizedSql.startsWith("UPDATE clients") &&
+        normalizedSql.includes("SET full_name = ?") &&
+        normalizedSql.includes("WHERE id = ?") &&
+        normalizedSql.includes("AND center_id = ?")
+      ) {
+        updates.push({
+          fullName: params[0],
+          clientId: Number(params[1]),
+          centerId: Number(params[2])
+        });
+        return [{ affectedRows: 1 }];
+      }
+
+      throw new Error(`SQL no esperado en test: ${normalizedSql}`);
+    }
+  };
+
+  let holdCall = null;
+  let confirmCall = null;
+  const payload = await createAdminManualAppointment({
+    connection,
+    adminSession: { centerId: 1 },
+    phoneE164: "59171234567",
+    clientFullName: "Lia Luna",
+    serviceId: "2",
+    therapistId: "5",
+    roomId: "3",
+    startsAt: "2026-05-30T10:00:00.000Z",
+    now: new Date("2026-05-12T12:00:00.000Z"),
+    createHold: async (args) => {
+      holdCall = args;
+      return {
+        appointmentId: 2001,
+        publicCode: "PUB-2001",
+        startsAt: "2026-05-30T10:00:00.000Z",
+        endsAt: "2026-05-30T11:00:00.000Z",
+        client: { id: 41 }
+      };
+    },
+    confirmStatus: async (args) => {
+      confirmCall = args;
+      return {
+        appointment: {
+          id: 2001,
+          status: "confirmed"
+        }
+      };
+    }
+  });
+
+  assert.equal(holdCall.centerId, 1);
+  assert.equal(holdCall.phoneE164, "59171234567");
+  assert.equal(holdCall.serviceId, 2);
+  assert.equal(holdCall.therapistId, 5);
+  assert.equal(holdCall.roomId, 3);
+  assert.equal(holdCall.source, "admin_manual");
+  assert.equal(updates.length, 1);
+  assert.deepEqual(updates[0], {
+    fullName: "Lia Luna",
+    clientId: 41,
+    centerId: 1
+  });
+  assert.equal(confirmCall.appointmentId, 2001);
+  assert.equal(confirmCall.status, "confirmed");
+  assert.equal(confirmCall.adminSession.centerId, 1);
+  assert.equal(payload.creation.mode, "admin_manual");
+  assert.equal(payload.creation.appointmentId, 2001);
+  assert.equal(payload.appointment.status, "confirmed");
+});
+
+test("createAdminManualAppointment rechaza startsAt pasado", async () => {
+  const connection = {
+    async query(sql) {
+      const normalizedSql = sql.replace(/\s+/g, " ").trim();
+
+      if (
+        normalizedSql.includes("FROM centers") &&
+        normalizedSql.includes("WHERE id = ?") &&
+        normalizedSql.includes("is_active = 1") &&
+        normalizedSql.includes("LIMIT 1")
+      ) {
+        return [[{ id: 1, slug: "demo", name: "Luna Mandala", timezone: "America/La_Paz" }]];
+      }
+
+      throw new Error(`SQL no esperado en test: ${normalizedSql}`);
+    }
+  };
+
+  await assert.rejects(
+    createAdminManualAppointment({
+      connection,
+      adminSession: { centerId: 1 },
+      phoneE164: "59171234567",
+      serviceId: "1",
+      startsAt: "2026-05-10T10:00:00.000Z",
+      now: new Date("2026-05-12T12:00:00.000Z"),
+      createHold: async () => {
+        throw new Error("no deberia intentar hold");
+      }
+    }),
+    (error) => {
+      assert.equal(error instanceof ValidationError, true);
+      assert.equal(error.details.field, "startsAt");
+      return true;
+    }
+  );
+});
+
+test("createAdminManualAppointment acepta 71234567 y normaliza a 59171234567", async () => {
+  const connection = {
+    async query(sql) {
+      const normalizedSql = sql.replace(/\s+/g, " ").trim();
+
+      if (
+        normalizedSql.includes("FROM centers") &&
+        normalizedSql.includes("WHERE id = ?") &&
+        normalizedSql.includes("is_active = 1") &&
+        normalizedSql.includes("LIMIT 1")
+      ) {
+        return [[{ id: 1, slug: "demo", name: "Luna Mandala", timezone: "America/La_Paz" }]];
+      }
+
+      throw new Error(`SQL no esperado en test: ${normalizedSql}`);
+    }
+  };
+
+  let holdCall = null;
+  await createAdminManualAppointment({
+    connection,
+    adminSession: { centerId: 1 },
+    phoneE164: "71234567",
+    serviceId: "1",
+    startsAt: "2026-05-30T10:00:00.000Z",
+    now: new Date("2026-05-12T12:00:00.000Z"),
+    createHold: async (args) => {
+      holdCall = args;
+      return {
+        appointmentId: 2002,
+        publicCode: "PUB-2002",
+        startsAt: "2026-05-30T10:00:00.000Z",
+        endsAt: "2026-05-30T11:00:00.000Z",
+        client: { id: 51 }
+      };
+    },
+    confirmStatus: async () => ({
+      appointment: {
+        id: 2002,
+        status: "confirmed"
+      }
+    })
+  });
+
+  assert.equal(holdCall.phoneE164, "59171234567");
+});
+
+test("createAdminManualAppointment rechaza 59110000000 por formato Bolivia invalido", async () => {
+  const connection = {
+    async query(sql) {
+      const normalizedSql = sql.replace(/\s+/g, " ").trim();
+
+      if (
+        normalizedSql.includes("FROM centers") &&
+        normalizedSql.includes("WHERE id = ?") &&
+        normalizedSql.includes("is_active = 1") &&
+        normalizedSql.includes("LIMIT 1")
+      ) {
+        return [[{ id: 1, slug: "demo", name: "Luna Mandala", timezone: "America/La_Paz" }]];
+      }
+
+      throw new Error(`SQL no esperado en test: ${normalizedSql}`);
+    }
+  };
+
+  await assert.rejects(
+    createAdminManualAppointment({
+      connection,
+      adminSession: { centerId: 1 },
+      phoneE164: "59110000000",
+      serviceId: "1",
+      startsAt: "2026-05-30T10:00:00.000Z",
+      now: new Date("2026-05-12T12:00:00.000Z"),
+      createHold: async () => {
+        throw new Error("no deberia intentar hold");
+      }
+    }),
+    (error) => {
+      assert.equal(error instanceof ValidationError, true);
+      assert.equal(error.details.field, "phoneE164");
+      assert.equal(error.details.country, "BO");
+      return true;
+    }
+  );
+});
+
+test("createAdminManualAppointment rechaza 10000000 por formato Bolivia invalido", async () => {
+  const connection = {
+    async query(sql) {
+      const normalizedSql = sql.replace(/\s+/g, " ").trim();
+
+      if (
+        normalizedSql.includes("FROM centers") &&
+        normalizedSql.includes("WHERE id = ?") &&
+        normalizedSql.includes("is_active = 1") &&
+        normalizedSql.includes("LIMIT 1")
+      ) {
+        return [[{ id: 1, slug: "demo", name: "Luna Mandala", timezone: "America/La_Paz" }]];
+      }
+
+      throw new Error(`SQL no esperado en test: ${normalizedSql}`);
+    }
+  };
+
+  await assert.rejects(
+    createAdminManualAppointment({
+      connection,
+      adminSession: { centerId: 1 },
+      phoneE164: "10000000",
+      serviceId: "1",
+      startsAt: "2026-05-30T10:00:00.000Z",
+      now: new Date("2026-05-12T12:00:00.000Z"),
+      createHold: async () => {
+        throw new Error("no deberia intentar hold");
+      }
+    }),
+    (error) => {
+      assert.equal(error instanceof ValidationError, true);
+      assert.equal(error.details.field, "phoneE164");
+      assert.equal(error.details.country, "BO");
+      return true;
+    }
+  );
 });
 
 test("state machine: pending -> confirmed conserva claims existentes", async () => {

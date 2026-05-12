@@ -392,6 +392,101 @@ test("GET /api/admin/appointments maps unexpected errors to 500", async () => {
   assert.equal(res.payload.error.code, "ADMIN_ROUTE_ERROR");
 });
 
+test("GET /api/admin/appointments/history without token returns 401", async () => {
+  let requestedConnection = false;
+
+  const pool = {
+    async getConnection() {
+      requestedConnection = true;
+      return {
+        release() {}
+      };
+    }
+  };
+
+  const router = createAdminRouter({
+    getPool: () => pool
+  });
+
+  const handler = getRouteHandler(router, "/appointments/history", "get");
+  const req = {
+    query: {},
+    get() {
+      return undefined;
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.payload.error.code, "ADMIN_TOKEN_REQUIRED");
+  assert.equal(requestedConnection, false);
+});
+
+test("GET /api/admin/appointments/history with token returns history payload", async () => {
+  const connection = {
+    released: false,
+    release() {
+      this.released = true;
+    }
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 1, email: "admin.dev@lunamandala.local", role: "owner" }),
+    listAppointmentHistory: async (args) => {
+      receivedArgs = args;
+      return {
+        generatedAt: "2026-05-08T12:00:00.000Z",
+        center: { id: 1, slug: "demo", displayName: "Luna Mandala", timezone: "America/La_Paz" },
+        filters: { q: "ana", status: "completed", order: "date_desc", limit: 20 },
+        history: [],
+        visible: 0
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/appointments/history", "get");
+  const req = {
+    query: {
+      tenantSlug: "demo",
+      q: "ana",
+      status: "completed",
+      order: "date_desc",
+      limit: "20"
+    },
+    get(headerName) {
+      if (headerName === "Authorization") {
+        return "Bearer token-demo";
+      }
+
+      return undefined;
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(connection.released, true);
+  assert.equal(receivedArgs.tenantSlug, "demo");
+  assert.equal(receivedArgs.q, "ana");
+  assert.equal(receivedArgs.status, "completed");
+  assert.equal(receivedArgs.order, "date_desc");
+  assert.equal(receivedArgs.limit, "20");
+  assert.equal(receivedArgs.now instanceof Date, true);
+  assert.equal(receivedArgs.adminSession.centerId, 1);
+  assert.equal(Array.isArray(res.payload.history), true);
+});
+
 test("GET /api/admin/appointments/:id without token returns 401", async () => {
   let requestedConnection = false;
 
@@ -1154,4 +1249,192 @@ test("GET /api/admin/search maps ValidationError type invalido a 400", async () 
   assert.equal(res.statusCode, 400);
   assert.equal(res.payload.error.code, "VALIDATION_ERROR");
   assert.equal(res.payload.error.details.field, "type");
+});
+
+test("POST /api/admin/appointments crea cita manual y retorna 201", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    createManualAppointment: async (args) => {
+      receivedArgs = args;
+      return {
+        generatedAt: "2026-05-12T11:00:00.000Z",
+        creation: { mode: "admin_manual", appointmentId: 77 },
+        appointment: { id: 77, status: "confirmed" }
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/appointments", "post");
+  const req = {
+    body: {
+      phoneE164: "59171234567",
+      clientFullName: "Lia Luna",
+      serviceId: "4",
+      therapistId: "2",
+      roomId: "1",
+      startsAt: "2026-05-20T10:00:00.000Z"
+    },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(receivedArgs.phoneE164, "59171234567");
+  assert.equal(receivedArgs.clientFullName, "Lia Luna");
+  assert.equal(receivedArgs.serviceId, "4");
+  assert.equal(receivedArgs.therapistId, "2");
+  assert.equal(receivedArgs.roomId, "1");
+  assert.equal(receivedArgs.startsAt, "2026-05-20T10:00:00.000Z");
+  assert.equal(receivedArgs.now instanceof Date, true);
+  assert.equal(res.payload.creation.mode, "admin_manual");
+});
+
+test("GET /api/admin/therapists with token forwards filters and session", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    listTherapists: async (args) => {
+      receivedArgs = args;
+      return {
+        generatedAt: "2026-05-12T11:00:00.000Z",
+        center: { id: 3, slug: "demo", displayName: "Luna Mandala", timezone: "America/La_Paz" },
+        filters: { q: "ana", status: "active", limit: 20 },
+        therapists: []
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/therapists", "get");
+  const req = {
+    query: { q: "ana", status: "active", limit: "20" },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(receivedArgs.q, "ana");
+  assert.equal(receivedArgs.status, "active");
+  assert.equal(receivedArgs.limit, "20");
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(receivedArgs.now instanceof Date, true);
+});
+
+test("GET /api/admin/therapists/:id with token returns therapist detail", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    getTherapistById: async (args) => {
+      receivedArgs = args;
+      return {
+        generatedAt: "2026-05-12T11:00:00.000Z",
+        therapist: { id: 2, displayName: "Ana" },
+        services: [],
+        schedules: []
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/therapists/:id", "get");
+  const req = {
+    params: { id: "2" },
+    query: {},
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(receivedArgs.therapistId, "2");
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(receivedArgs.now instanceof Date, true);
+  assert.equal(res.payload.therapist.id, 2);
+});
+
+test("GET /api/admin/resources with token returns read-only resources payload", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    listResources: async (args) => {
+      receivedArgs = args;
+      return {
+        generatedAt: "2026-05-12T11:00:00.000Z",
+        filters: { resourceType: "all" },
+        services: [],
+        rooms: [],
+        serviceRoomCompatibilities: [],
+        resourceSchedules: []
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/resources", "get");
+  const req = {
+    query: { resourceType: "all" },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(receivedArgs.resourceType, "all");
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(receivedArgs.now instanceof Date, true);
+  assert.equal(Array.isArray(res.payload.services), true);
 });

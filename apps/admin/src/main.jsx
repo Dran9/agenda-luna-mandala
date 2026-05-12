@@ -4,6 +4,7 @@ import {
   CalendarCheck,
   CircleNotch,
   Clock,
+  ClockCounterClockwise,
   Door,
   Lightning,
   MagnifyingGlass,
@@ -33,6 +34,7 @@ const MENU = [
 const VIEW_TABS = [
   { id: "today", label: "Hoy", Icon: CalendarCheck },
   { id: "timeline", label: "Timeline", Icon: Clock },
+  { id: "history", label: "Historial", Icon: ClockCounterClockwise },
   { id: "rooms", label: "Salas", Icon: Door }
 ];
 
@@ -63,9 +65,22 @@ const ACTION_LABELS = {
   cancelled: "Cancelar cita",
   no_show: "Marcar no show"
 };
+const HISTORY_STATUS_FILTERS = [
+  { id: "all", label: "Todos" },
+  { id: "completed", label: "Completadas" },
+  { id: "cancelled", label: "Canceladas" },
+  { id: "no_show", label: "No show" }
+];
+const HISTORY_ORDER_OPTIONS = [
+  { id: "date_desc", label: "Mas reciente" },
+  { id: "date_asc", label: "Mas antigua" }
+];
 const TERMINAL_ACTIONS = new Set(["completed", "cancelled", "no_show"]);
+const ACTIVE_ROOM_STATUSES = new Set(["pending", "confirmed"]);
 const CONTROL_AUTO_REFRESH_MS = 45000;
 const CLIENTS_AUTO_REFRESH_MS = 60000;
+const HISTORY_AUTO_REFRESH_MS = 60000;
+const THERAPISTS_AUTO_REFRESH_MS = 60000;
 
 const ADMIN_TOKEN_KEY = "agenda-admin-token";
 const ADMIN_PROFILE_KEY = "agenda-admin-profile";
@@ -201,6 +216,31 @@ function buildClientsQuery({ q, onboarding, limit }) {
   return params.toString();
 }
 
+function buildHistoryQuery({ q, status, order, limit }) {
+  const params = new URLSearchParams();
+  params.set("status", status || "all");
+  params.set("order", order || "date_desc");
+  params.set("limit", String(limit || 40));
+
+  if (String(q || "").trim()) {
+    params.set("q", String(q).trim());
+  }
+
+  return params.toString();
+}
+
+function buildTherapistsQuery({ q, status, limit }) {
+  const params = new URLSearchParams();
+  params.set("status", status || "all");
+  params.set("limit", String(limit || 20));
+
+  if (String(q || "").trim()) {
+    params.set("q", String(q).trim());
+  }
+
+  return params.toString();
+}
+
 function getErrorMessage(payload) {
   if (!payload || typeof payload !== "object") {
     return "No se pudo completar la solicitud de admin.";
@@ -240,6 +280,21 @@ function sortByStartsAt(items) {
 
     return Number(left.id || 0) - Number(right.id || 0);
   });
+}
+
+function isActiveRoomAppointment(appointment, nowDate = new Date()) {
+  const status = String(appointment?.status || "").trim().toLowerCase();
+
+  if (!ACTIVE_ROOM_STATUSES.has(status)) {
+    return false;
+  }
+
+  const endsAt = new Date(appointment?.endsAt || 0);
+  if (Number.isNaN(endsAt.getTime())) {
+    return false;
+  }
+
+  return endsAt.getTime() > nowDate.getTime();
 }
 
 function summarizeClaims(claims) {
@@ -415,6 +470,74 @@ function AppointmentTable({
               <Trash size={14} weight="regular" aria-hidden="true" />
               <span>{armedDeleteId === item.id ? "¿Borrar?" : "Borrar"}</span>
             </button>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function HistoryTable({ appointments, timezone }) {
+  if (!appointments.length) {
+    return <p className="empty-state">No hay atenciones para este filtro.</p>;
+  }
+
+  return (
+    <>
+      <div className="table-wrap" role="region" aria-label="Tabla de historial">
+        <table className="appointments-table history-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>WhatsApp</th>
+              <th>Fecha atencion</th>
+              <th>Horario</th>
+              <th>Terapeuta</th>
+              <th>Terapia</th>
+              <th>Sala</th>
+              <th>Estado final</th>
+              <th>Origen</th>
+              <th>Creada</th>
+            </tr>
+          </thead>
+          <tbody>
+            {appointments.map((item) => (
+              <tr key={`history-${item.id}`}>
+                <td>{item.client.fullName || "Sin nombre"}</td>
+                <td>{item.client.whatsapp || "-"}</td>
+                <td>{formatDateTime(item.startsAt, timezone)}</td>
+                <td>{formatClock(item.startsAt, timezone)} - {formatClock(item.endsAt, timezone)}</td>
+                <td>{item.therapist.name || "-"}</td>
+                <td>{item.service.name || "-"}</td>
+                <td>{item.room.name || "-"}</td>
+                <td>
+                  <StatusChip status={item.status} />
+                </td>
+                <td>{item.source || "-"}</td>
+                <td>{formatDateTime(item.createdAt, timezone)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <ul className="appointments-cards" aria-label="Historial mobile">
+        {appointments.map((item) => (
+          <li key={`history-mobile-${item.id}`} className="appointment-card">
+            <div className="card-open">
+              <span className="appointment-title">{item.client.fullName || "Sin nombre"}</span>
+              <StatusChip status={item.status} />
+            </div>
+            <p className="appointment-line">WhatsApp: {item.client.whatsapp || "-"}</p>
+            <p className="appointment-line">Fecha: {formatDateTime(item.startsAt, timezone)}</p>
+            <p className="appointment-line">
+              Horario: {formatClock(item.startsAt, timezone)} - {formatClock(item.endsAt, timezone)}
+            </p>
+            <p className="appointment-line">Terapeuta: {item.therapist.name || "-"}</p>
+            <p className="appointment-line">Terapia: {item.service.name || "-"}</p>
+            <p className="appointment-line">Sala: {item.room.name || "-"}</p>
+            <p className="appointment-line">Origen: {item.source || "-"}</p>
+            <p className="appointment-line">Creada: {formatDateTime(item.createdAt, timezone)}</p>
           </li>
         ))}
       </ul>
@@ -1230,6 +1353,289 @@ function ClientDrawer({ open, detail, loading, error, timezone, onClose }) {
   );
 }
 
+function TherapistsTable({ therapists, onSelect }) {
+  if (!therapists.length) {
+    return <p className="empty-state">No hay terapeutas para este filtro.</p>;
+  }
+
+  return (
+    <>
+      <div className="table-wrap" role="region" aria-label="Tabla de terapeutas">
+        <table className="appointments-table therapists-table">
+          <thead>
+            <tr>
+              <th>Terapeuta</th>
+              <th>Estado</th>
+              <th>Servicios</th>
+              <th>Telefono</th>
+              <th>Telegram</th>
+              <th>Horario base</th>
+            </tr>
+          </thead>
+          <tbody>
+            {therapists.map((therapist) => (
+              <tr key={`therapist-${therapist.id}`}>
+                <td>
+                  <button
+                    type="button"
+                    className="table-open"
+                    onClick={() => onSelect?.(therapist.id)}
+                    title="Abrir ficha terapeuta"
+                  >
+                    {therapist.displayName || therapist.fullName || `Terapeuta ${therapist.id}`}
+                  </button>
+                </td>
+                <td>
+                  <StatusChip status={therapist.isActive ? "confirmed" : "cancelled"} />
+                </td>
+                <td>{therapist.services?.length ? therapist.services.join(", ") : "-"}</td>
+                <td>{therapist.phone || "-"}</td>
+                <td>{therapist.telegramChatId || "-"}</td>
+                <td>
+                  {therapist.schedules?.length
+                    ? therapist.schedules.map((slot) => `${slot.dayLabel} ${slot.startTime}-${slot.endTime}`).join(" · ")
+                    : "-"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <ul className="appointments-cards" aria-label="Lista de terapeutas mobile">
+        {therapists.map((therapist) => (
+          <li key={`therapist-mobile-${therapist.id}`} className="appointment-card">
+            <button type="button" className="card-open" onClick={() => onSelect?.(therapist.id)}>
+              <span className="appointment-title">
+                {therapist.displayName || therapist.fullName || `Terapeuta ${therapist.id}`}
+              </span>
+              <StatusChip status={therapist.isActive ? "confirmed" : "cancelled"} />
+            </button>
+            <p className="appointment-line">Servicios: {therapist.services?.length ? therapist.services.join(", ") : "-"}</p>
+            <p className="appointment-line">Telefono: {therapist.phone || "-"}</p>
+            <p className="appointment-line">Telegram: {therapist.telegramChatId || "-"}</p>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function TherapistDrawer({ open, detail, loading, error, onClose }) {
+  if (!open) {
+    return null;
+  }
+
+  const therapist = detail?.therapist || null;
+  const services = detail?.services || [];
+  const schedules = detail?.schedules || [];
+
+  return (
+    <div className="drawer-overlay" role="presentation" onClick={onClose}>
+      <aside
+        className="drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ficha terapeuta"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="drawer-header">
+          <div>
+            <p className="drawer-kicker">Ficha terapeuta</p>
+            <h2>{therapist?.displayName || therapist?.fullName || "Terapeuta"}</h2>
+          </div>
+          <button type="button" className="drawer-close" onClick={onClose} aria-label="Cerrar terapeuta">
+            <X size={18} weight="bold" />
+          </button>
+        </header>
+
+        {loading ? <p className="feedback drawer-feedback">Cargando terapeuta...</p> : null}
+        {!loading && error ? <p className="feedback error drawer-feedback">{error}</p> : null}
+
+        {!loading && !error && therapist ? (
+          <div className="drawer-body">
+            <DrawerSection title="Datos">
+              <dl className="drawer-grid">
+                <dt>Nombre</dt>
+                <dd>{therapist.fullName || "-"}</dd>
+                <dt>Display</dt>
+                <dd>{therapist.displayName || "-"}</dd>
+                <dt>Estado</dt>
+                <dd>{therapist.isActive ? "Activo" : "Inactivo"}</dd>
+                <dt>Telefono</dt>
+                <dd>{therapist.phone || "-"}</dd>
+                <dt>Telegram</dt>
+                <dd>{therapist.telegramChatId || "-"}</dd>
+              </dl>
+            </DrawerSection>
+
+            <DrawerSection title="Servicios asociados">
+              {services.length ? (
+                <ul className="drawer-list">
+                  {services.map((service) => (
+                    <li key={`therapist-service-${service.id}`}>
+                      <span>{service.name}</span>
+                      <span>{service.durationMinutes} min</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="empty-state compact">Sin servicios asociados.</p>
+              )}
+            </DrawerSection>
+
+            <DrawerSection title="Horarios base (read-only)">
+              {schedules.length ? (
+                <ul className="drawer-list">
+                  {schedules.map((slot) => (
+                    <li key={`therapist-schedule-${slot.id}`}>
+                      <span>{slot.dayLabel}</span>
+                      <span>{slot.startTime} - {slot.endTime}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="empty-state compact">Sin horarios base.</p>
+              )}
+            </DrawerSection>
+          </div>
+        ) : null}
+      </aside>
+    </div>
+  );
+}
+
+function ResourcesReadonlyView({ resources }) {
+  if (!resources) {
+    return null;
+  }
+
+  const services = resources.services || [];
+  const rooms = resources.rooms || [];
+  const compatibilities = resources.serviceRoomCompatibilities || [];
+  const schedules = resources.resourceSchedules || [];
+
+  return (
+    <>
+      <section className="panel" aria-label="Servicios read-only">
+        <div className="panel-heading">
+          <h2>Servicios</h2>
+          <p>{services.length} registros</p>
+        </div>
+        <div className="table-wrap">
+          <table className="appointments-table">
+            <thead>
+              <tr>
+                <th>Servicio</th>
+                <th>Duracion</th>
+                <th>Precio</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {services.map((service) => (
+                <tr key={`service-${service.id}`}>
+                  <td>{service.name}</td>
+                  <td>{service.durationMinutes} min</td>
+                  <td>{service.priceAmount} {service.currencyCode}</td>
+                  <td><StatusChip status={service.isActive ? "confirmed" : "cancelled"} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel" aria-label="Salas read-only">
+        <div className="panel-heading">
+          <h2>Salas</h2>
+          <p>{rooms.length} registros</p>
+        </div>
+        <div className="table-wrap">
+          <table className="appointments-table">
+            <thead>
+              <tr>
+                <th>Sala</th>
+                <th>Capacidad</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rooms.map((room) => (
+                <tr key={`room-${room.id}`}>
+                  <td>{room.name}</td>
+                  <td>{room.capacity}</td>
+                  <td><StatusChip status={room.isActive ? "confirmed" : "cancelled"} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel" aria-label="Compatibilidades servicio-sala read-only">
+        <div className="panel-heading">
+          <h2>Compatibilidades</h2>
+          <p>{compatibilities.length} relaciones</p>
+        </div>
+        <div className="table-wrap">
+          <table className="appointments-table">
+            <thead>
+              <tr>
+                <th>Servicio</th>
+                <th>Sala</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {compatibilities.map((entry, index) => (
+                <tr key={`compat-${entry.serviceId}-${entry.roomId}-${index}`}>
+                  <td>{entry.serviceName}</td>
+                  <td>{entry.roomName}</td>
+                  <td><StatusChip status={entry.isActive ? "confirmed" : "cancelled"} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel" aria-label="Horarios base read-only">
+        <div className="panel-heading">
+          <h2>Horarios resource_schedules</h2>
+          <p>{schedules.length} bloques</p>
+        </div>
+        <div className="table-wrap">
+          <table className="appointments-table">
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>Recurso</th>
+                <th>Dia</th>
+                <th>Rango</th>
+                <th>Slot</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedules.map((slot) => (
+                <tr key={`schedule-${slot.id}`}>
+                  <td>{slot.resourceType}</td>
+                  <td>{slot.resourceName || slot.resourceId}</td>
+                  <td>{slot.dayLabel}</td>
+                  <td>{slot.startTime} - {slot.endTime}</td>
+                  <td>{slot.slotMinutes} min</td>
+                  <td><StatusChip status={slot.isActive ? "confirmed" : "cancelled"} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
+  );
+}
+
 const TYPE_LABELS = {
   client: "Cliente",
   appointment: "Cita",
@@ -1563,6 +1969,59 @@ function AdminApp() {
   const [clientsRefreshing, setClientsRefreshing] = useState(false);
   const [clientsError, setClientsError] = useState("");
   const [clientsPayload, setClientsPayload] = useState(null);
+  const [historyDraft, setHistoryDraft] = useState({
+    q: "",
+    status: "all",
+    order: "date_desc",
+    limit: 40
+  });
+  const [historyFilters, setHistoryFilters] = useState({
+    q: "",
+    status: "all",
+    order: "date_desc",
+    limit: 40
+  });
+  const [historyRefreshTick, setHistoryRefreshTick] = useState(0);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyRefreshing, setHistoryRefreshing] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyPayload, setHistoryPayload] = useState(null);
+  const [therapistsDraft, setTherapistsDraft] = useState({
+    q: "",
+    status: "all",
+    limit: 20
+  });
+  const [therapistsFilters, setTherapistsFilters] = useState({
+    q: "",
+    status: "all",
+    limit: 20
+  });
+  const [therapistsRefreshTick, setTherapistsRefreshTick] = useState(0);
+  const [therapistsLoading, setTherapistsLoading] = useState(false);
+  const [therapistsRefreshing, setTherapistsRefreshing] = useState(false);
+  const [therapistsError, setTherapistsError] = useState("");
+  const [therapistsPayload, setTherapistsPayload] = useState(null);
+  const [therapistDrawerOpen, setTherapistDrawerOpen] = useState(false);
+  const [selectedTherapistId, setSelectedTherapistId] = useState(null);
+  const [therapistDetailLoading, setTherapistDetailLoading] = useState(false);
+  const [therapistDetailError, setTherapistDetailError] = useState("");
+  const [therapistDetailPayload, setTherapistDetailPayload] = useState(null);
+  const [resourcesPayload, setResourcesPayload] = useState(null);
+  const [resourcesLoading, setResourcesLoading] = useState(false);
+  const [resourcesRefreshing, setResourcesRefreshing] = useState(false);
+  const [resourcesError, setResourcesError] = useState("");
+  const [resourcesRefreshTick, setResourcesRefreshTick] = useState(0);
+  const [manualDraft, setManualDraft] = useState({
+    clientFullName: "",
+    phoneE164: "",
+    serviceId: "",
+    therapistId: "",
+    roomId: "",
+    startsAt: ""
+  });
+  const [manualCreateLoading, setManualCreateLoading] = useState(false);
+  const [manualCreateError, setManualCreateError] = useState("");
+  const [manualCreateSuccess, setManualCreateSuccess] = useState("");
   const [deleteClientsLoading, setDeleteClientsLoading] = useState(false);
   const [deleteClientsError, setDeleteClientsError] = useState("");
   const [selectedClientIds, setSelectedClientIds] = useState([]);
@@ -1575,8 +2034,11 @@ function AdminApp() {
   const [clientDetailPayload, setClientDetailPayload] = useState(null);
   const payloadRef = useRef(null);
   const clientsPayloadRef = useRef(null);
+  const historyPayloadRef = useRef(null);
+  const therapistsPayloadRef = useRef(null);
   const detailPayloadRef = useRef(null);
   const clientDetailPayloadRef = useRef(null);
+  const therapistDetailPayloadRef = useRef(null);
 
   useEffect(() => {
     payloadRef.current = payload;
@@ -1587,12 +2049,24 @@ function AdminApp() {
   }, [clientsPayload]);
 
   useEffect(() => {
+    historyPayloadRef.current = historyPayload;
+  }, [historyPayload]);
+
+  useEffect(() => {
+    therapistsPayloadRef.current = therapistsPayload;
+  }, [therapistsPayload]);
+
+  useEffect(() => {
     detailPayloadRef.current = detailPayload;
   }, [detailPayload]);
 
   useEffect(() => {
     clientDetailPayloadRef.current = clientDetailPayload;
   }, [clientDetailPayload]);
+
+  useEffect(() => {
+    therapistDetailPayloadRef.current = therapistDetailPayload;
+  }, [therapistDetailPayload]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -1670,6 +2144,25 @@ function AdminApp() {
     setClientsPayload(null);
     setClientsLoading(false);
     setClientsRefreshing(false);
+    setHistoryPayload(null);
+    setHistoryLoading(false);
+    setHistoryRefreshing(false);
+    setHistoryError("");
+    setTherapistsPayload(null);
+    setTherapistsLoading(false);
+    setTherapistsRefreshing(false);
+    setTherapistsError("");
+    setTherapistDrawerOpen(false);
+    setSelectedTherapistId(null);
+    setTherapistDetailPayload(null);
+    setTherapistDetailError("");
+    setResourcesPayload(null);
+    setResourcesLoading(false);
+    setResourcesRefreshing(false);
+    setResourcesError("");
+    setManualCreateLoading(false);
+    setManualCreateError("");
+    setManualCreateSuccess("");
     setSelectedClientIds([]);
     setArmedDeleteClientId(null);
     setConfirmBulkClientsDelete(false);
@@ -1719,6 +2212,36 @@ function AdminApp() {
       }
 
       const response = await fetch(`/api/admin/clients/${clientId}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${authToken}`
+        },
+        signal
+      });
+
+      const nextPayload = await response.json();
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return null;
+      }
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(nextPayload));
+      }
+
+      return nextPayload;
+    },
+    [authToken, handleUnauthorized]
+  );
+
+  const fetchTherapistDetail = useCallback(
+    async (therapistId, { signal } = {}) => {
+      if (!authToken || !therapistId) {
+        return null;
+      }
+
+      const response = await fetch(`/api/admin/therapists/${therapistId}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${authToken}`
@@ -1876,6 +2399,210 @@ function AdminApp() {
   }, [authToken, activeSection, clientsFilters, clientsRefreshTick, handleUnauthorized]);
 
   useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadTherapists() {
+      if (!authToken || (activeSection !== "terapeutas" && activeSection !== "control")) {
+        setTherapistsPayload(null);
+        setTherapistsLoading(false);
+        setTherapistsRefreshing(false);
+        setTherapistsError("");
+        return;
+      }
+
+      const hasCachedPayload = Boolean(therapistsPayloadRef.current);
+
+      if (hasCachedPayload) {
+        setTherapistsRefreshing(true);
+      } else {
+        setTherapistsLoading(true);
+      }
+
+      setTherapistsError("");
+
+      try {
+        const query = activeSection === "control"
+          ? buildTherapistsQuery({ q: "", status: "active", limit: 100 })
+          : buildTherapistsQuery(therapistsFilters);
+        const response = await fetch(`/api/admin/therapists?${query}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${authToken}`
+          },
+          signal: controller.signal
+        });
+
+        const nextPayload = await response.json();
+
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(getErrorMessage(nextPayload));
+        }
+
+        setTherapistsPayload(nextPayload);
+      } catch (fetchError) {
+        if (fetchError.name === "AbortError") {
+          return;
+        }
+
+        if (!hasCachedPayload) {
+          setTherapistsPayload(null);
+        }
+        setTherapistsError(fetchError.message || "No se pudo cargar terapeutas.");
+      } finally {
+        setTherapistsLoading(false);
+        setTherapistsRefreshing(false);
+      }
+    }
+
+    loadTherapists();
+
+    return () => {
+      controller.abort();
+    };
+  }, [authToken, activeSection, therapistsFilters, therapistsRefreshTick, handleUnauthorized]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadResources() {
+      if (!authToken || (activeSection !== "ajustes" && activeSection !== "control")) {
+        if (!authToken) {
+          setResourcesPayload(null);
+          setResourcesError("");
+        }
+        setResourcesLoading(false);
+        setResourcesRefreshing(false);
+        return;
+      }
+
+      const hasCachedPayload = Boolean(resourcesPayload);
+      if (hasCachedPayload) {
+        setResourcesRefreshing(true);
+      } else {
+        setResourcesLoading(true);
+      }
+
+      setResourcesError("");
+
+      try {
+        const response = await fetch("/api/admin/resources", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${authToken}`
+          },
+          signal: controller.signal
+        });
+        const nextPayload = await response.json();
+
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(getErrorMessage(nextPayload));
+        }
+
+        setResourcesPayload(nextPayload);
+      } catch (fetchError) {
+        if (fetchError.name === "AbortError") {
+          return;
+        }
+
+        if (!hasCachedPayload) {
+          setResourcesPayload(null);
+        }
+        setResourcesError(fetchError.message || "No se pudieron cargar recursos.");
+      } finally {
+        setResourcesLoading(false);
+        setResourcesRefreshing(false);
+      }
+    }
+
+    loadResources();
+
+    return () => {
+      controller.abort();
+    };
+  }, [authToken, activeSection, resourcesRefreshTick, handleUnauthorized]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadHistory() {
+      const inHistoryTab = authToken && activeSection === "control" && activeTab === "history";
+
+      if (!inHistoryTab) {
+        setHistoryLoading(false);
+        setHistoryRefreshing(false);
+
+        if (!authToken || activeSection !== "control") {
+          setHistoryPayload(null);
+          setHistoryError("");
+        }
+        return;
+      }
+
+      const hasCachedPayload = Boolean(historyPayloadRef.current);
+
+      if (hasCachedPayload) {
+        setHistoryRefreshing(true);
+      } else {
+        setHistoryLoading(true);
+      }
+
+      setHistoryError("");
+
+      try {
+        const query = buildHistoryQuery(historyFilters);
+        const response = await fetch(`/api/admin/appointments/history?${query}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${authToken}`
+          },
+          signal: controller.signal
+        });
+
+        const nextPayload = await response.json();
+
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(getErrorMessage(nextPayload));
+        }
+
+        setHistoryPayload(nextPayload);
+      } catch (fetchError) {
+        if (fetchError.name === "AbortError") {
+          return;
+        }
+
+        if (!hasCachedPayload) {
+          setHistoryPayload(null);
+        }
+        setHistoryError(fetchError.message || "No se pudo cargar el historial.");
+      } finally {
+        setHistoryLoading(false);
+        setHistoryRefreshing(false);
+      }
+    }
+
+    loadHistory();
+
+    return () => {
+      controller.abort();
+    };
+  }, [authToken, activeSection, activeTab, historyFilters, historyRefreshTick, handleUnauthorized]);
+
+  useEffect(() => {
     if (!authToken || activeSection !== "control") {
       return undefined;
     }
@@ -1898,6 +2625,30 @@ function AdminApp() {
 
     return () => window.clearInterval(timer);
   }, [authToken, activeSection]);
+
+  useEffect(() => {
+    if (!authToken || activeSection !== "terapeutas") {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setTherapistsRefreshTick((value) => value + 1);
+    }, THERAPISTS_AUTO_REFRESH_MS);
+
+    return () => window.clearInterval(timer);
+  }, [authToken, activeSection]);
+
+  useEffect(() => {
+    if (!authToken || activeSection !== "control" || activeTab !== "history") {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setHistoryRefreshTick((value) => value + 1);
+    }, HISTORY_AUTO_REFRESH_MS);
+
+    return () => window.clearInterval(timer);
+  }, [authToken, activeSection, activeTab]);
 
   useEffect(() => {
     if (activeSection !== "control" || !drawerOpen || !selectedAppointmentId || !authToken) {
@@ -1987,13 +2738,75 @@ function AdminApp() {
     };
   }, [activeSection, clientDrawerOpen, selectedClientId, authToken, fetchClientDetail]);
 
-  const timezone = payload?.center?.timezone || clientsPayload?.center?.timezone || "America/La_Paz";
+  useEffect(() => {
+    if (activeSection !== "terapeutas" || !therapistDrawerOpen || !selectedTherapistId || !authToken) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function loadTherapistDetail() {
+      const hasCachedDetail = Boolean(therapistDetailPayloadRef.current);
+
+      if (!hasCachedDetail) {
+        setTherapistDetailLoading(true);
+      }
+      setTherapistDetailError("");
+
+      try {
+        const nextPayload = await fetchTherapistDetail(selectedTherapistId, {
+          signal: controller.signal
+        });
+
+        if (nextPayload) {
+          setTherapistDetailPayload(nextPayload);
+        }
+      } catch (fetchError) {
+        if (fetchError.name === "AbortError") {
+          return;
+        }
+
+        if (!hasCachedDetail) {
+          setTherapistDetailPayload(null);
+          setTherapistDetailError(fetchError.message || "No se pudo cargar la ficha del terapeuta.");
+        }
+      } finally {
+        setTherapistDetailLoading(false);
+      }
+    }
+
+    loadTherapistDetail();
+
+    return () => {
+      controller.abort();
+    };
+  }, [activeSection, therapistDrawerOpen, selectedTherapistId, authToken, fetchTherapistDetail, therapistsRefreshTick]);
+
+  const timezone =
+    payload?.center?.timezone ||
+    historyPayload?.center?.timezone ||
+    therapistsPayload?.center?.timezone ||
+    resourcesPayload?.center?.timezone ||
+    clientsPayload?.center?.timezone ||
+    "America/La_Paz";
   const generatedAtLabel = payload ? formatDateTime(payload.generatedAt, timezone) : "-";
   const clientsGeneratedAtLabel = clientsPayload
     ? formatDateTime(clientsPayload.generatedAt, timezone)
     : "-";
+  const historyGeneratedAtLabel = historyPayload
+    ? formatDateTime(historyPayload.generatedAt, timezone)
+    : "-";
+  const therapistsGeneratedAtLabel = therapistsPayload
+    ? formatDateTime(therapistsPayload.generatedAt, timezone)
+    : "-";
+  const resourcesGeneratedAtLabel = resourcesPayload
+    ? formatDateTime(resourcesPayload.generatedAt, timezone)
+    : "-";
   const controlRefreshLabel = lastRefreshedAt
     ? `Datos actualizados ${formatClock(lastRefreshedAt, timezone)}`
+    : "Sin actualizar";
+  const historyRefreshLabel = historyPayload
+    ? `Historial actualizado ${formatClock(historyPayload.generatedAt, timezone)}`
     : "Sin actualizar";
 
   const summary = useMemo(() => {
@@ -2021,6 +2834,14 @@ function AdminApp() {
     return sortByStartsAt(mergeById(todayAppointments, upcomingAppointments, recentAppointments));
   }, [todayAppointments, upcomingAppointments, recentAppointments]);
 
+  const roomsAppointments = useMemo(() => {
+    if (Array.isArray(payload?.roomsActive)) {
+      return sortByStartsAt(payload.roomsActive);
+    }
+
+    return sortByStartsAt(listAppointments.filter((entry) => isActiveRoomAppointment(entry)));
+  }, [payload, listAppointments]);
+
   const casesByStatus = useMemo(() => {
     return [
       {
@@ -2042,6 +2863,41 @@ function AdminApp() {
   }, [listAppointments]);
 
   const listedClients = clientsPayload?.clients || [];
+  const historyAppointments = historyPayload?.history || [];
+  const listedTherapists = therapistsPayload?.therapists || [];
+  const manualServices = useMemo(
+    () => (resourcesPayload?.services || []).filter((service) => service.isActive),
+    [resourcesPayload]
+  );
+  const manualRooms = useMemo(
+    () => (resourcesPayload?.rooms || []).filter((room) => room.isActive),
+    [resourcesPayload]
+  );
+  const manualTherapists = useMemo(() => {
+    if (listedTherapists.length) {
+      return listedTherapists.filter((therapist) => therapist.isActive);
+    }
+
+    const therapistMap = new Map();
+    for (const item of listAppointments) {
+      const therapistId = Number(item?.therapist?.id);
+      if (!Number.isInteger(therapistId) || therapistId <= 0 || therapistMap.has(therapistId)) {
+        continue;
+      }
+
+      therapistMap.set(therapistId, {
+        id: therapistId,
+        displayName:
+          item?.therapist?.name ||
+          item?.therapist?.fullName ||
+          `Terapeuta ${therapistId}`
+      });
+    }
+
+    return Array.from(therapistMap.values()).sort((left, right) =>
+      String(left.displayName).localeCompare(String(right.displayName))
+    );
+  }, [listedTherapists, listAppointments]);
 
   const selectedAppointmentIdsSet = useMemo(
     () => new Set(selectedAppointmentIds),
@@ -2075,7 +2931,8 @@ function AdminApp() {
   }, [selectedClientIds.length]);
 
   const activateSection = useCallback((sectionId) => {
-    if (sectionId !== "control" && sectionId !== "clientes") {
+    const allowed = new Set(["control", "clientes", "terapeutas", "ajustes"]);
+    if (!allowed.has(sectionId)) {
       return;
     }
 
@@ -2096,6 +2953,12 @@ function AdminApp() {
     setDeleteClientsError("");
     setArmedDeleteClientId(null);
     setConfirmBulkClientsDelete(false);
+    setTherapistDrawerOpen(false);
+    setSelectedTherapistId(null);
+    setTherapistDetailPayload(null);
+    setTherapistDetailError("");
+    setManualCreateError("");
+    setManualCreateSuccess("");
   }, []);
 
   const openDrawer = useCallback((appointmentId) => {
@@ -2265,6 +3128,25 @@ function AdminApp() {
     setClientsLoading(false);
     setClientsRefreshing(false);
     setClientsError("");
+    setHistoryPayload(null);
+    setHistoryLoading(false);
+    setHistoryRefreshing(false);
+    setHistoryError("");
+    setTherapistsPayload(null);
+    setTherapistsLoading(false);
+    setTherapistsRefreshing(false);
+    setTherapistsError("");
+    setTherapistDrawerOpen(false);
+    setSelectedTherapistId(null);
+    setTherapistDetailPayload(null);
+    setTherapistDetailError("");
+    setResourcesPayload(null);
+    setResourcesLoading(false);
+    setResourcesRefreshing(false);
+    setResourcesError("");
+    setManualCreateLoading(false);
+    setManualCreateError("");
+    setManualCreateSuccess("");
     setDeleteClientsError("");
     setDeleteClientsLoading(false);
     setSelectedClientIds([]);
@@ -2669,14 +3551,157 @@ function AdminApp() {
     setClientsRefreshTick((value) => value + 1);
   }
 
-  const sectionTitle = activeSection === "clientes" ? "Clientes" : "Control";
+  function handleHistoryFiltersSubmit(event) {
+    event.preventDefault();
+    const nextFilters = {
+      q: String(historyDraft.q || "").trim(),
+      status: historyDraft.status || "all",
+      order: historyDraft.order || "date_desc",
+      limit: Number(historyDraft.limit) || 40
+    };
+    setHistoryFilters(nextFilters);
+  }
+
+  function handleHistoryStatusFilter(nextStatus) {
+    const statusValue = nextStatus || "all";
+    setHistoryDraft((value) => ({ ...value, status: statusValue }));
+    setHistoryFilters((value) => ({ ...value, status: statusValue }));
+  }
+
+  function handleHistoryFiltersReset() {
+    const next = {
+      q: "",
+      status: "all",
+      order: "date_desc",
+      limit: 40
+    };
+    setHistoryDraft(next);
+    setHistoryFilters(next);
+    setHistoryRefreshTick((value) => value + 1);
+  }
+
+  function handleTherapistsFiltersSubmit(event) {
+    event.preventDefault();
+    setTherapistsFilters({
+      q: String(therapistsDraft.q || "").trim(),
+      status: therapistsDraft.status || "all",
+      limit: Number(therapistsDraft.limit) || 20
+    });
+  }
+
+  function handleTherapistsFiltersReset() {
+    const next = {
+      q: "",
+      status: "all",
+      limit: 20
+    };
+    setTherapistsDraft(next);
+    setTherapistsFilters(next);
+    setTherapistsRefreshTick((value) => value + 1);
+  }
+
+  function openTherapistDrawer(therapistId) {
+    setSelectedTherapistId(therapistId);
+    setTherapistDrawerOpen(true);
+    setTherapistDetailPayload(null);
+    setTherapistDetailError("");
+  }
+
+  function closeTherapistDrawer() {
+    setTherapistDrawerOpen(false);
+    setSelectedTherapistId(null);
+    setTherapistDetailPayload(null);
+    setTherapistDetailError("");
+  }
+
+  async function handleCreateManualAppointment(event) {
+    event.preventDefault();
+
+    if (!authToken || manualCreateLoading) {
+      return;
+    }
+
+    setManualCreateLoading(true);
+    setManualCreateError("");
+    setManualCreateSuccess("");
+
+    try {
+      const startsAtIso = manualDraft.startsAt
+        ? new Date(manualDraft.startsAt).toISOString()
+        : "";
+
+      const payloadBody = {
+        phoneE164: manualDraft.phoneE164,
+        clientFullName: manualDraft.clientFullName || null,
+        serviceId: manualDraft.serviceId,
+        startsAt: startsAtIso,
+        therapistId: manualDraft.therapistId || null,
+        roomId: manualDraft.roomId || null
+      };
+
+      const response = await fetch("/api/admin/appointments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify(payloadBody)
+      });
+      const nextPayload = await response.json();
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(nextPayload));
+      }
+
+      setManualCreateSuccess("Cita manual creada y confirmada.");
+      setManualDraft((value) => ({
+        ...value,
+        startsAt: "",
+        roomId: ""
+      }));
+      setRefreshTick((value) => value + 1);
+      if (nextPayload?.appointment?.id) {
+        openDrawer(Number(nextPayload.appointment.id));
+      }
+    } catch (createError) {
+      setManualCreateError(createError.message || "No se pudo crear la cita manual.");
+    } finally {
+      setManualCreateLoading(false);
+    }
+  }
+
+  const sectionTitle = (() => {
+    if (activeSection === "clientes") return "Clientes";
+    if (activeSection === "terapeutas") return "Terapeutas";
+    if (activeSection === "ajustes") return "Ajustes";
+    return "Control";
+  })();
   const sectionCenterName =
-    payload?.center?.displayName || clientsPayload?.center?.displayName || "-";
+    payload?.center?.displayName ||
+    historyPayload?.center?.displayName ||
+    therapistsPayload?.center?.displayName ||
+    resourcesPayload?.center?.displayName ||
+    clientsPayload?.center?.displayName ||
+    "-";
   const hasControlData = Boolean(payload);
+  const hasHistoryData = Boolean(historyPayload);
   const hasClientsData = Boolean(clientsPayload);
-  const canOpenSection = (sectionId) => sectionId === "control" || sectionId === "clientes";
+  const hasTherapistsData = Boolean(therapistsPayload);
+  const hasResourcesData = Boolean(resourcesPayload);
+  const canOpenSection = (sectionId) =>
+    sectionId === "control" ||
+    sectionId === "clientes" ||
+    sectionId === "terapeutas" ||
+    sectionId === "ajustes";
   const isControlSection = activeSection === "control";
   const isClientsSection = activeSection === "clientes";
+  const isTherapistsSection = activeSection === "terapeutas";
+  const isSettingsSection = activeSection === "ajustes";
 
   return (
     <div className="admin-shell">
@@ -2756,68 +3781,92 @@ function AdminApp() {
             ) : null}
 
             {authToken && isControlSection ? (
-              <>
-                <label className="control-field" htmlFor="limit-select">
-                  <span>Limit</span>
-                  <select
-                    id="limit-select"
-                    className="control-input"
-                    value={limit}
-                    onChange={(event) => setLimit(Number(event.target.value))}
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={30}>30</option>
-                    <option value={50}>50</option>
-                  </select>
-                </label>
-
-                <label className="control-check" htmlFor="upcoming-check">
-                  <input
-                    id="upcoming-check"
-                    type="checkbox"
-                    checked={includeUpcoming}
-                    onChange={(event) => setIncludeUpcoming(event.target.checked)}
-                  />
-                  <span>Incluir proximas</span>
-                </label>
-
-                <button
-                  type="button"
-                  className="refresh-button"
-                  onClick={() => setRefreshTick((value) => value + 1)}
-                  disabled={isLoading || isRefreshing}
-                >
-                  {isLoading || isRefreshing ? "Actualizando..." : "Actualizar"}
-                </button>
-
-                <p
-                  className={`refresh-indicator${error ? " is-error" : ""}`}
-                  aria-live="polite"
-                >
-                  {isRefreshing
-                    ? "Actualizando datos..."
-                    : error
-                      ? "Error en ultima actualizacion"
-                      : controlRefreshLabel}
-                </p>
-
-                {selectedAppointmentIds.length ? (
+              activeTab === "history" ? (
+                <>
                   <button
                     type="button"
-                    className={`danger-button${confirmBulkAppointmentsDelete ? " is-armed" : ""}`}
-                    disabled={deleteAppointmentsLoading}
-                    onClick={handleBulkDeleteAppointmentsButton}
+                    className="refresh-button"
+                    onClick={() => setHistoryRefreshTick((value) => value + 1)}
+                    disabled={historyLoading || historyRefreshing}
                   >
-                    <Trash size={14} weight="regular" aria-hidden="true" />
-                    <span>
-                      {confirmBulkAppointmentsDelete
-                        ? `¿Borrar ${selectedAppointmentIds.length}?`
-                        : `Borrar citas (${selectedAppointmentIds.length})`}
-                    </span>
+                    {historyLoading || historyRefreshing ? "Actualizando..." : "Actualizar"}
                   </button>
-                ) : null}
-              </>
+
+                  <p
+                    className={`refresh-indicator${historyError ? " is-error" : ""}`}
+                    aria-live="polite"
+                  >
+                    {historyRefreshing
+                      ? "Actualizando historial..."
+                      : historyError
+                        ? "Error en ultima actualizacion"
+                        : historyRefreshLabel}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <label className="control-field" htmlFor="limit-select">
+                    <span>Limit</span>
+                    <select
+                      id="limit-select"
+                      className="control-input"
+                      value={limit}
+                      onChange={(event) => setLimit(Number(event.target.value))}
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={30}>30</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </label>
+
+                  <label className="control-check" htmlFor="upcoming-check">
+                    <input
+                      id="upcoming-check"
+                      type="checkbox"
+                      checked={includeUpcoming}
+                      onChange={(event) => setIncludeUpcoming(event.target.checked)}
+                    />
+                    <span>Incluir proximas</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    className="refresh-button"
+                    onClick={() => setRefreshTick((value) => value + 1)}
+                    disabled={isLoading || isRefreshing}
+                  >
+                    {isLoading || isRefreshing ? "Actualizando..." : "Actualizar"}
+                  </button>
+
+                  <p
+                    className={`refresh-indicator${error ? " is-error" : ""}`}
+                    aria-live="polite"
+                  >
+                    {isRefreshing
+                      ? "Actualizando datos..."
+                      : error
+                        ? "Error en ultima actualizacion"
+                        : controlRefreshLabel}
+                  </p>
+
+                  {selectedAppointmentIds.length ? (
+                    <button
+                      type="button"
+                      className={`danger-button${confirmBulkAppointmentsDelete ? " is-armed" : ""}`}
+                      disabled={deleteAppointmentsLoading}
+                      onClick={handleBulkDeleteAppointmentsButton}
+                    >
+                      <Trash size={14} weight="regular" aria-hidden="true" />
+                      <span>
+                        {confirmBulkAppointmentsDelete
+                          ? `¿Borrar ${selectedAppointmentIds.length}?`
+                          : `Borrar citas (${selectedAppointmentIds.length})`}
+                      </span>
+                    </button>
+                  ) : null}
+                </>
+              )
             ) : null}
 
             {authToken && isClientsSection && selectedClientIds.length ? (
@@ -2834,6 +3883,46 @@ function AdminApp() {
                     : `Borrar clientes (${selectedClientIds.length})`}
                 </span>
               </button>
+            ) : null}
+
+            {authToken && isTherapistsSection ? (
+              <>
+                <button
+                  type="button"
+                  className="refresh-button"
+                  onClick={() => setTherapistsRefreshTick((value) => value + 1)}
+                  disabled={therapistsLoading || therapistsRefreshing}
+                >
+                  {therapistsLoading || therapistsRefreshing ? "Actualizando..." : "Actualizar"}
+                </button>
+                <p className={`refresh-indicator${therapistsError ? " is-error" : ""}`}>
+                  {therapistsRefreshing
+                    ? "Actualizando terapeutas..."
+                    : therapistsError
+                      ? "Error en ultima actualizacion"
+                      : "Terapeutas al dia"}
+                </p>
+              </>
+            ) : null}
+
+            {authToken && isSettingsSection ? (
+              <>
+                <button
+                  type="button"
+                  className="refresh-button"
+                  onClick={() => setResourcesRefreshTick((value) => value + 1)}
+                  disabled={resourcesLoading || resourcesRefreshing}
+                >
+                  {resourcesLoading || resourcesRefreshing ? "Actualizando..." : "Actualizar"}
+                </button>
+                <p className={`refresh-indicator${resourcesError ? " is-error" : ""}`}>
+                  {resourcesRefreshing
+                    ? "Actualizando recursos..."
+                    : resourcesError
+                      ? "Error en ultima actualizacion"
+                      : "Recursos al dia"}
+                </p>
+              </>
             ) : null}
 
             {authToken ? (
@@ -2888,15 +3977,34 @@ function AdminApp() {
               {isControlSection ? (
                 <>
                   <section className="meta-strip" aria-label="Filtros activos">
-                    <p>
-                      Fecha: <strong>{payload?.filters?.date || "today"}</strong>
-                    </p>
-                    <p>
-                      Upcoming: <strong>{toBoolLabel(includeUpcoming)}</strong>
-                    </p>
-                    <p>
-                      Ultima carga: <strong>{generatedAtLabel}</strong>
-                    </p>
+                    {activeTab === "history" ? (
+                      <>
+                        <p>
+                          Busqueda: <strong>{historyFilters.q || "-"}</strong>
+                        </p>
+                        <p>
+                          Estado: <strong>{historyFilters.status}</strong>
+                        </p>
+                        <p>
+                          Orden: <strong>{historyFilters.order}</strong>
+                        </p>
+                        <p>
+                          Ultima carga: <strong>{historyGeneratedAtLabel}</strong>
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p>
+                          Fecha: <strong>{payload?.filters?.date || "today"}</strong>
+                        </p>
+                        <p>
+                          Upcoming: <strong>{toBoolLabel(includeUpcoming)}</strong>
+                        </p>
+                        <p>
+                          Ultima carga: <strong>{generatedAtLabel}</strong>
+                        </p>
+                      </>
+                    )}
                   </section>
 
                   <section className="command-bar" aria-label="Vistas internas control">
@@ -2918,13 +4026,124 @@ function AdminApp() {
                     })}
                   </section>
 
-                  {isLoading && !hasControlData ? <p className="feedback">Cargando tablero...</p> : null}
-                  {error && !hasControlData ? <p className="feedback error">{error}</p> : null}
-                  {error && hasControlData ? (
-                    <p className="feedback error">No se pudo actualizar el tablero. Mostrando ultima carga valida.</p>
-                  ) : null}
-                  {deleteAppointmentsError ? (
-                    <p className="feedback error">{deleteAppointmentsError}</p>
+                  {activeTab === "history" ? (
+                    <>
+                      {historyLoading && !hasHistoryData ? (
+                        <p className="feedback">Cargando historial...</p>
+                      ) : null}
+                      {historyError && !hasHistoryData ? <p className="feedback error">{historyError}</p> : null}
+                      {historyError && hasHistoryData ? (
+                        <p className="feedback error">No se pudo actualizar historial. Mostrando ultima carga valida.</p>
+                      ) : null}
+                      {historyRefreshing ? (
+                        <p className="feedback subtle">Actualizando historial en segundo plano...</p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      {isLoading && !hasControlData ? <p className="feedback">Cargando tablero...</p> : null}
+                      {error && !hasControlData ? <p className="feedback error">{error}</p> : null}
+                      {error && hasControlData ? (
+                        <p className="feedback error">No se pudo actualizar el tablero. Mostrando ultima carga valida.</p>
+                      ) : null}
+                      {deleteAppointmentsError ? (
+                        <p className="feedback error">{deleteAppointmentsError}</p>
+                      ) : null}
+                    </>
+                  )}
+
+                  {activeTab === "history" && hasHistoryData ? (
+                    <>
+                      <section className="panel" aria-label="Filtros historial admin">
+                        <form className="history-command-bar" onSubmit={handleHistoryFiltersSubmit}>
+                          <label className="client-filter-field" htmlFor="history-search">
+                            <span>Buscar</span>
+                            <input
+                              id="history-search"
+                              type="search"
+                              value={historyDraft.q}
+                              onChange={(event) =>
+                                setHistoryDraft((value) => ({ ...value, q: event.target.value }))
+                              }
+                              placeholder="Nombre o WhatsApp"
+                            />
+                          </label>
+
+                          <label className="client-filter-field" htmlFor="history-order">
+                            <span>Orden</span>
+                            <select
+                              id="history-order"
+                              className="control-input"
+                              value={historyDraft.order}
+                              onChange={(event) =>
+                                setHistoryDraft((value) => ({ ...value, order: event.target.value }))
+                              }
+                            >
+                              {HISTORY_ORDER_OPTIONS.map((option) => (
+                                <option key={option.id} value={option.id}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="client-filter-field" htmlFor="history-limit">
+                            <span>Limit</span>
+                            <select
+                              id="history-limit"
+                              className="control-input"
+                              value={historyDraft.limit}
+                              onChange={(event) =>
+                                setHistoryDraft((value) => ({
+                                  ...value,
+                                  limit: Number(event.target.value)
+                                }))
+                              }
+                            >
+                              <option value={20}>20</option>
+                              <option value={40}>40</option>
+                              <option value={60}>60</option>
+                              <option value={100}>100</option>
+                            </select>
+                          </label>
+
+                          <div className="client-command-actions">
+                            <button type="submit" className="refresh-button">Buscar</button>
+                            <button
+                              type="button"
+                              className="logout-button"
+                              onClick={handleHistoryFiltersReset}
+                            >
+                              Limpiar
+                            </button>
+                          </div>
+                        </form>
+
+                        <nav className="history-status-pills" aria-label="Filtro por estado historial">
+                          {HISTORY_STATUS_FILTERS.map((filter) => {
+                            const active = historyFilters.status === filter.id;
+                            return (
+                              <button
+                                key={filter.id}
+                                type="button"
+                                className={`history-pill${active ? " is-active" : ""}`}
+                                onClick={() => handleHistoryStatusFilter(filter.id)}
+                              >
+                                {filter.label}
+                              </button>
+                            );
+                          })}
+                        </nav>
+                      </section>
+
+                      <section className="panel" aria-label="Historial de atenciones">
+                        <div className="panel-heading">
+                          <h2>Historial</h2>
+                          <p>{historyAppointments.length} visibles</p>
+                        </div>
+                        <HistoryTable appointments={historyAppointments} timezone={timezone} />
+                      </section>
+                    </>
                   ) : null}
 
                   {hasControlData ? (
@@ -2938,6 +4157,155 @@ function AdminApp() {
                             <SummaryCard label="Completed" value={summary.completed} className="status-completed" />
                             <SummaryCard label="No show" value={summary.no_show} className="status-no-show" />
                             <SummaryCard label="Total" value={summary.total} className="status-total" />
+                          </section>
+
+                          <section className="panel" aria-label="Nueva cita manual">
+                            <div className="panel-heading">
+                              <h2>Nueva cita manual</h2>
+                              <p>Usa el mismo motor de claims y disponibilidad.</p>
+                            </div>
+                            <form className="manual-form-grid" onSubmit={handleCreateManualAppointment}>
+                              <label className="client-filter-field" htmlFor="manual-client-name">
+                                <span>Cliente</span>
+                                <input
+                                  id="manual-client-name"
+                                  type="text"
+                                  value={manualDraft.clientFullName}
+                                  onChange={(event) =>
+                                    setManualDraft((value) => ({
+                                      ...value,
+                                      clientFullName: event.target.value
+                                    }))
+                                  }
+                                  placeholder="Nombre completo (opcional)"
+                                />
+                              </label>
+
+                              <label className="client-filter-field" htmlFor="manual-phone">
+                                <span>WhatsApp</span>
+                                <input
+                                  id="manual-phone"
+                                  type="text"
+                                  value={manualDraft.phoneE164}
+                                  onChange={(event) =>
+                                    setManualDraft((value) => ({
+                                      ...value,
+                                      phoneE164: event.target.value
+                                    }))
+                                  }
+                                  placeholder="59171234567"
+                                  required
+                                />
+                              </label>
+
+                              <label className="client-filter-field" htmlFor="manual-service">
+                                <span>Servicio</span>
+                                <select
+                                  id="manual-service"
+                                  className="control-input"
+                                  value={manualDraft.serviceId}
+                                  onChange={(event) =>
+                                    setManualDraft((value) => ({
+                                      ...value,
+                                      serviceId: event.target.value
+                                    }))
+                                  }
+                                  required
+                                >
+                                  <option value="">Seleccionar servicio</option>
+                                  {manualServices.map((service) => (
+                                    <option key={`manual-service-${service.id}`} value={String(service.id)}>
+                                      {service.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <label className="client-filter-field" htmlFor="manual-therapist">
+                                <span>Terapeuta</span>
+                                <select
+                                  id="manual-therapist"
+                                  className="control-input"
+                                  value={manualDraft.therapistId}
+                                  onChange={(event) =>
+                                    setManualDraft((value) => ({
+                                      ...value,
+                                      therapistId: event.target.value
+                                    }))
+                                  }
+                                >
+                                  <option value="">Automatico</option>
+                                  {manualTherapists.map((therapist) => (
+                                    <option
+                                      key={`manual-therapist-${therapist.id}`}
+                                      value={String(therapist.id)}
+                                    >
+                                      {therapist.displayName || therapist.fullName || `Terapeuta ${therapist.id}`}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <label className="client-filter-field" htmlFor="manual-room">
+                                <span>Sala</span>
+                                <select
+                                  id="manual-room"
+                                  className="control-input"
+                                  value={manualDraft.roomId}
+                                  onChange={(event) =>
+                                    setManualDraft((value) => ({
+                                      ...value,
+                                      roomId: event.target.value
+                                    }))
+                                  }
+                                >
+                                  <option value="">Automatica</option>
+                                  {manualRooms.map((room) => (
+                                    <option key={`manual-room-${room.id}`} value={String(room.id)}>
+                                      {room.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <label className="client-filter-field" htmlFor="manual-starts-at">
+                                <span>Fecha y hora</span>
+                                <input
+                                  id="manual-starts-at"
+                                  type="datetime-local"
+                                  value={manualDraft.startsAt}
+                                  onChange={(event) =>
+                                    setManualDraft((value) => ({
+                                      ...value,
+                                      startsAt: event.target.value
+                                    }))
+                                  }
+                                  required
+                                />
+                              </label>
+
+                              <div className="manual-form-actions">
+                                <button
+                                  type="submit"
+                                  className="refresh-button"
+                                  disabled={manualCreateLoading || !manualServices.length}
+                                >
+                                  {manualCreateLoading ? "Creando..." : "Crear cita"}
+                                </button>
+                                {!manualServices.length ? (
+                                  <p className="manual-form-note">
+                                    Carga recursos para habilitar servicios activos.
+                                  </p>
+                                ) : null}
+                              </div>
+                            </form>
+
+                            {manualCreateError ? (
+                              <p className="feedback error compact-feedback">{manualCreateError}</p>
+                            ) : null}
+                            {manualCreateSuccess ? (
+                              <p className="feedback subtle compact-feedback">{manualCreateSuccess}</p>
+                            ) : null}
                           </section>
 
                           <section className="panel" aria-label="Casos prioritarios">
@@ -3058,7 +4426,7 @@ function AdminApp() {
                             <p className="feedback error compact-feedback">{kanbanError}</p>
                           ) : null}
                           <RoomsKanban
-                            appointments={listAppointments}
+                            appointments={roomsAppointments}
                             rooms={payload?.rooms || []}
                             timezone={timezone}
                             onSelect={openDrawer}
@@ -3191,6 +4559,140 @@ function AdminApp() {
                   ) : null}
                 </>
               ) : null}
+
+              {isTherapistsSection ? (
+                <>
+                  <section className="panel" aria-label="Filtros terapeutas">
+                    <form className="client-command-bar" onSubmit={handleTherapistsFiltersSubmit}>
+                      <label className="client-filter-field" htmlFor="therapists-search">
+                        <span>Buscar</span>
+                        <input
+                          id="therapists-search"
+                          type="search"
+                          value={therapistsDraft.q}
+                          onChange={(event) =>
+                            setTherapistsDraft((value) => ({ ...value, q: event.target.value }))
+                          }
+                          placeholder="Nombre o telefono"
+                        />
+                      </label>
+
+                      <label className="client-filter-field" htmlFor="therapists-status">
+                        <span>Estado</span>
+                        <select
+                          id="therapists-status"
+                          className="control-input"
+                          value={therapistsDraft.status}
+                          onChange={(event) =>
+                            setTherapistsDraft((value) => ({
+                              ...value,
+                              status: event.target.value
+                            }))
+                          }
+                        >
+                          <option value="all">Todos</option>
+                          <option value="active">Activos</option>
+                          <option value="inactive">Inactivos</option>
+                        </select>
+                      </label>
+
+                      <label className="client-filter-field" htmlFor="therapists-limit">
+                        <span>Limit</span>
+                        <select
+                          id="therapists-limit"
+                          className="control-input"
+                          value={therapistsDraft.limit}
+                          onChange={(event) =>
+                            setTherapistsDraft((value) => ({
+                              ...value,
+                              limit: Number(event.target.value)
+                            }))
+                          }
+                        >
+                          <option value={10}>10</option>
+                          <option value={20}>20</option>
+                          <option value={30}>30</option>
+                          <option value={50}>50</option>
+                        </select>
+                      </label>
+
+                      <div className="client-command-actions">
+                        <button type="submit" className="refresh-button">Buscar</button>
+                        <button
+                          type="button"
+                          className="logout-button"
+                          onClick={handleTherapistsFiltersReset}
+                        >
+                          Limpiar
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+
+                  <section className="meta-strip" aria-label="Filtros activos terapeutas">
+                    <p>
+                      Filtro q: <strong>{therapistsFilters.q || "-"}</strong>
+                    </p>
+                    <p>
+                      Estado: <strong>{therapistsFilters.status}</strong>
+                    </p>
+                    <p>
+                      Ultima carga: <strong>{therapistsGeneratedAtLabel}</strong>
+                    </p>
+                  </section>
+
+                  {therapistsLoading && !hasTherapistsData ? (
+                    <p className="feedback">Cargando terapeutas...</p>
+                  ) : null}
+                  {therapistsError && !hasTherapistsData ? (
+                    <p className="feedback error">{therapistsError}</p>
+                  ) : null}
+                  {therapistsError && hasTherapistsData ? (
+                    <p className="feedback error">No se pudo actualizar terapeutas. Mostrando ultima carga valida.</p>
+                  ) : null}
+                  {therapistsRefreshing ? (
+                    <p className="feedback subtle">Actualizando terapeutas en segundo plano...</p>
+                  ) : null}
+
+                  {hasTherapistsData ? (
+                    <section className="panel" aria-label="Listado de terapeutas">
+                      <div className="panel-heading">
+                        <h2>Terapeutas</h2>
+                        <p>{listedTherapists.length} registros</p>
+                      </div>
+                      <TherapistsTable therapists={listedTherapists} onSelect={openTherapistDrawer} />
+                    </section>
+                  ) : null}
+                </>
+              ) : null}
+
+              {isSettingsSection ? (
+                <>
+                  <section className="meta-strip" aria-label="Estado recursos read-only">
+                    <p>
+                      Recurso: <strong>{resourcesPayload?.filters?.resourceType || "all"}</strong>
+                    </p>
+                    <p>
+                      Ultima carga: <strong>{resourcesGeneratedAtLabel}</strong>
+                    </p>
+                  </section>
+
+                  {resourcesLoading && !hasResourcesData ? (
+                    <p className="feedback">Cargando recursos...</p>
+                  ) : null}
+                  {resourcesError && !hasResourcesData ? (
+                    <p className="feedback error">{resourcesError}</p>
+                  ) : null}
+                  {resourcesError && hasResourcesData ? (
+                    <p className="feedback error">No se pudo actualizar recursos. Mostrando ultima carga valida.</p>
+                  ) : null}
+                  {resourcesRefreshing ? (
+                    <p className="feedback subtle">Actualizando recursos en segundo plano...</p>
+                  ) : null}
+
+                  {hasResourcesData ? <ResourcesReadonlyView resources={resourcesPayload} /> : null}
+                </>
+              ) : null}
             </>
           )}
         </main>
@@ -3218,6 +4720,14 @@ function AdminApp() {
         error={clientDetailError}
         timezone={timezone}
         onClose={closeClientDrawer}
+      />
+
+      <TherapistDrawer
+        open={therapistDrawerOpen}
+        detail={therapistDetailPayload}
+        loading={therapistDetailLoading}
+        error={therapistDetailError}
+        onClose={closeTherapistDrawer}
       />
 
       <GlobalSearchModal
