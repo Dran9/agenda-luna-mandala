@@ -5,6 +5,11 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 const STATUS_FILTERS = new Set(["all", "active", "inactive"]);
 const DAY_LABELS = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
+/**
+ * Placeholder estructural para una futura bandera real de admision.
+ * En v1 se mantiene constante hasta definir origen en DB o regla derivada.
+ */
+const DEFAULT_ACCEPTS_NEW = true;
 
 class AdminTherapistsError extends Error {
   constructor({
@@ -89,28 +94,49 @@ function parseTherapistId(rawValue) {
   return parsed;
 }
 
-function splitServiceNames(value) {
+function toStatusMeta(isActiveRaw) {
+  const status = Number(isActiveRaw) === 1 ? "ACTIVE" : "INACTIVE";
+  return {
+    status,
+    statusLabel: status === "ACTIVE" ? "Activo" : "Inactivo"
+  };
+}
+
+function compactTime(value) {
   if (!value) {
-    return [];
+    return "--:--";
   }
 
-  return String(value)
-    .split("||")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+  const raw = String(value).trim();
+  const match = raw.match(/^(\d{2}:\d{2})/);
+  if (match) {
+    return match[1];
+  }
+
+  return raw;
 }
 
 function mapBaseTherapistRow(row) {
+  const statusMeta = toStatusMeta(row.isActive);
+  const displayName = row.displayName || row.fullName;
+  const contactSummary = row.phone ? String(row.phone).trim() : "-";
+
   return {
     id: Number(row.id),
     slug: row.slug,
     fullName: row.fullName,
-    displayName: row.displayName || row.fullName,
+    displayName,
     phone: row.phone || null,
     telegramChatId: row.telegramChatId || null,
     isActive: Number(row.isActive) === 1,
+    status: statusMeta.status,
+    statusLabel: statusMeta.statusLabel,
+    contactSummary: contactSummary || "-",
     createdAt: toIso(row.createdAt),
-    services: splitServiceNames(row.serviceNames)
+    compatibleRoomsCount: 0,
+    acceptsNew: DEFAULT_ACCEPTS_NEW,
+    services: [],
+    servicesCount: 0
   };
 }
 
@@ -120,13 +146,16 @@ function buildWeeklyScheduleSummary(rows) {
   for (const row of rows) {
     const weekday = Number(row.weekday);
     const key = `${weekday}|${row.startTime}|${row.endTime}`;
+    const statusMeta = toStatusMeta(row.isActive);
     grouped.set(key, {
       weekday,
       dayLabel: DAY_LABELS[weekday] || `Dia ${weekday}`,
       startTime: row.startTime,
       endTime: row.endTime,
       slotMinutes: Number(row.slotMinutes || 60),
-      isActive: Number(row.isActive) === 1
+      isActive: Number(row.isActive) === 1,
+      status: statusMeta.status,
+      statusLabel: statusMeta.statusLabel
     });
   }
 
@@ -134,6 +163,76 @@ function buildWeeklyScheduleSummary(rows) {
     if (left.weekday !== right.weekday) return left.weekday - right.weekday;
     return String(left.startTime).localeCompare(String(right.startTime));
   });
+}
+
+function buildSchedulesByDay(rows) {
+  const grouped = new Map();
+
+  for (const row of rows) {
+    const weekday = Number(row.weekday);
+    const dayLabel = DAY_LABELS[weekday] || `Dia ${weekday}`;
+    const slotMinutes = Number(row.slotMinutes || 60);
+    const startLabel = compactTime(row.startTime);
+    const endLabel = compactTime(row.endTime);
+    const timeRange = `${startLabel}-${endLabel}`;
+    const statusMeta = toStatusMeta(row.isActive);
+    const key = `${timeRange}|${slotMinutes}|${statusMeta.status}`;
+    const existing = grouped.get(key) || {
+      timeRange,
+      slotMinutes,
+      status: statusMeta.status,
+      statusLabel: statusMeta.statusLabel,
+      days: [],
+      weekdays: []
+    };
+
+    if (!existing.weekdays.includes(weekday)) {
+      existing.weekdays.push(weekday);
+      existing.days.push(dayLabel);
+    }
+
+    grouped.set(key, existing);
+  }
+
+  return Array.from(grouped.values())
+    .map((entry) => {
+      const sortedPairs = entry.weekdays
+        .map((weekday, index) => ({
+          weekday,
+          dayLabel: entry.days[index]
+        }))
+        .sort((left, right) => left.weekday - right.weekday);
+      const days = sortedPairs.map((pair) => pair.dayLabel);
+
+      return {
+        timeRange: entry.timeRange,
+        days,
+        daysLabel: days.join(", "),
+        slotMinutes: entry.slotMinutes,
+        status: entry.status,
+        statusLabel: entry.statusLabel,
+        _firstWeekday: sortedPairs[0]?.weekday ?? 99
+      };
+    })
+    .sort((left, right) => {
+      if (left._firstWeekday !== right._firstWeekday) {
+        return left._firstWeekday - right._firstWeekday;
+      }
+
+      if (left.timeRange !== right.timeRange) {
+        return String(left.timeRange).localeCompare(String(right.timeRange));
+      }
+
+      if (left.status !== right.status) {
+        return left.status === "ACTIVE" ? -1 : 1;
+      }
+
+      return left.slotMinutes - right.slotMinutes;
+    })
+    .map((entry) => {
+      const { _firstWeekday, ...cleaned } = entry;
+      return cleaned;
+    });
 }
 
 async function resolveCenter({ connection, tenantSlug, adminSession }) {
@@ -216,6 +315,85 @@ async function loadTherapistSchedulesByIds({ connection, centerId, therapistIds 
   return map;
 }
 
+async function loadTherapistServicesByIds({ connection, centerId, therapistIds }) {
+  if (!therapistIds.length) {
+    return new Map();
+  }
+
+  const inClause = `(${therapistIds.map(() => "?").join(", ")})`;
+  const [rows] = await connection.query(
+    `SELECT
+      ts.therapist_id AS therapistId,
+      s.id AS serviceId,
+      s.name AS serviceName
+     FROM therapist_services ts
+     INNER JOIN services s
+       ON s.center_id = ts.center_id
+      AND s.id = ts.service_id
+     WHERE ts.center_id = ?
+       AND ts.therapist_id IN ${inClause}
+       AND ts.is_active = 1
+       AND s.is_active = 1
+     ORDER BY ts.therapist_id ASC, s.name ASC, s.id ASC`,
+    [centerId, ...therapistIds]
+  );
+
+  const map = new Map();
+
+  for (const row of rows) {
+    const therapistId = Number(row.therapistId);
+    if (!map.has(therapistId)) {
+      map.set(therapistId, []);
+    }
+
+    map.get(therapistId).push({
+      id: Number(row.serviceId),
+      name: row.serviceName
+    });
+  }
+
+  return map;
+}
+
+async function loadTherapistCompatibleRoomsCountByIds({ connection, centerId, therapistIds }) {
+  if (!therapistIds.length) {
+    return new Map();
+  }
+
+  const inClause = `(${therapistIds.map(() => "?").join(", ")})`;
+  const [rows] = await connection.query(
+    `SELECT
+      ts.therapist_id AS therapistId,
+      COUNT(DISTINCT r.id) AS compatibleRoomsCount
+     FROM therapist_services ts
+     INNER JOIN services s
+       ON s.center_id = ts.center_id
+      AND s.id = ts.service_id
+     INNER JOIN service_rooms sr
+       ON sr.center_id = ts.center_id
+      AND sr.service_id = ts.service_id
+     INNER JOIN rooms r
+       ON r.center_id = sr.center_id
+      AND r.id = sr.room_id
+     WHERE ts.center_id = ?
+       AND ts.therapist_id IN ${inClause}
+       AND ts.is_active = 1
+       AND s.is_active = 1
+       AND sr.is_active = 1
+       AND r.is_active = 1
+     GROUP BY ts.therapist_id`,
+    [centerId, ...therapistIds]
+  );
+
+  const map = new Map();
+
+  for (const row of rows) {
+    map.set(Number(row.therapistId), Number(row.compatibleRoomsCount || 0));
+  }
+
+  return map;
+}
+
 async function listAdminTherapists({
   connection,
   adminSession,
@@ -257,20 +435,9 @@ async function listAdminTherapists({
       t.phone,
       t.telegram_chat_id AS telegramChatId,
       t.is_active AS isActive,
-      t.created_at AS createdAt,
-      GROUP_CONCAT(
-        DISTINCT CASE WHEN ts.is_active = 1 AND s.is_active = 1 THEN s.name END
-        ORDER BY s.name SEPARATOR '||'
-      ) AS serviceNames
+      t.created_at AS createdAt
      FROM therapists t
-     LEFT JOIN therapist_services ts
-       ON ts.center_id = t.center_id
-      AND ts.therapist_id = t.id
-     LEFT JOIN services s
-       ON s.center_id = ts.center_id
-      AND s.id = ts.service_id
      WHERE ${whereSql.join(" AND ")}
-     GROUP BY t.id
      ORDER BY t.is_active DESC, COALESCE(t.display_name, t.full_name) ASC, t.id ASC
      LIMIT ?`,
     [...params, rowLimit]
@@ -278,16 +445,39 @@ async function listAdminTherapists({
 
   const therapists = rows.map(mapBaseTherapistRow);
   const therapistIds = therapists.map((entry) => entry.id);
-  const schedulesByTherapist = await loadTherapistSchedulesByIds({
-    connection,
-    centerId: center.id,
-    therapistIds
-  });
+  const [servicesByTherapist, schedulesByTherapist, compatibleRoomsCountByTherapist] = await Promise.all([
+    loadTherapistServicesByIds({
+      connection,
+      centerId: center.id,
+      therapistIds
+    }),
+    loadTherapistSchedulesByIds({
+      connection,
+      centerId: center.id,
+      therapistIds
+    }),
+    loadTherapistCompatibleRoomsCountByIds({
+      connection,
+      centerId: center.id,
+      therapistIds
+    })
+  ]);
 
   const hydrated = therapists.map((therapist) => ({
     ...therapist,
-    schedules: buildWeeklyScheduleSummary(schedulesByTherapist.get(therapist.id) || [])
+    services: servicesByTherapist.get(therapist.id) || [],
+    servicesCount: (servicesByTherapist.get(therapist.id) || []).length,
+    compatibleRoomsCount: compatibleRoomsCountByTherapist.get(therapist.id) || 0,
+    acceptsNew: DEFAULT_ACCEPTS_NEW,
+    schedules: buildWeeklyScheduleSummary(schedulesByTherapist.get(therapist.id) || []),
+    schedulesByDay: buildSchedulesByDay(schedulesByTherapist.get(therapist.id) || [])
   }));
+
+  const summary = {
+    total: hydrated.length,
+    active: hydrated.filter((entry) => entry.status === "ACTIVE").length,
+    inactive: hydrated.filter((entry) => entry.status === "INACTIVE").length
+  };
 
   return {
     generatedAt: nowDate.toISOString(),
@@ -297,6 +487,7 @@ async function listAdminTherapists({
       status: statusFilter,
       limit: rowLimit
     },
+    summary,
     therapists: hydrated
   };
 }
@@ -337,43 +528,67 @@ async function getAdminTherapistDetail({
     });
   }
 
-  const [serviceRows] = await connection.query(
-    `SELECT
-      s.id,
-      s.slug,
-      s.name,
-      s.duration_minutes AS durationMinutes,
-      s.is_active AS isActive,
-      ts.priority,
-      ts.is_active AS relationIsActive
-     FROM therapist_services ts
-     INNER JOIN services s
-       ON s.center_id = ts.center_id
-      AND s.id = ts.service_id
-     WHERE ts.center_id = ?
-       AND ts.therapist_id = ?
-     ORDER BY ts.is_active DESC, s.is_active DESC, s.name ASC`,
-    [center.id, resolvedTherapistId]
-  );
+  const [[serviceRows], [scheduleRows], [compatibleRoomRows]] = await Promise.all([
+    connection.query(
+      `SELECT
+        s.id,
+        s.slug,
+        s.name,
+        s.duration_minutes AS durationMinutes,
+        s.is_active AS isActive,
+        ts.priority,
+        ts.is_active AS relationIsActive
+       FROM therapist_services ts
+       INNER JOIN services s
+         ON s.center_id = ts.center_id
+        AND s.id = ts.service_id
+       WHERE ts.center_id = ?
+         AND ts.therapist_id = ?
+       ORDER BY ts.is_active DESC, s.is_active DESC, s.name ASC`,
+      [center.id, resolvedTherapistId]
+    ),
+    connection.query(
+      `SELECT
+        id,
+        weekday,
+        start_time AS startTime,
+        end_time AS endTime,
+        slot_minutes AS slotMinutes,
+        valid_from AS validFrom,
+        valid_to AS validTo,
+        is_active AS isActive
+       FROM resource_schedules
+       WHERE center_id = ?
+         AND resource_type = 'therapist'
+         AND resource_id = ?
+       ORDER BY weekday ASC, start_time ASC, id ASC`,
+      [center.id, resolvedTherapistId]
+    ),
+    connection.query(
+      `SELECT
+        COUNT(DISTINCT r.id) AS compatibleRoomsCount
+       FROM therapist_services ts
+       INNER JOIN services s
+         ON s.center_id = ts.center_id
+        AND s.id = ts.service_id
+       INNER JOIN service_rooms sr
+         ON sr.center_id = ts.center_id
+        AND sr.service_id = ts.service_id
+       INNER JOIN rooms r
+         ON r.center_id = sr.center_id
+        AND r.id = sr.room_id
+       WHERE ts.center_id = ?
+         AND ts.therapist_id = ?
+         AND ts.is_active = 1
+         AND s.is_active = 1
+         AND sr.is_active = 1
+         AND r.is_active = 1`,
+      [center.id, resolvedTherapistId]
+    )
+  ]);
+  const compatibleRoomsCount = Number(compatibleRoomRows[0]?.compatibleRoomsCount || 0);
 
-  const [scheduleRows] = await connection.query(
-    `SELECT
-      id,
-      weekday,
-      start_time AS startTime,
-      end_time AS endTime,
-      slot_minutes AS slotMinutes,
-      valid_from AS validFrom,
-      valid_to AS validTo,
-      is_active AS isActive
-     FROM resource_schedules
-     WHERE center_id = ?
-       AND resource_type = 'therapist'
-       AND resource_id = ?
-     ORDER BY weekday ASC, start_time ASC, id ASC`,
-    [center.id, resolvedTherapistId]
-  );
-
+  const therapistStatusMeta = toStatusMeta(therapistRows[0].isActive);
   const therapist = {
     id: Number(therapistRows[0].id),
     slug: therapistRows[0].slug,
@@ -382,6 +597,10 @@ async function getAdminTherapistDetail({
     phone: therapistRows[0].phone || null,
     telegramChatId: therapistRows[0].telegramChatId || null,
     isActive: Number(therapistRows[0].isActive) === 1,
+    status: therapistStatusMeta.status,
+    statusLabel: therapistStatusMeta.statusLabel,
+    compatibleRoomsCount,
+    acceptsNew: DEFAULT_ACCEPTS_NEW,
     createdAt: toIso(therapistRows[0].createdAt)
   };
 
@@ -389,26 +608,36 @@ async function getAdminTherapistDetail({
     generatedAt: nowDate.toISOString(),
     center,
     therapist,
-    services: serviceRows.map((row) => ({
-      id: Number(row.id),
-      slug: row.slug,
-      name: row.name,
-      durationMinutes: Number(row.durationMinutes || 0),
-      isActive: Number(row.isActive) === 1,
-      relationIsActive: Number(row.relationIsActive) === 1,
-      priority: Number(row.priority || 0)
-    })),
-    schedules: scheduleRows.map((row) => ({
-      id: Number(row.id),
-      weekday: Number(row.weekday),
-      dayLabel: DAY_LABELS[Number(row.weekday)] || `Dia ${row.weekday}`,
-      startTime: row.startTime,
-      endTime: row.endTime,
-      slotMinutes: Number(row.slotMinutes || 60),
-      validFrom: row.validFrom ? String(row.validFrom).slice(0, 10) : null,
-      validTo: row.validTo ? String(row.validTo).slice(0, 10) : null,
-      isActive: Number(row.isActive) === 1
-    }))
+    services: serviceRows.map((row) => {
+      const serviceStatusMeta = toStatusMeta(row.relationIsActive);
+      return {
+        id: Number(row.id),
+        slug: row.slug,
+        name: row.name,
+        durationMinutes: Number(row.durationMinutes || 0),
+        isActive: Number(row.isActive) === 1,
+        relationIsActive: Number(row.relationIsActive) === 1,
+        relationStatus: serviceStatusMeta.status,
+        statusLabel: serviceStatusMeta.statusLabel,
+        priority: Number(row.priority || 0)
+      };
+    }),
+    schedules: scheduleRows.map((row) => {
+      const statusMeta = toStatusMeta(row.isActive);
+      return {
+        id: Number(row.id),
+        weekday: Number(row.weekday),
+        dayLabel: DAY_LABELS[Number(row.weekday)] || `Dia ${row.weekday}`,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        slotMinutes: Number(row.slotMinutes || 60),
+        validFrom: row.validFrom ? String(row.validFrom).slice(0, 10) : null,
+        validTo: row.validTo ? String(row.validTo).slice(0, 10) : null,
+        isActive: Number(row.isActive) === 1,
+        status: statusMeta.status,
+        statusLabel: statusMeta.statusLabel
+      };
+    })
   };
 }
 

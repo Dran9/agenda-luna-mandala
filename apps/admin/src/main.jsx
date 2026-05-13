@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  ArrowsClockwise,
+  CalendarDots,
   CalendarCheck,
+  CaretRight,
   CircleNotch,
   Clock,
   ClockCounterClockwise,
@@ -1576,141 +1579,412 @@ function ClientDrawer({ open, detail, loading, error, timezone, onClose }) {
   );
 }
 
-function compactSchedulesByDay(schedules) {
-  const groups = new Map();
+const THERAPIST_DAY_ORDER = {
+  Dom: 0,
+  Lun: 1,
+  Mar: 2,
+  Mie: 3,
+  Jue: 4,
+  Vie: 5,
+  Sab: 6
+};
 
-  for (const slot of schedules || []) {
-    const dayLabel = slot?.dayLabel || "-";
-    const range = `${slot?.startTime || "--:--"}-${slot?.endTime || "--:--"}`;
-    const existing = groups.get(dayLabel) || [];
-    if (!existing.includes(range)) {
-      existing.push(range);
-      groups.set(dayLabel, existing);
-    }
-  }
-
-  return Array.from(groups.entries()).map(([dayLabel, ranges]) => ({
-    dayLabel,
-    ranges
-  }));
+function getTherapistStatusMeta(therapist) {
+  const status = normalizeResourceStatus(therapist?.status, therapist?.isActive === true);
+  return {
+    status,
+    statusLabel: therapist?.statusLabel || getStatusLabelFromValue(status)
+  };
 }
 
-function TherapistsTable({ therapists, onSelect }) {
+function normalizeTherapistServices(services) {
+  if (!Array.isArray(services)) {
+    return [];
+  }
+
+  return services
+    .map((entry) => {
+      if (entry && typeof entry === "object") {
+        const serviceId = Number(entry.id || 0);
+        return {
+          id: Number.isInteger(serviceId) ? serviceId : 0,
+          name: String(entry.name || "").trim()
+        };
+      }
+
+      return {
+        id: 0,
+        name: String(entry || "").trim()
+      };
+    })
+    .filter((entry) => entry.name);
+}
+
+function normalizeTherapistScheduleGroups(therapist) {
+  const scheduleGroups = Array.isArray(therapist?.schedulesByDay) ? therapist.schedulesByDay : [];
+
+  if (scheduleGroups.length) {
+    return scheduleGroups
+      .map((entry) => {
+        const days = Array.isArray(entry?.days)
+          ? entry.days.filter(Boolean).map((day) => String(day))
+          : [];
+        const daysLabel = String(entry?.daysLabel || days.join(", ") || "-");
+        const normalizedStatus = normalizeResourceStatus(
+          entry?.status,
+          String(entry?.statusLabel || "").toLowerCase() === "activo"
+        );
+
+        const [startRaw, endRaw] = String(entry?.timeRange || "").split("-");
+        const startLabel = compactTimeLabel(startRaw || "--:--");
+        const endLabel = compactTimeLabel(endRaw || "--:--");
+        const timeRange = `${startLabel}-${endLabel}`;
+        const firstDay = days[0] || String(daysLabel).split(",")[0].trim();
+
+        return {
+          timeRange,
+          days,
+          daysLabel,
+          slotMinutes: Number(entry?.slotMinutes || 60),
+          status: normalizedStatus,
+          statusLabel: entry?.statusLabel || getStatusLabelFromValue(normalizedStatus),
+          _firstDay: THERAPIST_DAY_ORDER[firstDay] ?? 99
+        };
+      })
+      .sort((left, right) => {
+        if (left._firstDay !== right._firstDay) {
+          return left._firstDay - right._firstDay;
+        }
+
+        if (left.timeRange !== right.timeRange) {
+          return left.timeRange.localeCompare(right.timeRange);
+        }
+
+        if (left.status !== right.status) {
+          return left.status === "ACTIVE" ? -1 : 1;
+        }
+
+        return left.slotMinutes - right.slotMinutes;
+      })
+      .map((entry) => {
+        const { _firstDay, ...cleaned } = entry;
+        return cleaned;
+      });
+  }
+
+  const rawSchedules = Array.isArray(therapist?.schedules) ? therapist.schedules : [];
+  const grouped = new Map();
+
+  for (const slot of rawSchedules) {
+    const dayLabel = String(slot?.dayLabel || "-");
+    const weekday = Number(slot?.weekday);
+    const startLabel = compactTimeLabel(slot?.startTime || "--:--");
+    const endLabel = compactTimeLabel(slot?.endTime || "--:--");
+    const timeRange = `${startLabel}-${endLabel}`;
+    const normalizedStatus = normalizeResourceStatus(slot?.status, slot?.isActive === true);
+    const key = `${timeRange}|${slot?.slotMinutes || 60}|${normalizedStatus}`;
+    const existing = grouped.get(key) || {
+      timeRange,
+      slotMinutes: Number(slot?.slotMinutes || 60),
+      status: normalizedStatus,
+      statusLabel: slot?.statusLabel || getStatusLabelFromValue(normalizedStatus),
+      days: [],
+      weekdays: []
+    };
+
+    if (!existing.days.includes(dayLabel)) {
+      existing.days.push(dayLabel);
+      existing.weekdays.push(Number.isInteger(weekday) ? weekday : THERAPIST_DAY_ORDER[dayLabel] ?? 99);
+    }
+
+    grouped.set(key, existing);
+  }
+
+  return Array.from(grouped.values())
+    .map((entry) => {
+      const sortedDays = entry.days
+        .map((dayLabel, index) => ({
+          dayLabel,
+          weekday: entry.weekdays[index]
+        }))
+        .sort((left, right) => left.weekday - right.weekday);
+      const days = sortedDays.map((pair) => pair.dayLabel);
+
+      return {
+        timeRange: entry.timeRange,
+        days,
+        daysLabel: days.join(", "),
+        slotMinutes: entry.slotMinutes,
+        status: entry.status,
+        statusLabel: entry.statusLabel,
+        _firstDay: sortedDays[0]?.weekday ?? 99
+      };
+    })
+    .sort((left, right) => {
+      if (left._firstDay !== right._firstDay) {
+        return left._firstDay - right._firstDay;
+      }
+      return left.timeRange.localeCompare(right.timeRange);
+    })
+    .map((entry) => {
+      const { _firstDay, ...cleaned } = entry;
+      return cleaned;
+    });
+}
+
+function splitVisibleItems(items, maxVisible) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const visible = safeItems.slice(0, maxVisible);
+  return {
+    visible,
+    hiddenCount: Math.max(safeItems.length - visible.length, 0)
+  };
+}
+
+function getTherapistInitials(therapist) {
+  const displayName = String(therapist?.displayName || therapist?.fullName || "").trim();
+  if (!displayName) {
+    return "--";
+  }
+
+  const words = displayName.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+  }
+
+  return displayName[0].toUpperCase();
+}
+
+function getTherapistSchedulePreview(therapist) {
+  const schedulesByDay = normalizeTherapistScheduleGroups(therapist);
+  if (!schedulesByDay.length) {
+    return {
+      summary: "Sin horario base",
+      extraCount: 0
+    };
+  }
+
+  const first = schedulesByDay[0];
+  return {
+    summary: `${first.daysLabel} ${first.timeRange}`,
+    extraCount: Math.max(schedulesByDay.length - 1, 0)
+  };
+}
+
+function TherapistsGrid({ therapists, onSelect }) {
   if (!therapists.length) {
     return <p className="empty-state">No hay terapeutas para este filtro.</p>;
   }
 
   return (
-    <>
-      <div className="table-wrap" role="region" aria-label="Tabla de terapeutas">
-        <table className="appointments-table therapists-table">
-          <thead>
-            <tr>
-              <th className="col-therapist-main">Terapeuta</th>
-              <th className="col-status">Estado</th>
-              <th className="col-services">Servicios</th>
-              <th className="col-schedule">Horario base</th>
-            </tr>
-          </thead>
-          <tbody>
-            {therapists.map((therapist) => {
-              const scheduleGroups = compactSchedulesByDay(therapist.schedules || []);
+    <div className="therapists-grid" role="list" aria-label="Directorio de terapeutas">
+      {therapists.map((therapist) => {
+        const statusMeta = getTherapistStatusMeta(therapist);
+        const services = normalizeTherapistServices(therapist?.services);
+        const visibleServices = splitVisibleItems(services, 4);
+        const schedulePreview = getTherapistSchedulePreview(therapist);
+        const displayName = therapist.displayName || therapist.fullName || "Terapeuta sin nombre";
+        const compatibleRoomsCount = Number(therapist?.compatibleRoomsCount ?? 0);
+        const servicesCount = Number(therapist?.servicesCount ?? services.length ?? 0);
 
-              return (
-                <tr key={`therapist-${therapist.id}`}>
-                  <td className="col-therapist-main">
-                    <button
-                      type="button"
-                      className="table-open"
-                      onClick={() => onSelect?.(therapist.id)}
-                      title="Abrir ficha terapeuta"
-                    >
-                      {therapist.displayName || therapist.fullName || `Terapeuta ${therapist.id}`}
-                    </button>
-                    <div className="resource-meta-lines">
-                      {therapist.phone ? <span>{therapist.phone}</span> : null}
-                      {therapist.telegramChatId ? <span>Telegram: {therapist.telegramChatId}</span> : null}
-                      {!therapist.phone && !therapist.telegramChatId ? <span>-</span> : null}
-                    </div>
-                  </td>
-                  <td className="col-status">
-                    <StatusChip status={therapist.isActive ? "active" : "inactive"} />
-                  </td>
-                  <td className="col-services">
-                    {therapist.services?.length ? (
-                      <div className="inline-tag-list">
-                        {therapist.services.map((serviceName) => (
-                          <span key={`${therapist.id}-${serviceName}`} className="inline-tag">
-                            {serviceName}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                  <td className="col-schedule">
-                    {scheduleGroups.length ? (
-                      <div className="schedule-chip-list">
-                        {scheduleGroups.map((group) => (
-                          <span
-                            key={`${therapist.id}-schedule-${group.dayLabel}`}
-                            className="schedule-chip"
-                          >
-                            <strong>{group.dayLabel}</strong>
-                            <span>{group.ranges.join(" · ")}</span>
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <ul className="appointments-cards" aria-label="Lista de terapeutas mobile">
-        {therapists.map((therapist) => {
-          const scheduleGroups = compactSchedulesByDay(therapist.schedules || []);
-
-          return (
-            <li key={`therapist-mobile-${therapist.id}`} className="appointment-card">
-              <button type="button" className="card-open" onClick={() => onSelect?.(therapist.id)}>
-                <span className="appointment-title">
-                  {therapist.displayName || therapist.fullName || `Terapeuta ${therapist.id}`}
-                </span>
-                <StatusChip status={therapist.isActive ? "active" : "inactive"} />
-              </button>
-              <p className="appointment-line">Telefono: {therapist.phone || "-"}</p>
-              <p className="appointment-line">Telegram: {therapist.telegramChatId || "-"}</p>
-              <div className="inline-tag-list">
-                {therapist.services?.length
-                  ? therapist.services.map((serviceName) => (
-                      <span key={`mobile-${therapist.id}-${serviceName}`} className="inline-tag">
-                        {serviceName}
-                      </span>
-                    ))
-                  : <span className="inline-tag is-empty">Sin servicios</span>}
+        return (
+          <button
+            key={`therapist-card-${therapist.id}`}
+            type="button"
+            className={`therapist-grid-card${statusMeta.status === "INACTIVE" ? " is-inactive" : ""}`}
+            onClick={() => onSelect?.(therapist.id)}
+            aria-label={`Abrir perfil de ${displayName}`}
+          >
+            <div className="therapist-grid-top">
+              <span className="therapist-avatar" aria-hidden="true">
+                {getTherapistInitials(therapist)}
+              </span>
+              <div className="therapist-identity">
+                <h3>{displayName}</h3>
+                <p>
+                  Terapeuta
+                  {therapist?.slug ? <span> · #{therapist.slug}</span> : null}
+                </p>
               </div>
-              {scheduleGroups.length ? (
-                <div className="schedule-chip-list">
-                  {scheduleGroups.map((group) => (
-                    <span key={`mobile-${therapist.id}-${group.dayLabel}`} className="schedule-chip">
-                      <strong>{group.dayLabel}</strong>
-                      <span>{group.ranges.join(" · ")}</span>
+              <StatusChip status={statusToChipKey(statusMeta.status)} />
+            </div>
+
+            <div className="therapist-grid-stats" aria-label="Resumen operativo">
+              <div className="therapist-grid-stat">
+                <span>Servicios</span>
+                <strong>{servicesCount}</strong>
+              </div>
+              <div className="therapist-grid-stat">
+                <span>Salas compatibles</span>
+                <strong>{compatibleRoomsCount}</strong>
+              </div>
+            </div>
+
+            <div className="therapist-grid-tags">
+              {visibleServices.visible.length
+                ? visibleServices.visible.map((service) => (
+                    <span key={`therapist-chip-${therapist.id}-${service.id || service.name}`} className="inline-tag therapist-service-chip">
+                      {service.name}
                     </span>
-                  ))}
-                </div>
+                  ))
+                : <span className="inline-tag therapist-service-chip is-empty">Sin servicios</span>}
+              {visibleServices.hiddenCount > 0 ? (
+                <span className="inline-tag therapist-service-chip therapist-service-chip-more">+{visibleServices.hiddenCount}</span>
               ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    </>
+            </div>
+
+            <div className="therapist-grid-foot">
+              <span>{schedulePreview.summary}</span>
+              <span className="therapist-grid-foot-tail">
+                {schedulePreview.extraCount > 0 ? `+${schedulePreview.extraCount} mas` : null}
+                <CaretRight size={14} weight="bold" aria-hidden="true" />
+              </span>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TherapistsReadonlyView({
+  payload,
+  generatedAtLabel,
+  onRefresh,
+  isLoading,
+  isRefreshing,
+  isStale,
+  errorMessage,
+  onSelect
+}) {
+  const [searchValue, setSearchValue] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const therapists = Array.isArray(payload?.therapists) ? payload.therapists : [];
+  const summary = payload?.summary || {
+    total: therapists.length,
+    active: therapists.filter((entry) => normalizeResourceStatus(entry?.status, entry?.isActive === true) === "ACTIVE").length,
+    inactive: therapists.filter((entry) => normalizeResourceStatus(entry?.status, entry?.isActive === true) === "INACTIVE").length
+  };
+
+  const filteredTherapists = useMemo(() => {
+    const query = String(searchValue || "").trim().toLowerCase();
+    const statusValue = String(statusFilter || "all").trim().toLowerCase();
+
+    return therapists.filter((therapist) => {
+      const status = normalizeResourceStatus(therapist?.status, therapist?.isActive === true);
+      const statusMatches =
+        statusValue === "all" ||
+        (statusValue === "active" && status === "ACTIVE") ||
+        (statusValue === "inactive" && status === "INACTIVE");
+
+      if (!statusMatches) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      const services = normalizeTherapistServices(therapist?.services);
+      const schedulesByDay = normalizeTherapistScheduleGroups(therapist);
+      const haystack = [
+        therapist?.displayName,
+        therapist?.fullName,
+        therapist?.contactSummary,
+        therapist?.phone,
+        therapist?.telegramChatId ? "telegram" : "",
+        ...services.map((service) => service.name),
+        ...schedulesByDay.map((slot) => `${slot.daysLabel} ${slot.timeRange}`),
+        therapist?.statusLabel
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [therapists, searchValue, statusFilter]);
+
+  return (
+    <section className="therapists-shell" aria-label="Terapeutas operativos">
+      <header className="therapists-header">
+        <div>
+          <h2>Terapeutas</h2>
+          <p>Configuracion operativa de terapeutas, servicios compatibles y horarios base.</p>
+        </div>
+        <div className="therapists-header-meta">
+          <span className="settings-chip">Actualizado: {generatedAtLabel}</span>
+          <span className="settings-chip">Total: {summary.total || 0}</span>
+          <span className="settings-chip">Activos: {summary.active || 0}</span>
+          <span className="settings-chip">Inactivos: {summary.inactive || 0}</span>
+        </div>
+      </header>
+
+      <section className="panel therapists-panel" aria-label="Vista de terapeutas">
+        <div className="therapists-toolbar">
+          <label className="settings-search-field therapists-search-field" htmlFor="therapists-search">
+            <MagnifyingGlass size={16} aria-hidden="true" />
+            <input
+              id="therapists-search"
+              type="search"
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
+              placeholder="Buscar terapeuta..."
+            />
+          </label>
+
+          <label className="settings-status-field therapists-status-field" htmlFor="therapists-status-filter">
+            <span>Estado</span>
+            <select
+              id="therapists-status-filter"
+              className="control-input"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+            >
+              <option value="all">Todos</option>
+              <option value="active">Activos</option>
+              <option value="inactive">Inactivos</option>
+            </select>
+          </label>
+
+          <p className="settings-counter therapists-counter" aria-live="polite">
+            {filteredTherapists.length} resultados
+          </p>
+
+          <button
+            type="button"
+            className="refresh-button therapists-refresh-button"
+            onClick={onRefresh}
+            disabled={isLoading || isRefreshing}
+          >
+            <ArrowsClockwise size={15} weight="bold" aria-hidden="true" className={isLoading || isRefreshing ? "spin" : ""} />
+            <span>{isLoading || isRefreshing ? "Actualizando..." : "Actualizar"}</span>
+          </button>
+        </div>
+
+        {isRefreshing ? (
+          <p className="feedback subtle settings-feedback">Actualizando terapeutas en segundo plano...</p>
+        ) : null}
+        {isStale ? (
+          <p className="feedback error settings-feedback">
+            No se pudo refrescar Terapeutas. Mostrando la ultima carga valida.
+            {errorMessage ? ` (${errorMessage})` : ""}
+          </p>
+        ) : null}
+        {isLoading && !therapists.length ? <p className="feedback">Cargando terapeutas...</p> : null}
+        {errorMessage && !therapists.length ? <p className="feedback error">{errorMessage}</p> : null}
+
+        {!isLoading && !errorMessage && !therapists.length ? (
+          <p className="empty-state">Sin terapeutas disponibles para este centro.</p>
+        ) : null}
+        {therapists.length && !filteredTherapists.length ? (
+          <p className="empty-state">Sin resultados para el filtro actual.</p>
+        ) : null}
+        {filteredTherapists.length ? (
+          <TherapistsGrid therapists={filteredTherapists} onSelect={onSelect} />
+        ) : null}
+      </section>
+    </section>
   );
 }
 
@@ -1720,70 +1994,107 @@ function TherapistDrawer({ open, detail, loading, error, onClose }) {
   }
 
   const therapist = detail?.therapist || null;
-  const services = detail?.services || [];
-  const schedules = detail?.schedules || [];
+  const services = Array.isArray(detail?.services) ? detail.services : [];
+  const schedules = Array.isArray(detail?.schedules) ? detail.schedules : [];
+  const scheduleGroups = normalizeTherapistScheduleGroups({ schedulesByDay: [], schedules });
+  const statusMeta = getTherapistStatusMeta(therapist);
+  const therapistName = therapist?.displayName || therapist?.fullName || "Terapeuta";
 
   return (
     <div className="drawer-overlay" role="presentation" onClick={onClose}>
       <aside
-        className="drawer"
+        className="drawer therapist-drawer"
         role="dialog"
         aria-modal="true"
         aria-label="Ficha terapeuta"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="drawer-header">
-          <div>
-            <p className="drawer-kicker">Ficha terapeuta</p>
-            <h2>{therapist?.displayName || therapist?.fullName || "Terapeuta"}</h2>
+        <header className="drawer-header therapist-drawer-header" id="therapist-drawer-title">
+          <div className="therapist-drawer-hero">
+            <span className="therapist-drawer-avatar" aria-hidden="true">
+              {getTherapistInitials(therapist)}
+            </span>
+            <div className="therapist-drawer-heading">
+              <h2>{therapistName}</h2>
+              <div className="therapist-drawer-meta-row">
+                {therapist?.slug ? <code>#{therapist.slug}</code> : null}
+                <StatusChip status={statusToChipKey(statusMeta.status)} />
+              </div>
+            </div>
           </div>
           <button type="button" className="drawer-close" onClick={onClose} aria-label="Cerrar terapeuta">
             <X size={18} weight="bold" />
           </button>
         </header>
+        <nav className="therapist-drawer-tabs" aria-label="Secciones terapeuta">
+          <button type="button" className="is-active">
+            <UserCircle size={16} weight="regular" aria-hidden="true" />
+            <span>Perfil</span>
+          </button>
+          <button type="button" disabled aria-disabled="true" title="Proximamente">
+            <SlidersHorizontal size={16} weight="regular" aria-hidden="true" />
+            <span>Operativa</span>
+          </button>
+          <button type="button" disabled aria-disabled="true" title="Proximamente">
+            <CalendarDots size={16} weight="regular" aria-hidden="true" />
+            <span>Disponibilidad</span>
+          </button>
+        </nav>
 
         {loading ? <p className="feedback drawer-feedback">Cargando terapeuta...</p> : null}
         {!loading && error ? <p className="feedback error drawer-feedback">{error}</p> : null}
 
         {!loading && !error && therapist ? (
-          <div className="drawer-body">
-            <DrawerSection title="Datos">
-              <dl className="drawer-grid">
-                <dt>Nombre</dt>
-                <dd>{therapist.fullName || "-"}</dd>
-                <dt>Display</dt>
-                <dd>{therapist.displayName || "-"}</dd>
-                <dt>Estado</dt>
-                <dd>{therapist.isActive ? "Activo" : "Inactivo"}</dd>
-                <dt>Telefono</dt>
-                <dd>{therapist.phone || "-"}</dd>
-                <dt>Telegram</dt>
-                <dd>{therapist.telegramChatId || "-"}</dd>
-              </dl>
+          <div className="drawer-body therapist-drawer-body">
+            <DrawerSection title="Contacto">
+              <ul className="therapist-contact-list">
+                <li>
+                  <span>Telefono</span>
+                  <strong>{therapist.phone || "-"}</strong>
+                </li>
+                <li>
+                  <span>Telegram</span>
+                  <strong>{therapist.telegramChatId || "-"}</strong>
+                </li>
+              </ul>
             </DrawerSection>
 
-            <DrawerSection title="Servicios asociados">
+            <DrawerSection title="Servicios">
               {services.length ? (
-                <ul className="drawer-list">
-                  {services.map((service) => (
-                    <li key={`therapist-service-${service.id}`}>
-                      <span>{service.name}</span>
-                      <span>{service.durationMinutes} min</span>
-                    </li>
-                  ))}
+                <ul className="drawer-list therapist-drawer-list therapist-drawer-list-services">
+                  {services.map((service) => {
+                    const relationStatus = normalizeResourceStatus(
+                      service?.relationStatus,
+                      service?.relationIsActive === true
+                    );
+                    return (
+                      <li key={`therapist-service-${service.id}`}>
+                        <span>{service.name || "Servicio"}</span>
+                        <span className="therapist-drawer-service-meta">
+                          {service.durationMinutes ? `${service.durationMinutes} min` : "Sin duracion"} ·{" "}
+                          {service.statusLabel || getStatusLabelFromValue(relationStatus)}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <p className="empty-state compact">Sin servicios asociados.</p>
               )}
             </DrawerSection>
 
-            <DrawerSection title="Horarios base (read-only)">
-              {schedules.length ? (
-                <ul className="drawer-list">
-                  {schedules.map((slot) => (
-                    <li key={`therapist-schedule-${slot.id}`}>
-                      <span>{slot.dayLabel}</span>
-                      <span>{slot.startTime} - {slot.endTime}</span>
+            <DrawerSection title="Horarios base">
+              {scheduleGroups.length ? (
+                <ul className="drawer-list therapist-drawer-list therapist-drawer-list-schedules">
+                  {scheduleGroups.map((group) => (
+                    <li key={`therapist-schedule-${group.daysLabel}-${group.timeRange}-${group.status}`}>
+                      <span className="therapist-drawer-schedule-days">{group.daysLabel}</span>
+                      <span className="therapist-drawer-schedule-time">
+                        {group.timeRange}
+                      </span>
+                      <span className="therapist-drawer-service-meta">
+                        {group.slotMinutes} min · {group.statusLabel}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -2506,16 +2817,6 @@ function AdminApp() {
   const [historyRefreshing, setHistoryRefreshing] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [historyPayload, setHistoryPayload] = useState(null);
-  const [therapistsDraft, setTherapistsDraft] = useState({
-    q: "",
-    status: "all",
-    limit: 20
-  });
-  const [therapistsFilters, setTherapistsFilters] = useState({
-    q: "",
-    status: "all",
-    limit: 20
-  });
   const [therapistsRefreshTick, setTherapistsRefreshTick] = useState(0);
   const [therapistsLoading, setTherapistsLoading] = useState(false);
   const [therapistsRefreshing, setTherapistsRefreshing] = useState(false);
@@ -2943,7 +3244,7 @@ function AdminApp() {
       try {
         const query = activeSection === "control"
           ? buildTherapistsQuery({ q: "", status: "active", limit: 100 })
-          : buildTherapistsQuery(therapistsFilters);
+          : buildTherapistsQuery({ q: "", status: "all", limit: 100 });
         const response = await fetch(`/api/admin/therapists?${query}`, {
           method: "GET",
           headers: {
@@ -2984,7 +3285,7 @@ function AdminApp() {
     return () => {
       controller.abort();
     };
-  }, [authToken, activeSection, therapistsFilters, therapistsRefreshTick, handleUnauthorized]);
+  }, [authToken, activeSection, therapistsRefreshTick, handleUnauthorized]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -4101,26 +4402,6 @@ function AdminApp() {
     setHistoryRefreshTick((value) => value + 1);
   }
 
-  function handleTherapistsFiltersSubmit(event) {
-    event.preventDefault();
-    setTherapistsFilters({
-      q: String(therapistsDraft.q || "").trim(),
-      status: therapistsDraft.status || "all",
-      limit: Number(therapistsDraft.limit) || 20
-    });
-  }
-
-  function handleTherapistsFiltersReset() {
-    const next = {
-      q: "",
-      status: "all",
-      limit: 20
-    };
-    setTherapistsDraft(next);
-    setTherapistsFilters(next);
-    setTherapistsRefreshTick((value) => value + 1);
-  }
-
   function openTherapistDrawer(therapistId) {
     setSelectedTherapistId(therapistId);
     setTherapistDrawerOpen(true);
@@ -4404,26 +4685,6 @@ function AdminApp() {
                     : `Borrar clientes (${selectedClientIds.length})`}
                 </span>
               </button>
-            ) : null}
-
-            {authToken && isTherapistsSection ? (
-              <>
-                <button
-                  type="button"
-                  className="refresh-button"
-                  onClick={() => setTherapistsRefreshTick((value) => value + 1)}
-                  disabled={therapistsLoading || therapistsRefreshing}
-                >
-                  {therapistsLoading || therapistsRefreshing ? "Actualizando..." : "Actualizar"}
-                </button>
-                <p className={`refresh-indicator${therapistsError ? " is-error" : ""}`}>
-                  {therapistsRefreshing
-                    ? "Actualizando terapeutas..."
-                    : therapistsError
-                      ? "Error en ultima actualizacion"
-                      : "Terapeutas al dia"}
-                </p>
-              </>
             ) : null}
 
             {authToken ? (
@@ -5065,106 +5326,17 @@ function AdminApp() {
 
               {isTherapistsSection ? (
                 <>
-                  <section className="panel" aria-label="Filtros terapeutas">
-                    <form className="client-command-bar" onSubmit={handleTherapistsFiltersSubmit}>
-                      <label className="client-filter-field" htmlFor="therapists-search">
-                        <span>Buscar</span>
-                        <input
-                          id="therapists-search"
-                          type="search"
-                          value={therapistsDraft.q}
-                          onChange={(event) =>
-                            setTherapistsDraft((value) => ({ ...value, q: event.target.value }))
-                          }
-                          placeholder="Nombre o telefono"
-                        />
-                      </label>
-
-                      <label className="client-filter-field" htmlFor="therapists-status">
-                        <span>Estado</span>
-                        <select
-                          id="therapists-status"
-                          className="control-input"
-                          value={therapistsDraft.status}
-                          onChange={(event) =>
-                            setTherapistsDraft((value) => ({
-                              ...value,
-                              status: event.target.value
-                            }))
-                          }
-                        >
-                          <option value="all">Todos</option>
-                          <option value="active">Activos</option>
-                          <option value="inactive">Inactivos</option>
-                        </select>
-                      </label>
-
-                      <label className="client-filter-field" htmlFor="therapists-limit">
-                        <span>Limit</span>
-                        <select
-                          id="therapists-limit"
-                          className="control-input"
-                          value={therapistsDraft.limit}
-                          onChange={(event) =>
-                            setTherapistsDraft((value) => ({
-                              ...value,
-                              limit: Number(event.target.value)
-                            }))
-                          }
-                        >
-                          <option value={10}>10</option>
-                          <option value={20}>20</option>
-                          <option value={30}>30</option>
-                          <option value={50}>50</option>
-                        </select>
-                      </label>
-
-                      <div className="client-command-actions">
-                        <button type="submit" className="refresh-button">Buscar</button>
-                        <button
-                          type="button"
-                          className="logout-button"
-                          onClick={handleTherapistsFiltersReset}
-                        >
-                          Limpiar
-                        </button>
-                      </div>
-                    </form>
-                  </section>
-
-                  <section className="meta-strip" aria-label="Filtros activos terapeutas">
-                    <p>
-                      Filtro q: <strong>{therapistsFilters.q || "-"}</strong>
-                    </p>
-                    <p>
-                      Estado: <strong>{therapistsFilters.status}</strong>
-                    </p>
-                    <p>
-                      Ultima carga: <strong>{therapistsGeneratedAtLabel}</strong>
-                    </p>
-                  </section>
-
-                  {therapistsLoading && !hasTherapistsData ? (
-                    <p className="feedback">Cargando terapeutas...</p>
-                  ) : null}
-                  {therapistsError && !hasTherapistsData ? (
-                    <p className="feedback error">{therapistsError}</p>
-                  ) : null}
-                  {therapistsError && hasTherapistsData ? (
-                    <p className="feedback error">No se pudo actualizar terapeutas. Mostrando ultima carga valida.</p>
-                  ) : null}
-                  {therapistsRefreshing ? (
-                    <p className="feedback subtle">Actualizando terapeutas en segundo plano...</p>
-                  ) : null}
-
-                  {hasTherapistsData ? (
-                    <section className="panel" aria-label="Listado de terapeutas">
-                      <div className="panel-heading">
-                        <h2>Terapeutas</h2>
-                        <p>{listedTherapists.length} registros</p>
-                      </div>
-                      <TherapistsTable therapists={listedTherapists} onSelect={openTherapistDrawer} />
-                    </section>
+                  {hasTherapistsData || therapistsLoading || therapistsError ? (
+                    <TherapistsReadonlyView
+                      payload={therapistsPayload}
+                      generatedAtLabel={therapistsGeneratedAtLabel}
+                      onRefresh={() => setTherapistsRefreshTick((value) => value + 1)}
+                      isLoading={therapistsLoading}
+                      isRefreshing={therapistsRefreshing}
+                      isStale={Boolean(therapistsError && hasTherapistsData)}
+                      errorMessage={therapistsError}
+                      onSelect={openTherapistDrawer}
+                    />
                   ) : null}
                 </>
               ) : null}
