@@ -27,6 +27,7 @@ const ROOM_FEATURE_LABELS = {
   camilla: "Camilla",
   mesa: "Mesa"
 };
+let serviceRoomRequirementsTableExists = null;
 
 class AdminAppointmentsError extends Error {
   constructor({
@@ -345,6 +346,10 @@ function featureKeyToViewModel(featureKey) {
 }
 
 async function hasServiceRoomRequirementsTable(connection) {
+  if (typeof serviceRoomRequirementsTableExists === "boolean") {
+    return serviceRoomRequirementsTableExists;
+  }
+
   const [rows] = await connection.query(
     `SELECT COUNT(*) AS tableCount
      FROM information_schema.TABLES
@@ -352,7 +357,12 @@ async function hasServiceRoomRequirementsTable(connection) {
        AND TABLE_NAME = 'service_room_requirements'`
   );
 
-  return Number(rows[0]?.tableCount || 0) > 0;
+  serviceRoomRequirementsTableExists = Number(rows[0]?.tableCount || 0) > 0;
+  return serviceRoomRequirementsTableExists;
+}
+
+function resetServiceRoomRequirementsSchemaCache() {
+  serviceRoomRequirementsTableExists = null;
 }
 
 async function loadServiceRoomRequirementsByServiceId({ connection, centerId, serviceIds }) {
@@ -1832,5 +1842,6 @@ module.exports = {
   getAdminAppointmentDetail,
   deleteAdminAppointments,
   updateAdminAppointmentStatus,
-  updateAdminAppointmentRoom
+  updateAdminAppointmentRoom,
+  _resetServiceRoomRequirementsSchemaCache: resetServiceRoomRequirementsSchemaCache
 };

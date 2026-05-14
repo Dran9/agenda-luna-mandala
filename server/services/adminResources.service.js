@@ -48,6 +48,7 @@ const ROOM_FEATURE_LABELS = {
   mesa: "Mesa"
 };
 const ROOM_FEATURE_KEYS = new Set(Object.keys(ROOM_FEATURE_LABELS));
+let serviceRoomRequirementsTableExists = null;
 
 function toStatusMeta(isActiveRaw) {
   const status = Number(isActiveRaw) === 1 ? "ACTIVE" : "INACTIVE";
@@ -138,6 +139,10 @@ function featureKeyToViewModel(featureKey) {
 }
 
 async function hasServiceRoomRequirementsTable(connection) {
+  if (typeof serviceRoomRequirementsTableExists === "boolean") {
+    return serviceRoomRequirementsTableExists;
+  }
+
   const [rows] = await connection.query(
     `SELECT COUNT(*) AS tableCount
      FROM information_schema.TABLES
@@ -145,7 +150,12 @@ async function hasServiceRoomRequirementsTable(connection) {
        AND TABLE_NAME = 'service_room_requirements'`
   );
 
-  return Number(rows[0]?.tableCount || 0) > 0;
+  serviceRoomRequirementsTableExists = Number(rows[0]?.tableCount || 0) > 0;
+  return serviceRoomRequirementsTableExists;
+}
+
+function resetServiceRoomRequirementsSchemaCache() {
+  serviceRoomRequirementsTableExists = null;
 }
 
 async function loadServiceRoomRequirements(connection, centerId) {
@@ -781,5 +791,6 @@ module.exports = {
   AdminResourcesError,
   createRoom,
   listAdminResources,
-  updateRoom
+  updateRoom,
+  _resetServiceRoomRequirementsSchemaCache: resetServiceRoomRequirementsSchemaCache
 };

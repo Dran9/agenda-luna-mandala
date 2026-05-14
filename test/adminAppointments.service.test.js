@@ -1,8 +1,9 @@
 const assert = require("node:assert/strict");
-const test = require("node:test");
+const { beforeEach, test } = require("node:test");
 
 const {
   AdminAppointmentsError,
+  _resetServiceRoomRequirementsSchemaCache,
   createAdminManualAppointment,
   getAdminAppointmentDetail,
   listAdminAppointmentHistory,
@@ -11,6 +12,10 @@ const {
   updateAdminAppointmentStatus
 } = require("../server/services/adminAppointments.service");
 const { SlotOccupiedError, ValidationError } = require("../server/services/errors");
+
+beforeEach(() => {
+  _resetServiceRoomRequirementsSchemaCache();
+});
 
 function toComparableTime(value) {
   if (value instanceof Date) {

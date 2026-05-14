@@ -1,11 +1,16 @@
 const assert = require("node:assert/strict");
-const test = require("node:test");
+const { beforeEach, test } = require("node:test");
 
 const {
+  _resetServiceRoomRequirementsSchemaCache,
   createRoom,
   listAdminResources,
   updateRoom
 } = require("../server/services/adminResources.service");
+
+beforeEach(() => {
+  _resetServiceRoomRequirementsSchemaCache();
+});
 
 function createScriptedConnection(steps) {
   const scriptedSteps = [...steps];
