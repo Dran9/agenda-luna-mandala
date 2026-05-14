@@ -10,7 +10,7 @@ const {
   updateAdminAppointmentRoom,
   updateAdminAppointmentStatus
 } = require("../server/services/adminAppointments.service");
-const { ValidationError } = require("../server/services/errors");
+const { SlotOccupiedError, ValidationError } = require("../server/services/errors");
 
 function toComparableTime(value) {
   if (value instanceof Date) {
@@ -94,6 +94,7 @@ function createServiceConnection(seed) {
     services: (seed.services || []).map((entry) => ({ ...entry })),
     therapists: (seed.therapists || []).map((entry) => ({ ...entry })),
     rooms: (seed.rooms || []).map((entry) => ({ ...entry })),
+    roomFeatures: (seed.roomFeatures || []).map((entry) => ({ ...entry })),
     serviceRooms: (seed.serviceRooms || []).map((entry) => ({ ...entry })),
     serviceRoomRequirements: (seed.serviceRoomRequirements || []).map((entry) => ({ ...entry })),
     appointments: (seed.appointments || []).map((entry) => ({ ...entry })),
@@ -334,6 +335,21 @@ function createServiceConnection(seed) {
         return [rows];
       }
 
+      if (normalizedSql.includes("FROM room_features")) {
+        const centerId = Number(params[0]);
+        const roomIds = params.slice(1).map((entry) => Number(entry));
+        const rows = this.state.roomFeatures
+          .filter((entry) => entry.centerId === centerId)
+          .filter((entry) => roomIds.includes(Number(entry.roomId)))
+          .map((entry) => ({
+            roomId: entry.roomId,
+            featureKey: entry.featureKey
+          }))
+          .sort((left, right) => Number(left.roomId) - Number(right.roomId) || String(left.featureKey).localeCompare(String(right.featureKey)));
+
+        return [rows];
+      }
+
       if (normalizedSql.includes("FROM appointments a") && normalizedSql.includes("WHERE a.center_id = ?") && normalizedSql.includes("AND a.id = ?") && normalizedSql.includes("INNER JOIN clients")) {
         const [centerId, appointmentId] = params;
         const appointment = this.state.appointments.find(
@@ -425,26 +441,24 @@ function createServiceConnection(seed) {
         return [rows];
       }
 
-      if (normalizedSql.includes("FROM service_rooms sr") && normalizedSql.includes("INNER JOIN rooms r")) {
-        const [centerId, serviceId] = params;
+      if (normalizedSql.includes("FROM rooms r") && normalizedSql.includes("LEFT JOIN service_rooms sr")) {
+        const [serviceId, centerId] = params;
         const rows = this.state.serviceRooms
-          .filter((entry) => entry.centerId === centerId && entry.serviceId === serviceId && entry.isActive === 1)
-          .map((entry) => {
-            const room = this.state.rooms.find((item) => item.id === entry.roomId && item.isActive !== 0);
-
-            if (!room) {
-              return null;
-            }
-
+          .filter((entry) => entry.centerId === centerId && entry.serviceId === serviceId && entry.isActive === 1);
+        const compatibleRoomIds = new Set(rows.map((entry) => Number(entry.roomId)));
+        const roomRows = this.state.rooms
+          .filter((room) => room.centerId === undefined || Number(room.centerId) === centerId)
+          .filter((room) => room.isActive !== 0)
+          .map((room) => {
             return {
               roomId: room.id,
-              roomName: room.name
+              roomName: room.name,
+              serviceCompatible: compatibleRoomIds.has(Number(room.id)) ? 1 : 0
             };
           })
-          .filter(Boolean)
           .sort((left, right) => left.roomId - right.roomId);
 
-        return [rows];
+        return [roomRows];
       }
 
       if (
@@ -662,6 +676,7 @@ function baseSeed() {
     services: [{ id: 1, name: "Masaje Relajante" }],
     therapists: [{ id: 1, name: "Ana" }],
     rooms: [{ id: 1, name: "Sala Luna", isActive: 1 }],
+    roomFeatures: [{ centerId: 1, roomId: 1, featureKey: "camilla" }],
     serviceRooms: [{ centerId: 1, serviceId: 1, roomId: 1, isActive: 1 }],
     serviceRoomRequirements: [{ centerId: 1, serviceId: 1, featureKey: "camilla", isActive: 1 }],
     appointments: [],
@@ -992,6 +1007,7 @@ test("getAdminAppointmentDetail devuelve joins reales, claims y pagos", async ()
   assert.equal(payload.appointment.clientContext.activeAppointments.length, 1);
   assert.equal(payload.appointment.roomOptions.length, 1);
   assert.equal(payload.appointment.roomOptions[0].available, true);
+  assert.deepEqual(payload.appointment.roomOptions[0].featureKeys, ["camilla"]);
 });
 
 test("createAdminManualAppointment usa hold+confirm compartidos y source admin_manual", async () => {
@@ -1753,4 +1769,105 @@ test("room change: sala ocupada devuelve ROOM_NOT_AVAILABLE", async () => {
       return true;
     }
   );
+});
+
+test("room change: permite override a sala activa disponible aunque no sea compatible por servicio", async () => {
+  const seed = baseSeed();
+  seed.rooms = [
+    { id: 1, name: "Sala Luna", isActive: 1 },
+    { id: 2, name: "Sala Sillas", isActive: 1 }
+  ];
+  seed.roomFeatures = [{ centerId: 1, roomId: 1, featureKey: "camilla" }];
+  seed.serviceRooms = [
+    { centerId: 1, serviceId: 1, roomId: 1, isActive: 1 }
+  ];
+  seed.appointments = [
+    {
+      id: 403,
+      centerId: 1,
+      publicCode: "PUB-ROOM-403",
+      status: "confirmed",
+      startsAt: "2026-05-10T12:00:00-04:00",
+      endsAt: "2026-05-10T12:02:00-04:00",
+      createdAt: "2026-05-09T18:00:00.000Z",
+      clientId: 1,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    }
+  ];
+  seed.claims = [
+    { id: 81, centerId: 1, appointmentId: 403, resourceType: "therapist", resourceId: 1, claimTime: "2026-05-10 12:00:00", createdAt: "2026-05-09T18:00:01.000Z" },
+    { id: 82, centerId: 1, appointmentId: 403, resourceType: "room", resourceId: 1, claimTime: "2026-05-10 12:00:00", createdAt: "2026-05-09T18:00:01.000Z" },
+    { id: 83, centerId: 1, appointmentId: 403, resourceType: "therapist", resourceId: 1, claimTime: "2026-05-10 12:01:00", createdAt: "2026-05-09T18:00:01.000Z" },
+    { id: 84, centerId: 1, appointmentId: 403, resourceType: "room", resourceId: 1, claimTime: "2026-05-10 12:01:00", createdAt: "2026-05-09T18:00:01.000Z" }
+  ];
+
+  const connection = createServiceConnection(seed);
+  const payload = await updateAdminAppointmentRoom({
+    connection,
+    appointmentId: 403,
+    roomId: 2,
+    adminSession: { centerId: 1 }
+  });
+
+  assert.equal(payload.roomChange.fromRoomId, 1);
+  assert.equal(payload.roomChange.toRoomId, 2);
+  assert.equal(payload.appointment.room.id, 2);
+  assert.equal(payload.appointment.roomOptions.find((room) => room.id === 2).serviceCompatible, false);
+  assert.deepEqual(payload.appointment.roomOptions.find((room) => room.id === 2).featureKeys, []);
+  assert.equal(connection.state.appointments[0].roomId, 2);
+  assert.equal(connection.state.claims.filter((entry) => entry.appointmentId === 403 && entry.resourceType === "room").every((entry) => entry.resourceId === 2), true);
+});
+
+test("room change: si claims se ocupan durante confirmacion hace rollback de sala", async () => {
+  const seed = baseSeed();
+  seed.rooms = [
+    { id: 1, name: "Sala Luna", isActive: 1 },
+    { id: 2, name: "Sala Sol", isActive: 1 }
+  ];
+  seed.serviceRooms = [
+    { centerId: 1, serviceId: 1, roomId: 1, isActive: 1 },
+    { centerId: 1, serviceId: 1, roomId: 2, isActive: 1 }
+  ];
+  seed.appointments = [
+    {
+      id: 404,
+      centerId: 1,
+      publicCode: "PUB-ROOM-404",
+      status: "confirmed",
+      startsAt: "2026-05-10T13:00:00-04:00",
+      endsAt: "2026-05-10T13:02:00-04:00",
+      createdAt: "2026-05-09T18:00:00.000Z",
+      clientId: 1,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    }
+  ];
+
+  const connection = createServiceConnection(seed);
+
+  await assert.rejects(
+    updateAdminAppointmentRoom({
+      connection,
+      appointmentId: 404,
+      roomId: 2,
+      adminSession: { centerId: 1 },
+      createClaims: async () => {
+        throw new SlotOccupiedError("Sala ocupada en carrera", { resourceType: "room" });
+      }
+    }),
+    (error) => {
+      assert.equal(error instanceof AdminAppointmentsError, true);
+      assert.equal(error.code, "ROOM_NOT_AVAILABLE");
+      assert.equal(error.status, 409);
+      return true;
+    }
+  );
+
+  assert.equal(connection.state.appointments[0].roomId, 1);
+  assert.equal(connection._snapshot, null);
 });

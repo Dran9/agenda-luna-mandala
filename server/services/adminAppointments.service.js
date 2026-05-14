@@ -395,6 +395,45 @@ async function loadServiceRoomRequirementsByServiceId({ connection, centerId, se
   return result;
 }
 
+async function loadRoomFeaturesByRoomId({ connection, centerId, roomIds }) {
+  const normalizedIds = Array.from(
+    new Set(
+      (roomIds || [])
+        .map((entry) => Number(entry))
+        .filter((entry) => Number.isInteger(entry) && entry > 0)
+    )
+  );
+
+  const result = new Map();
+  if (!normalizedIds.length) {
+    return result;
+  }
+
+  const inClause = buildInClause(normalizedIds);
+  const [rows] = await connection.query(
+    `SELECT
+      room_id AS roomId,
+      feature_key AS featureKey
+     FROM room_features
+     WHERE center_id = ?
+       AND room_id IN ${inClause.sql}
+     ORDER BY room_id ASC, feature_key ASC`,
+    [centerId, ...inClause.values]
+  );
+
+  for (const row of rows) {
+    const roomId = Number(row.roomId);
+    const feature = featureKeyToViewModel(row.featureKey);
+    if (!roomId || !feature) continue;
+    if (!result.has(roomId)) {
+      result.set(roomId, []);
+    }
+    result.get(roomId).push(feature);
+  }
+
+  return result;
+}
+
 function baseAppointmentSelectSql() {
   return `SELECT
     a.id,
@@ -948,17 +987,18 @@ async function getRoomOptionsForAppointment({
   const [roomRows] = await connection.query(
     `SELECT
       r.id AS roomId,
-      r.name AS roomName
-     FROM service_rooms sr
-     INNER JOIN rooms r
-       ON r.id = sr.room_id
-      AND r.center_id = sr.center_id
-     WHERE sr.center_id = ?
-       AND sr.service_id = ?
-       AND sr.is_active = 1
+      r.name AS roomName,
+      CASE WHEN sr.room_id IS NULL THEN 0 ELSE 1 END AS serviceCompatible
+     FROM rooms r
+     LEFT JOIN service_rooms sr
+       ON sr.center_id = r.center_id
+      AND sr.room_id = r.id
+      AND sr.service_id = ?
+      AND sr.is_active = 1
+     WHERE r.center_id = ?
        AND r.is_active = 1
      ORDER BY r.id ASC`,
-    [centerId, serviceId]
+    [serviceId, centerId]
   );
 
   if (roomRows.length === 0) {
@@ -966,6 +1006,7 @@ async function getRoomOptionsForAppointment({
   }
 
   const roomIds = roomRows.map((entry) => Number(entry.roomId));
+  const featuresByRoomId = await loadRoomFeaturesByRoomId({ connection, centerId, roomIds });
   const inClause = buildInClause(roomIds);
   const startsAtDb = formatDateTimeForDbLocal(appointmentRow.startsAt, DEFAULT_DB_OFFSET);
   const endsAtDb = formatDateTimeForDbLocal(appointmentRow.endsAt, DEFAULT_DB_OFFSET);
@@ -992,12 +1033,17 @@ async function getRoomOptionsForAppointment({
   return roomRows.map((entry) => {
     const roomId = Number(entry.roomId);
     const blockedMinutes = blockedByRoomId.get(roomId) || 0;
+    const features = featuresByRoomId.get(roomId) || [];
     return {
       id: roomId,
       name: entry.roomName,
       available: blockedMinutes === 0,
       blockedMinutes,
-      current: roomId === currentRoomId
+      current: roomId === currentRoomId,
+      serviceCompatible: Number(entry.serviceCompatible || 0) === 1,
+      features,
+      featureKeys: features.map((feature) => feature.key),
+      featuresLabel: features.length ? features.map((feature) => feature.label).join(", ") : "-"
     };
   });
 }
@@ -1125,6 +1171,11 @@ async function listAdminAppointments({
      ORDER BY name ASC, id ASC`,
     [center.id]
   );
+  const roomFeaturesByRoomId = await loadRoomFeaturesByRoomId({
+    connection,
+    centerId: center.id,
+    roomIds: roomRows.map((row) => row.id)
+  });
 
   const roomsActiveRows = sortRowsByStartsAtAsc(
     mergeAppointmentRowsById(todayRows, upcomingRows, recentRows).filter((row) =>
@@ -1150,12 +1201,19 @@ async function listAdminAppointments({
     upcoming: mapAppointmentRowsWithRequirements(upcomingRows, requirementsByServiceId),
     recentCreated: mapAppointmentRowsWithRequirements(recentRows, requirementsByServiceId),
     roomsActive: mapAppointmentRowsWithRequirements(roomsActiveRows, requirementsByServiceId),
-    rooms: roomRows.map((row) => ({
-      id: Number(row.id),
-      slug: row.slug,
-      name: row.name,
-      capacity: Number(row.capacity || 1)
-    })),
+    rooms: roomRows.map((row) => {
+      const roomId = Number(row.id);
+      const features = roomFeaturesByRoomId.get(roomId) || [];
+      return {
+        id: roomId,
+        slug: row.slug,
+        name: row.name,
+        capacity: Number(row.capacity || 1),
+        features,
+        featureKeys: features.map((feature) => feature.key),
+        featuresLabel: features.length ? features.map((feature) => feature.label).join(", ") : "-"
+      };
+    }),
     metadata: {
       dbNow: formatDateTimeForDbLocal(nowDate, DEFAULT_DB_OFFSET)
     }
