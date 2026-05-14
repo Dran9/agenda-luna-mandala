@@ -15,6 +15,8 @@
 
   --success: #059669;
   --warning: #b45309;
+  --warning-soft: #fffbeb;
+  --warning-line: rgba(180, 83, 9, 0.28);
   --danger: #dc2626;
   --info: #0369a1;
 
@@ -45,6 +47,8 @@
 
   --success: #34d399;
   --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.12);
+  --warning-line: rgba(251, 191, 36, 0.34);
   --danger: #f87171;
   --info: #38bdf8;
 
@@ -2615,12 +2619,37 @@ select {
   padding-bottom: 12px;
 }
 
+.rooms-board-col-title-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
 .rooms-board-col-name {
   font-size: 1.4rem;
   font-weight: 700;
   letter-spacing: -0.015em;
   color: var(--ink);
   line-height: 1.2;
+}
+
+.rooms-board-col-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--warning-line, rgba(180, 83, 9, 0.28));
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .rooms-board-col-stats {
@@ -2696,6 +2725,10 @@ select {
 .rooms-board-card.status-no_show {
   border-left: 3px solid var(--danger);
   opacity: 0.85;
+}
+
+.rooms-board-card.is-fallback-room {
+  background: var(--surface-muted);
 }
 
 .rooms-board-card-time {

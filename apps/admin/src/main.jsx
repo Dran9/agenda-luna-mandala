@@ -837,6 +837,7 @@ function buildRoomColumnsModel({ appointments, rooms }) {
       key: String(room.id),
       roomId: Number(room.id),
       roomName: room.name || `Sala ${room.id}`,
+      isFallback: false,
       appointments: []
     });
   }
@@ -853,6 +854,7 @@ function buildRoomColumnsModel({ appointments, rooms }) {
         key: fallbackKey,
         roomId: null,
         roomName: item.room?.name || "Sin sala",
+        isFallback: true,
         appointments: []
       });
     }
@@ -955,28 +957,39 @@ function RoomsKanban({
         {columns.map((column) => {
           const isHover = hoverRoomKey === column.key && draggable && column.roomId !== null;
           const count = column.appointments.length;
+          const countLabel = column.isFallback
+            ? `${count} cita${count === 1 ? "" : "s"} existente${count === 1 ? "" : "s"}`
+            : `${count} cita${count === 1 ? "" : "s"} activa${count === 1 ? "" : "s"}`;
           return (
             <article
               key={column.key}
               className={`rooms-board-col${isHover ? " is-drop-target" : ""}${
-                column.roomId === null ? " is-disabled-target" : ""
+                column.isFallback ? " is-disabled-target" : ""
               }`}
+              aria-disabled={column.isFallback ? "true" : undefined}
               onDragOver={(event) => handleColumnDragOver(event, column)}
               onDragLeave={(event) => handleColumnDragLeave(event, column)}
               onDrop={(event) => handleColumnDrop(event, column)}
             >
               <header className="rooms-board-col-head">
-                <h3 className="rooms-board-col-name">{column.roomName}</h3>
+                <div className="rooms-board-col-title-row">
+                  <h3 className="rooms-board-col-name">{column.roomName}</h3>
+                  {column.isFallback ? (
+                    <span className="rooms-board-col-badge">Inactiva · citas existentes</span>
+                  ) : null}
+                </div>
                 <p className="rooms-board-col-stats">
-                  {count} cita{count === 1 ? "" : "s"} hoy
+                  {countLabel}
                 </p>
               </header>
 
               <div className="rooms-board-col-body">
                 {count === 0 ? (
                   <p className="rooms-board-empty">
-                    {column.roomId === null
-                      ? "Citas sin sala asignada"
+                    {column.isFallback
+                      ? "Sala inactiva conservada solo para mostrar citas existentes."
+                      : column.roomId === null
+                      ? "Citas sin sala asignada."
                       : "Sala libre. Arrastra una cita aqui."}
                   </p>
                 ) : (
@@ -993,7 +1006,7 @@ function RoomsKanban({
                         key={`event-${column.key}-${item.id}`}
                         className={`rooms-board-card status-${item.status || "pending"}${
                           dragOk ? " is-draggable" : ""
-                        }${isPending ? " is-pending" : ""}`}
+                        }${isPending ? " is-pending" : ""}${column.isFallback ? " is-fallback-room" : ""}`}
                         data-status={item.status || "pending"}
                         draggable={dragOk && !isMutating ? "true" : undefined}
                         onDragStart={(event) => handleDragStart(event, item)}
@@ -5440,7 +5453,7 @@ function AdminApp() {
                         <section className="panel rooms-panel" aria-label="Vista por salas">
                           <div className="panel-heading">
                             <h2>Kanban de salas</h2>
-                            <p>Arrastra una cita entre salas para reasignarla.</p>
+                            <p>Arrastra una cita hacia una sala activa para reasignarla.</p>
                           </div>
                           {kanbanError ? (
                             <p className="feedback error compact-feedback">{kanbanError}</p>
