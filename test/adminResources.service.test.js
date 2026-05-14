@@ -1,7 +1,11 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { listAdminResources } = require("../server/services/adminResources.service");
+const {
+  createRoom,
+  listAdminResources,
+  updateRoom
+} = require("../server/services/adminResources.service");
 
 function createScriptedConnection(steps) {
   const scriptedSteps = [...steps];
@@ -80,6 +84,14 @@ test("listAdminResources devuelve settings semantico con labels y summary", asyn
       ]
     },
     {
+      includes: "FROM room_features",
+      rows: [
+        { roomId: 20, featureKey: "camilla" },
+        { roomId: 20, featureKey: "mesa" },
+        { roomId: 21, featureKey: "mesa" }
+      ]
+    },
+    {
       includes: "FROM resource_schedules rs",
       rows: [
         {
@@ -137,6 +149,8 @@ test("listAdminResources devuelve settings semantico con labels y summary", asyn
   assert.equal(payload.settings.rooms[0].capacityLabel, "2 personas");
   assert.equal(payload.settings.rooms[0].statusLabel, "Activo");
   assert.equal(payload.settings.rooms[0].compatibleServicesCount, 1);
+  assert.deepEqual(payload.settings.rooms[0].featureKeys, ["camilla", "mesa"]);
+  assert.equal(payload.settings.rooms[0].featuresLabel, "Camilla, Mesa");
 
   assert.equal(payload.settings.compatibilities[0].id, "10-20");
   assert.equal(payload.settings.compatibilities[0].serviceLabel, "Masaje");
@@ -175,6 +189,10 @@ test("listAdminResources aplica filtro resourceType para horarios", async () => 
       rows: []
     },
     {
+      includes: "FROM room_features",
+      rows: []
+    },
+    {
       includes: "WHERE rs.center_id = ? AND rs.resource_type = ?",
       assert: ({ params }) => {
         assert.deepEqual(params, [2, "room"]);
@@ -191,4 +209,189 @@ test("listAdminResources aplica filtro resourceType para horarios", async () => 
 
   connection.assertDone();
   assert.equal(payload.settings.schedules.length, 0);
+});
+
+test("createRoom crea sala y features en transaccion", async () => {
+  const steps = [];
+  const connection = {
+    async beginTransaction() {
+      steps.push("begin");
+    },
+    async commit() {
+      steps.push("commit");
+    },
+    async rollback() {
+      steps.push("rollback");
+    },
+    async query(sql) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      steps.push(normalizedSql);
+
+      if (normalizedSql.includes("SELECT id FROM rooms WHERE center_id = ? AND slug = ?")) {
+        return [[]];
+      }
+      if (normalizedSql.includes("INSERT INTO rooms")) {
+        return [{ insertId: 44 }];
+      }
+      if (normalizedSql.includes("INSERT INTO room_features")) {
+        return [{ affectedRows: 2 }];
+      }
+      if (normalizedSql.includes("FROM rooms WHERE center_id = ? AND id = ?")) {
+        return [[{ id: 44, name: "Sala Fénix", slug: "sala-fenix", capacity: 1, isActive: 1 }]];
+      }
+      if (normalizedSql.includes("FROM room_features")) {
+        return [[{ featureKey: "camilla" }, { featureKey: "mesa" }]];
+      }
+
+      throw new Error(`Query no esperada: ${normalizedSql}`);
+    }
+  };
+
+  const result = await createRoom({
+    connection,
+    adminSession: { centerId: 1 },
+    name: "Sala Fénix",
+    capacity: "",
+    featureKeys: ["camilla", "mesa"]
+  });
+
+  assert.equal(result.slug, "sala-fenix");
+  assert.equal(result.capacity, 1);
+  assert.deepEqual(result.featureKeys, ["camilla", "mesa"]);
+  assert.equal(steps.includes("begin"), true);
+  assert.equal(steps.includes("commit"), true);
+  assert.equal(steps.includes("rollback"), false);
+});
+
+test("createRoom rechaza capacity invalida y recursos fuera del set", async () => {
+  const connection = {
+    async beginTransaction() {
+      throw new Error("no debe iniciar transaccion");
+    },
+    async query() {
+      throw new Error("no debe consultar");
+    }
+  };
+
+  await assert.rejects(
+    () => createRoom({
+      connection,
+      adminSession: { centerId: 1 },
+      name: "Sala Test",
+      capacity: "abc",
+      featureKeys: ["camilla"]
+    }),
+    (error) => error.message === "Capacidad debe ser entero entre 1 y 50"
+  );
+
+  await assert.rejects(
+    () => createRoom({
+      connection,
+      adminSession: { centerId: 1 },
+      name: "Sala Test",
+      capacity: 1,
+      featureKeys: ["individual"]
+    }),
+    (error) => error.message.includes("Recurso no permitido")
+  );
+});
+
+test("updateRoom reemplaza features dentro de transaccion", async () => {
+  const steps = [];
+  const connection = {
+    async beginTransaction() {
+      steps.push("begin");
+    },
+    async commit() {
+      steps.push("commit");
+    },
+    async rollback() {
+      steps.push("rollback");
+    },
+    async query(sql) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      steps.push(normalizedSql);
+
+      if (normalizedSql.includes("SELECT id FROM rooms WHERE center_id = ? AND id = ? LIMIT 1 FOR UPDATE")) {
+        return [[{ id: 20 }]];
+      }
+      if (normalizedSql.startsWith("UPDATE rooms SET")) {
+        return [{ affectedRows: 1 }];
+      }
+      if (normalizedSql.includes("DELETE FROM room_features")) {
+        return [{ affectedRows: 2 }];
+      }
+      if (normalizedSql.includes("INSERT INTO room_features")) {
+        return [{ affectedRows: 1 }];
+      }
+      if (normalizedSql.includes("FROM rooms WHERE center_id = ? AND id = ?")) {
+        return [[{ id: 20, name: "Sala Editada", slug: "sala-fenix", capacity: 2, isActive: 1 }]];
+      }
+      if (normalizedSql.includes("FROM room_features")) {
+        return [[{ featureKey: "mesa" }]];
+      }
+
+      throw new Error(`Query no esperada: ${normalizedSql}`);
+    }
+  };
+
+  const result = await updateRoom({
+    connection,
+    adminSession: { centerId: 1 },
+    roomId: 20,
+    name: "Sala Editada",
+    capacity: 2,
+    featureKeys: ["mesa"]
+  });
+
+  assert.equal(result.name, "Sala Editada");
+  assert.deepEqual(result.featureKeys, ["mesa"]);
+  assert.equal(steps.includes("begin"), true);
+  assert.equal(steps.includes("commit"), true);
+  assert.equal(steps.includes("rollback"), false);
+});
+
+test("updateRoom hace rollback si falla reemplazo de features", async () => {
+  const steps = [];
+  const connection = {
+    async beginTransaction() {
+      steps.push("begin");
+    },
+    async commit() {
+      steps.push("commit");
+    },
+    async rollback() {
+      steps.push("rollback");
+    },
+    async query(sql) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      steps.push(normalizedSql);
+
+      if (normalizedSql.includes("SELECT id FROM rooms WHERE center_id = ? AND id = ? LIMIT 1 FOR UPDATE")) {
+        return [[{ id: 20 }]];
+      }
+      if (normalizedSql.includes("DELETE FROM room_features")) {
+        return [{ affectedRows: 2 }];
+      }
+      if (normalizedSql.includes("INSERT INTO room_features")) {
+        throw new Error("insert failed");
+      }
+
+      throw new Error(`Query no esperada: ${normalizedSql}`);
+    }
+  };
+
+  await assert.rejects(
+    () => updateRoom({
+      connection,
+      adminSession: { centerId: 1 },
+      roomId: 20,
+      featureKeys: ["camilla"]
+    }),
+    (error) => error.code === "ROOM_UPDATE_ERROR"
+  );
+
+  assert.equal(steps.includes("begin"), true);
+  assert.equal(steps.includes("rollback"), true);
+  assert.equal(steps.includes("commit"), false);
 });

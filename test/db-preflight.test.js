@@ -31,4 +31,5 @@ test("inspectSchemaTables returns no missing tables when schema is complete", ()
 
   assert.deepEqual(inspection.unknownTables, []);
   assert.deepEqual(inspection.missingExpected, []);
+  assert.equal(EXPECTED_CORE_TABLES.includes("room_features"), true);
 });

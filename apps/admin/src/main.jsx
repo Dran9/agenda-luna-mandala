@@ -59,6 +59,10 @@ const SETTINGS_STATUS_FILTERS = [
   { id: "active", label: "Activos" },
   { id: "inactive", label: "Inactivos" }
 ];
+const ROOM_FEATURE_OPTIONS = [
+  { key: "camilla", label: "Camilla" },
+  { key: "mesa", label: "Mesa" }
+];
 
 const STATUS_META = {
   pending: { label: "Pendiente", className: "status-pending" },
@@ -262,6 +266,21 @@ function normalizeSettingsPayload(resources) {
   const rooms = roomsSource.map((entry) => {
     const capacity = Number(entry?.capacity || 0);
     const status = normalizeResourceStatus(entry?.status, entry?.isActive === true);
+    const featureKeys = Array.isArray(entry?.featureKeys) ? entry.featureKeys : [];
+    const features = Array.isArray(entry?.features)
+      ? entry.features.map((feature) => ({
+          key: String(feature?.key || "").trim(),
+          label: String(feature?.label || feature?.key || "").trim()
+        })).filter((feature) => feature.key)
+      : featureKeys.map((key) => ({
+          key,
+          label: ROOM_FEATURE_OPTIONS.find((option) => option.key === key)?.label || key
+        }));
+    const featuresLabel = entry?.featuresLabel
+      ? String(entry.featuresLabel)
+      : features.length
+        ? features.map((feature) => feature.label).join(", ")
+        : "-";
     const capacityLabel = entry?.capacityLabel
       ? String(entry.capacityLabel)
       : capacity === 1
@@ -275,7 +294,10 @@ function normalizeSettingsPayload(resources) {
       capacityLabel,
       status,
       statusLabel: entry?.statusLabel || getStatusLabelFromValue(status),
-      compatibleServicesCount: Number(entry?.compatibleServicesCount || 0)
+      compatibleServicesCount: Number(entry?.compatibleServicesCount || 0),
+      featureKeys,
+      features,
+      featuresLabel
     };
   });
 
@@ -2116,7 +2138,10 @@ function ResourcesReadonlyView({
   isLoading,
   isRefreshing,
   isStale,
-  errorMessage
+  errorMessage,
+  authToken,
+  onRoomSaved,
+  onUnauthorized
 }) {
   const normalizedSettings = useMemo(
     () => normalizeSettingsPayload(resources),
@@ -2125,6 +2150,14 @@ function ResourcesReadonlyView({
   const [activeModule, setActiveModule] = useState("services");
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [roomFormOpen, setRoomFormOpen] = useState(false);
+  const [editingRoomId, setEditingRoomId] = useState(null);
+  const [roomFormName, setRoomFormName] = useState("");
+  const [roomFormCapacity, setRoomFormCapacity] = useState("1");
+  const [roomFormFeatureKeys, setRoomFormFeatureKeys] = useState([]);
+  const [roomFormLoading, setRoomFormLoading] = useState(false);
+  const [roomFormError, setRoomFormError] = useState("");
+  const [roomFormFeedback, setRoomFormFeedback] = useState("");
 
   const moduleRows = useMemo(() => {
     if (activeModule === "rooms") return normalizedSettings.rooms;
@@ -2168,6 +2201,7 @@ function ResourcesReadonlyView({
         const haystack = [
           entry?.name,
           entry?.capacityLabel,
+          entry?.featuresLabel,
           entry?.statusLabel
         ]
           .filter(Boolean)
@@ -2214,6 +2248,97 @@ function ResourcesReadonlyView({
     compatibilities: normalizedSettings.summary.compatibilitiesTotal,
     schedules: normalizedSettings.summary.schedulesTotal
   };
+
+  const resetRoomForm = useCallback(() => {
+    setEditingRoomId(null);
+    setRoomFormName("");
+    setRoomFormCapacity("1");
+    setRoomFormFeatureKeys([]);
+    setRoomFormError("");
+  }, []);
+
+  const openNewRoomForm = useCallback(() => {
+    resetRoomForm();
+    setRoomFormFeedback("");
+    setRoomFormOpen(true);
+  }, [resetRoomForm]);
+
+  const openEditRoomForm = useCallback((room) => {
+    setEditingRoomId(room.id);
+    setRoomFormName(room.name || "");
+    setRoomFormCapacity(String(room.capacity || 1));
+    setRoomFormFeatureKeys(Array.isArray(room.featureKeys) ? [...room.featureKeys] : []);
+    setRoomFormError("");
+    setRoomFormFeedback("");
+    setRoomFormOpen(true);
+  }, []);
+
+  const toggleRoomFeature = useCallback((featureKey, checked) => {
+    setRoomFormFeatureKeys((current) => {
+      if (checked) {
+        return current.includes(featureKey) ? current : [...current, featureKey];
+      }
+
+      return current.filter((key) => key !== featureKey);
+    });
+  }, []);
+
+  const saveRoom = useCallback(async () => {
+    if (roomFormLoading) {
+      return;
+    }
+
+    setRoomFormLoading(true);
+    setRoomFormError("");
+    setRoomFormFeedback("");
+
+    try {
+      const endpoint = editingRoomId
+        ? `/api/admin/resources/rooms/${editingRoomId}`
+        : "/api/admin/resources/rooms";
+      const response = await fetch(endpoint, {
+        method: editingRoomId ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          name: roomFormName.trim(),
+          capacity: roomFormCapacity,
+          featureKeys: roomFormFeatureKeys
+        })
+      });
+      const payload = await response.json();
+
+      if (response.status === 401) {
+        onUnauthorized?.();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(payload));
+      }
+
+      setRoomFormFeedback(editingRoomId ? "Sala actualizada." : "Sala creada.");
+      setRoomFormOpen(false);
+      resetRoomForm();
+      onRoomSaved?.();
+    } catch (requestError) {
+      setRoomFormError(requestError.message || "No se pudo guardar la sala.");
+    } finally {
+      setRoomFormLoading(false);
+    }
+  }, [
+    authToken,
+    editingRoomId,
+    onRoomSaved,
+    onUnauthorized,
+    resetRoomForm,
+    roomFormCapacity,
+    roomFormFeatureKeys,
+    roomFormLoading,
+    roomFormName
+  ]);
 
   return (
     <section className="settings-shell" aria-label="Ajustes operativos">
@@ -2296,6 +2421,107 @@ function ResourcesReadonlyView({
           </p>
         ) : null}
 
+        {activeModule === "rooms" ? (
+          <div className="settings-room-actions">
+            {roomFormFeedback ? (
+              <p className="feedback subtle settings-feedback">{roomFormFeedback}</p>
+            ) : null}
+
+            <button
+              type="button"
+              className="refresh-button settings-room-new-button"
+              onClick={openNewRoomForm}
+              disabled={roomFormOpen && !editingRoomId}
+            >
+              Nueva sala
+            </button>
+
+            {roomFormOpen ? (
+              <section className="settings-room-form" aria-label="Formulario de sala">
+                <div className="settings-room-form-header">
+                  <h3>{editingRoomId ? `Editar sala #${editingRoomId}` : "Nueva sala"}</h3>
+                </div>
+
+                <div className="settings-room-form-grid">
+                  <label className="client-filter-field" htmlFor="settings-room-name">
+                    <span>Nombre</span>
+                    <input
+                      id="settings-room-name"
+                      type="text"
+                      value={roomFormName}
+                      onChange={(event) => setRoomFormName(event.target.value)}
+                      placeholder="Sala Fénix"
+                    />
+                  </label>
+
+                  <label className="client-filter-field" htmlFor="settings-room-capacity">
+                    <span>Capacidad (1-50)</span>
+                    <input
+                      id="settings-room-capacity"
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={roomFormCapacity}
+                      onChange={(event) => setRoomFormCapacity(event.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <fieldset className="settings-room-features">
+                  <legend>Recursos</legend>
+                  <div className="settings-room-feature-list">
+                    {ROOM_FEATURE_OPTIONS.map((feature) => {
+                      const checked = roomFormFeatureKeys.includes(feature.key);
+                      return (
+                        <label
+                          key={`room-feature-${feature.key}`}
+                          className={`settings-room-feature${checked ? " is-selected" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => toggleRoomFeature(feature.key, event.target.checked)}
+                          />
+                          <span>{feature.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+
+                <div className="manual-form-actions">
+                  <button
+                    type="button"
+                    className="refresh-button"
+                    onClick={saveRoom}
+                    disabled={roomFormLoading || !roomFormName.trim()}
+                  >
+                    {roomFormLoading
+                      ? "Guardando..."
+                      : editingRoomId
+                        ? "Guardar cambios"
+                        : "Crear sala"}
+                  </button>
+                  <button
+                    type="button"
+                    className="logout-button"
+                    onClick={() => {
+                      setRoomFormOpen(false);
+                      resetRoomForm();
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+
+                {roomFormError ? (
+                  <p className="feedback error compact-feedback">{roomFormError}</p>
+                ) : null}
+              </section>
+            ) : null}
+          </div>
+        ) : null}
+
         {filteredRows.length === 0 ? (
           <p className="empty-state">Sin registros para el filtro actual.</p>
         ) : (
@@ -2345,37 +2571,67 @@ function ResourcesReadonlyView({
               <>
                 <div className="table-wrap">
                   <table className="appointments-table settings-table">
-                    <thead>
-                      <tr>
-                        <th>Sala</th>
-                        <th>Capacidad</th>
-                        <th>Servicios compatibles</th>
-                        <th>Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRows.map((room) => (
-                        <tr key={`settings-room-${room.id}`}>
-                          <td>{room.name}</td>
-                          <td>{room.capacityLabel}</td>
-                          <td>{room.compatibleServicesCount}</td>
-                          <td><StatusChip status={statusToChipKey(room.status)} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
+	                    <thead>
+	                      <tr>
+	                        <th>Sala</th>
+	                        <th>Capacidad</th>
+	                        <th>Recursos</th>
+	                        <th>Servicios compatibles</th>
+	                        <th>Estado</th>
+	                        <th>Accion</th>
+	                      </tr>
+	                    </thead>
+	                    <tbody>
+	                      {filteredRows.map((room) => (
+	                        <tr key={`settings-room-${room.id}`}>
+	                          <td>{room.name}</td>
+	                          <td>{room.capacityLabel}</td>
+	                          <td>
+	                            {room.features.length ? (
+	                              <span className="inline-tag-list">
+	                                {room.features.map((feature) => (
+	                                  <span key={feature.key} className="inline-tag">{feature.label}</span>
+	                                ))}
+	                              </span>
+	                            ) : "-"}
+	                          </td>
+	                          <td>{room.compatibleServicesCount}</td>
+	                          <td><StatusChip status={statusToChipKey(room.status)} /></td>
+	                          <td>
+	                            <button
+	                              type="button"
+	                              className="table-open"
+	                              onClick={() => openEditRoomForm(room)}
+	                            >
+	                              Editar
+	                            </button>
+	                          </td>
+	                        </tr>
+	                      ))}
+	                    </tbody>
                   </table>
                 </div>
 
                 <ul className="settings-mobile-cards" aria-label="Salas mobile">
                   {filteredRows.map((room) => (
-                    <li key={`settings-room-mobile-${room.id}`} className="settings-mobile-card">
-                      <p className="settings-mobile-title">{room.name}</p>
-                      <p className="settings-mobile-line">Capacidad: {room.capacityLabel}</p>
-                      <p className="settings-mobile-line">Servicios compatibles: {room.compatibleServicesCount}</p>
-                      <StatusChip status={statusToChipKey(room.status)} />
-                    </li>
-                  ))}
-                </ul>
+	                    <li key={`settings-room-mobile-${room.id}`} className="settings-mobile-card">
+	                      <p className="settings-mobile-title">{room.name}</p>
+	                      <p className="settings-mobile-line">Capacidad: {room.capacityLabel}</p>
+	                      <p className="settings-mobile-line">Recursos: {room.featuresLabel}</p>
+	                      <p className="settings-mobile-line">Servicios compatibles: {room.compatibleServicesCount}</p>
+	                      <div className="settings-mobile-card-actions">
+	                        <StatusChip status={statusToChipKey(room.status)} />
+	                        <button
+	                          type="button"
+	                          className="table-open"
+	                          onClick={() => openEditRoomForm(room)}
+	                        >
+	                          Editar
+	                        </button>
+	                      </div>
+	                    </li>
+	                  ))}
+	                </ul>
               </>
             ) : null}
 
@@ -5351,15 +5607,18 @@ function AdminApp() {
                   ) : null}
 
                   {hasResourcesData ? (
-                    <ResourcesReadonlyView
-                      resources={resourcesPayload}
-                      timezone={timezone}
-                      onRefresh={() => setResourcesRefreshTick((value) => value + 1)}
-                      isLoading={resourcesLoading}
-                      isRefreshing={resourcesRefreshing}
-                      isStale={Boolean(resourcesError)}
-                      errorMessage={resourcesError}
-                    />
+	                    <ResourcesReadonlyView
+	                      resources={resourcesPayload}
+	                      timezone={timezone}
+	                      onRefresh={() => setResourcesRefreshTick((value) => value + 1)}
+	                      isLoading={resourcesLoading}
+	                      isRefreshing={resourcesRefreshing}
+	                      isStale={Boolean(resourcesError)}
+	                      errorMessage={resourcesError}
+	                      authToken={authToken}
+	                      onRoomSaved={() => setResourcesRefreshTick((value) => value + 1)}
+	                      onUnauthorized={handleUnauthorized}
+	                    />
                   ) : null}
                 </>
               ) : null}

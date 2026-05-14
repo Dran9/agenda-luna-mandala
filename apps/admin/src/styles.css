@@ -1389,6 +1389,77 @@ select {
   margin: 0;
 }
 
+.settings-room-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-room-new-button {
+  justify-self: start;
+  min-width: 180px;
+}
+
+.settings-room-form {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.settings-room-form-header h3 {
+  font-size: 0.98rem;
+}
+
+.settings-room-form-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(160px, 240px);
+  gap: 10px;
+}
+
+.settings-room-features {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.settings-room-features legend {
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.settings-room-feature-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-room-feature {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-room-feature.is-selected {
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
 .settings-table {
   min-width: 980px;
 }
@@ -1427,6 +1498,13 @@ select {
 .settings-mobile-line {
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.settings-mobile-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .timeline-list {
@@ -2083,6 +2161,10 @@ select {
 
   .manual-form-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .settings-room-form-grid {
+    grid-template-columns: 1fr;
   }
 
   .client-command-actions {

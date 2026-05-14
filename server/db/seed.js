@@ -33,10 +33,14 @@ const SERVICES = [
 ];
 
 const ROOMS = [
-  { slug: "sala-luna", name: "Sala Luna", capacity: 1 },
-  { slug: "sala-sol", name: "Sala Sol", capacity: 1 },
-  { slug: "sala-aurora", name: "Sala Aurora", capacity: 1 }
+  { slug: "sala-fenix", name: "Sala Fénix", capacity: 1, features: ["camilla", "mesa"] },
+  { slug: "sala-cristales", name: "Sala Cristales", capacity: 1, features: ["camilla"] },
+  { slug: "sala-orion", name: "Sala Orión", capacity: 1, features: ["mesa"] },
+  { slug: "sala-lakshmi", name: "Sala Lakshmi", capacity: 1, features: ["mesa"] }
 ];
+
+const OBSOLETE_ROOM_SLUGS = ["sala-luna", "sala-sol", "sala-aurora"];
+const ROOM_FEATURE_KEYS = new Set(["camilla", "mesa"]);
 
 const THERAPISTS = [
   { slug: "ana-quispe", fullName: "Ana Quispe", displayName: "Ana" },
@@ -174,8 +178,51 @@ async function upsertRooms(connection, centerId) {
     );
   }
 
-  const [rows] = await connection.query("SELECT id, slug FROM rooms WHERE center_id = ?", [centerId]);
+  const roomSlugs = ROOMS.map((room) => room.slug);
+  const [rows] = await connection.query(
+    `SELECT id, slug FROM rooms WHERE center_id = ? AND slug IN (${roomSlugs.map(() => "?").join(", ")})`,
+    [centerId, ...roomSlugs]
+  );
   return new Map(rows.map((row) => [row.slug, row.id]));
+}
+
+async function deactivateObsoleteRooms(connection, centerId) {
+  for (const slug of OBSOLETE_ROOM_SLUGS) {
+    await connection.query(
+      `UPDATE rooms
+       SET is_active = 0,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE center_id = ?
+         AND slug = ?
+         AND is_active = 1`,
+      [centerId, slug]
+    );
+  }
+}
+
+async function upsertRoomFeatures(connection, centerId, roomBySlug) {
+  for (const room of ROOMS) {
+    const roomId = roomBySlug.get(room.slug);
+    if (!roomId) {
+      continue;
+    }
+
+    await connection.query(
+      "DELETE FROM room_features WHERE center_id = ? AND room_id = ?",
+      [centerId, roomId]
+    );
+
+    for (const featureKey of room.features) {
+      if (!ROOM_FEATURE_KEYS.has(featureKey)) {
+        continue;
+      }
+
+      await connection.query(
+        "INSERT IGNORE INTO room_features (center_id, room_id, feature_key) VALUES (?, ?, ?)",
+        [centerId, roomId, featureKey]
+      );
+    }
+  }
 }
 
 async function upsertTherapists(connection, centerId) {
@@ -220,9 +267,17 @@ async function upsertTherapistServices(connection, centerId, serviceBySlug, ther
   }
 }
 
+function getCanonicalRoomIds(roomBySlug) {
+  return ROOMS
+    .map((room) => roomBySlug.get(room.slug))
+    .filter((roomId) => roomId !== undefined && roomId !== null);
+}
+
 async function upsertServiceRooms(connection, centerId, serviceBySlug, roomBySlug) {
+  const roomIds = getCanonicalRoomIds(roomBySlug);
+
   for (const serviceId of serviceBySlug.values()) {
-    for (const roomId of roomBySlug.values()) {
+    for (const roomId of roomIds) {
       await connection.query(
         `INSERT INTO service_rooms (center_id, service_id, room_id, is_active)
         VALUES (?, ?, ?, 1)
@@ -264,7 +319,7 @@ async function upsertResourceSchedules(connection, centerId, therapistBySlug, ro
     }
   }
 
-  for (const roomId of roomBySlug.values()) {
+  for (const roomId of getCanonicalRoomIds(roomBySlug)) {
     for (const weekday of WORKING_WEEKDAYS) {
       await connection.query(
         `INSERT INTO resource_schedules (
@@ -313,6 +368,8 @@ async function runSeed() {
     const roomBySlug = await upsertRooms(connection, centerId);
     const therapistBySlug = await upsertTherapists(connection, centerId);
 
+    await deactivateObsoleteRooms(connection, centerId);
+    await upsertRoomFeatures(connection, centerId, roomBySlug);
     await upsertTherapistServices(connection, centerId, serviceBySlug, therapistBySlug);
     await upsertServiceRooms(connection, centerId, serviceBySlug, roomBySlug);
     await upsertResourceSchedules(connection, centerId, therapistBySlug, roomBySlug);
@@ -345,5 +402,12 @@ if (require.main === module) {
 }
 
 module.exports = {
-  runSeed
+  ROOM_FEATURE_KEYS,
+  ROOMS,
+  getCanonicalRoomIds,
+  runSeed,
+  upsertRoomFeatures,
+  upsertRooms,
+  upsertResourceSchedules,
+  upsertServiceRooms
 };

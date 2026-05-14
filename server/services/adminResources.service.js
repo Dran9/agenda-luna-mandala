@@ -43,6 +43,11 @@ const RESOURCE_TYPE_LABELS = {
   therapist: "Terapeuta",
   room: "Sala"
 };
+const ROOM_FEATURE_LABELS = {
+  camilla: "Camilla",
+  mesa: "Mesa"
+};
+const ROOM_FEATURE_KEYS = new Set(Object.keys(ROOM_FEATURE_LABELS));
 
 function toStatusMeta(isActiveRaw) {
   const status = Number(isActiveRaw) === 1 ? "ACTIVE" : "INACTIVE";
@@ -183,7 +188,7 @@ async function listAdminResources({
   const normalizedResourceType = normalizeResourceType(resourceType);
   const nowDate = toDate(now);
 
-  const [[serviceRows], [roomRows], [compatibilityRows]] = await Promise.all([
+  const [[serviceRows], [roomRows], [compatibilityRows], [featureRows]] = await Promise.all([
     connection.query(
       `SELECT
         id,
@@ -224,6 +229,15 @@ async function listAdminResources({
         AND r.id = sr.room_id
        WHERE sr.center_id = ?
        ORDER BY sr.is_active DESC, s.name ASC, r.name ASC`,
+      [center.id]
+    ),
+    connection.query(
+      `SELECT
+        room_id AS roomId,
+        feature_key AS featureKey
+       FROM room_features
+       WHERE center_id = ?
+       ORDER BY room_id ASC, feature_key ASC`,
       [center.id]
     )
   ]);
@@ -278,6 +292,20 @@ async function listAdminResources({
 
   const activeCompatibilityByServiceId = new Map();
   const activeCompatibilityByRoomId = new Map();
+  const featuresByRoomId = new Map();
+
+  for (const row of featureRows) {
+    const roomId = Number(row.roomId);
+    const featureKey = String(row.featureKey || "").trim();
+    if (!roomId || !featureKey) {
+      continue;
+    }
+
+    if (!featuresByRoomId.has(roomId)) {
+      featuresByRoomId.set(roomId, []);
+    }
+    featuresByRoomId.get(roomId).push(featureKey);
+  }
 
   for (const row of compatibilityRows) {
     const isActive = Number(row.isActive) === 1;
@@ -319,15 +347,24 @@ async function listAdminResources({
   const rooms = roomRows.map((row) => {
     const capacity = Math.max(0, Math.trunc(toSafeNumber(row.capacity, 0)));
     const statusMeta = toStatusMeta(row.isActive);
+    const roomId = Number(row.id);
+    const featureKeys = featuresByRoomId.get(roomId) || [];
+    const features = featureKeys.map((key) => ({
+      key,
+      label: ROOM_FEATURE_LABELS[key] || key
+    }));
 
     return {
-      id: Number(row.id),
-      name: row.name || `Sala ${row.id}`,
+      id: roomId,
+      name: row.name || `Sala ${roomId}`,
       capacity,
       capacityLabel: toCapacityLabel(capacity),
       status: statusMeta.status,
       statusLabel: statusMeta.statusLabel,
-      compatibleServicesCount: activeCompatibilityByRoomId.get(Number(row.id)) || 0
+      compatibleServicesCount: activeCompatibilityByRoomId.get(roomId) || 0,
+      features,
+      featureKeys,
+      featuresLabel: features.length ? features.map((feature) => feature.label).join(", ") : "-"
     };
   });
 
@@ -393,7 +430,303 @@ async function listAdminResources({
   };
 }
 
+function slugify(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-")
+    || "sala";
+}
+
+function isEmptyCapacity(value) {
+  return value === undefined || value === null || String(value).trim() === "";
+}
+
+function normalizeRoomCapacity(value, { defaultWhenEmpty = false } = {}) {
+  if (isEmptyCapacity(value)) {
+    if (defaultWhenEmpty) {
+      return 1;
+    }
+
+    throw new ValidationError("Capacidad debe ser entero entre 1 y 50", { field: "capacity" });
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 50) {
+    throw new ValidationError("Capacidad debe ser entero entre 1 y 50", { field: "capacity" });
+  }
+
+  return parsed;
+}
+
+function normalizeRoomFeatureKeys(featureKeys) {
+  if (featureKeys === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(featureKeys)) {
+    throw new ValidationError("featureKeys debe ser array", {
+      field: "featureKeys",
+      allowed: Array.from(ROOM_FEATURE_KEYS)
+    });
+  }
+
+  const normalized = [...new Set(featureKeys.map((key) => String(key || "").trim()).filter(Boolean))];
+
+  for (const featureKey of normalized) {
+    if (!ROOM_FEATURE_KEYS.has(featureKey)) {
+      throw new ValidationError(`Recurso no permitido: ${featureKey}`, {
+        field: "featureKeys",
+        allowed: Array.from(ROOM_FEATURE_KEYS)
+      });
+    }
+  }
+
+  return normalized;
+}
+
+function normalizeRoomIsActive(value) {
+  if (value === true || value === 1 || value === "1" || value === "true") {
+    return 1;
+  }
+
+  if (value === false || value === 0 || value === "0" || value === "false") {
+    return 0;
+  }
+
+  throw new ValidationError("isActive invalido", { field: "isActive" });
+}
+
+function toRoomMutationResult(roomRow, featureRows = []) {
+  const featureKeys = featureRows.map((row) => String(row.featureKey || "").trim()).filter(Boolean);
+  const features = featureKeys.map((key) => ({ key, label: ROOM_FEATURE_LABELS[key] || key }));
+
+  return {
+    id: Number(roomRow.id),
+    name: roomRow.name,
+    slug: roomRow.slug,
+    capacity: Number(roomRow.capacity),
+    capacityLabel: toCapacityLabel(roomRow.capacity),
+    isActive: Number(roomRow.isActive) === 1,
+    status: Number(roomRow.isActive) === 1 ? "ACTIVE" : "INACTIVE",
+    statusLabel: Number(roomRow.isActive) === 1 ? "Activo" : "Inactivo",
+    featureKeys,
+    features,
+    featuresLabel: features.length ? features.map((feature) => feature.label).join(", ") : "-"
+  };
+}
+
+async function insertRoomFeatures(connection, centerId, roomId, featureKeys) {
+  if (!featureKeys.length) {
+    return;
+  }
+
+  const featureValues = featureKeys.map(() => "(?, ?, ?)").join(", ");
+  const featureParams = [];
+  for (const featureKey of featureKeys) {
+    featureParams.push(centerId, roomId, featureKey);
+  }
+
+  await connection.query(
+    `INSERT INTO room_features (center_id, room_id, feature_key) VALUES ${featureValues}`,
+    featureParams
+  );
+}
+
+async function createRoom({ connection, adminSession, name, capacity, featureKeys }) {
+  const centerId = parseAdminCenterId(adminSession);
+  if (!centerId) {
+    throw new ValidationError("Sesion admin sin centerId", { field: "adminSession.centerId" });
+  }
+
+  const trimmedName = String(name || "").trim();
+  if (!trimmedName) {
+    throw new ValidationError("Nombre de sala obligatorio", { field: "name" });
+  }
+  if (trimmedName.length > 160) {
+    throw new ValidationError("Nombre de sala demasiado largo", { field: "name" });
+  }
+
+  const normalizedCapacity = normalizeRoomCapacity(capacity, { defaultWhenEmpty: true });
+  const normalizedFeatureKeys = normalizeRoomFeatureKeys(featureKeys) || [];
+  const slug = slugify(trimmedName);
+
+  await connection.beginTransaction();
+
+  try {
+    const [existingRows] = await connection.query(
+      "SELECT id FROM rooms WHERE center_id = ? AND slug = ? LIMIT 1",
+      [centerId, slug]
+    );
+
+    if (existingRows.length) {
+      throw new AdminResourcesError({
+        status: 409,
+        code: "ROOM_SLUG_DUPLICATE",
+        message: `Ya existe una sala con slug "${slug}"`
+      });
+    }
+
+    const [result] = await connection.query(
+      `INSERT INTO rooms (center_id, slug, name, capacity, is_active)
+       VALUES (?, ?, ?, ?, 1)`,
+      [centerId, slug, trimmedName, normalizedCapacity]
+    );
+    const roomId = Number(result.insertId);
+
+    await insertRoomFeatures(connection, centerId, roomId, normalizedFeatureKeys);
+
+    const [createdRoom] = await connection.query(
+      `SELECT id, name, slug, capacity, is_active AS isActive
+       FROM rooms
+       WHERE center_id = ? AND id = ?
+       LIMIT 1`,
+      [centerId, roomId]
+    );
+    const [createdFeatures] = await connection.query(
+      `SELECT feature_key AS featureKey
+       FROM room_features
+       WHERE center_id = ? AND room_id = ?
+       ORDER BY feature_key ASC`,
+      [centerId, roomId]
+    );
+
+    await connection.commit();
+    return toRoomMutationResult(createdRoom[0], createdFeatures);
+  } catch (error) {
+    await connection.rollback();
+
+    if (error instanceof ValidationError || error instanceof AdminResourcesError) {
+      throw error;
+    }
+
+    if (error?.code === "ER_DUP_ENTRY") {
+      throw new AdminResourcesError({
+        status: 409,
+        code: "ROOM_SLUG_DUPLICATE",
+        message: `Ya existe una sala con slug "${slug}"`
+      });
+    }
+
+    throw new AdminResourcesError({
+      status: 500,
+      code: "ROOM_CREATE_ERROR",
+      message: "No se pudo crear la sala"
+    });
+  }
+}
+
+async function updateRoom({ connection, adminSession, roomId: rawRoomId, name, capacity, isActive, featureKeys }) {
+  const centerId = parseAdminCenterId(adminSession);
+  if (!centerId) {
+    throw new ValidationError("Sesion admin sin centerId", { field: "adminSession.centerId" });
+  }
+
+  const roomId = Number(rawRoomId);
+  if (!Number.isInteger(roomId) || roomId <= 0) {
+    throw new ValidationError("roomId invalido", { field: "roomId" });
+  }
+
+  const updates = [];
+  const updateParams = [];
+
+  if (name !== undefined) {
+    const trimmedName = String(name || "").trim();
+    if (!trimmedName) {
+      throw new ValidationError("Nombre de sala no puede estar vacio", { field: "name" });
+    }
+    if (trimmedName.length > 160) {
+      throw new ValidationError("Nombre de sala demasiado largo", { field: "name" });
+    }
+    updates.push("name = ?");
+    updateParams.push(trimmedName);
+  }
+
+  if (capacity !== undefined) {
+    updates.push("capacity = ?");
+    updateParams.push(normalizeRoomCapacity(capacity));
+  }
+
+  if (isActive !== undefined) {
+    updates.push("is_active = ?");
+    updateParams.push(normalizeRoomIsActive(isActive));
+  }
+
+  const normalizedFeatureKeys = normalizeRoomFeatureKeys(featureKeys);
+
+  await connection.beginTransaction();
+
+  try {
+    const [existingRows] = await connection.query(
+      "SELECT id FROM rooms WHERE center_id = ? AND id = ? LIMIT 1 FOR UPDATE",
+      [centerId, roomId]
+    );
+
+    if (existingRows.length === 0) {
+      throw new AdminResourcesError({
+        status: 404,
+        code: "ROOM_NOT_FOUND",
+        message: "Sala no encontrada"
+      });
+    }
+
+    if (updates.length) {
+      updates.push("updated_at = CURRENT_TIMESTAMP");
+      updateParams.push(centerId, roomId);
+
+      await connection.query(
+        `UPDATE rooms SET ${updates.join(", ")} WHERE center_id = ? AND id = ?`,
+        updateParams
+      );
+    }
+
+    if (normalizedFeatureKeys !== undefined) {
+      await connection.query(
+        "DELETE FROM room_features WHERE center_id = ? AND room_id = ?",
+        [centerId, roomId]
+      );
+      await insertRoomFeatures(connection, centerId, roomId, normalizedFeatureKeys);
+    }
+
+    const [updatedRoom] = await connection.query(
+      `SELECT id, name, slug, capacity, is_active AS isActive
+       FROM rooms
+       WHERE center_id = ? AND id = ?
+       LIMIT 1`,
+      [centerId, roomId]
+    );
+    const [updatedFeatures] = await connection.query(
+      `SELECT feature_key AS featureKey
+       FROM room_features
+       WHERE center_id = ? AND room_id = ?
+       ORDER BY feature_key ASC`,
+      [centerId, roomId]
+    );
+
+    await connection.commit();
+    return toRoomMutationResult(updatedRoom[0], updatedFeatures);
+  } catch (error) {
+    await connection.rollback();
+
+    if (error instanceof ValidationError || error instanceof AdminResourcesError) {
+      throw error;
+    }
+
+    throw new AdminResourcesError({
+      status: 500,
+      code: "ROOM_UPDATE_ERROR",
+      message: "No se pudo actualizar la sala"
+    });
+  }
+}
+
 module.exports = {
   AdminResourcesError,
-  listAdminResources
+  createRoom,
+  listAdminResources,
+  updateRoom
 };

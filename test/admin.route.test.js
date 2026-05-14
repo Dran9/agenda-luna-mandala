@@ -1447,3 +1447,92 @@ test("GET /api/admin/resources with token returns read-only resources payload", 
   assert.equal(Array.isArray(res.payload.settings.services), true);
   assert.equal(res.payload.summary.compatibilitiesTotal, 0);
 });
+
+test("POST /api/admin/resources/rooms creates room scoped to admin center", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    createResourceRoom: async (args) => {
+      receivedArgs = args;
+      return { id: 44, name: "Sala Fénix", featureKeys: ["camilla", "mesa"] };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/resources/rooms", "post");
+  const req = {
+    body: {
+      name: "Sala Fénix",
+      capacity: 1,
+      featureKeys: ["camilla", "mesa"]
+    },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(receivedArgs.connection, connection);
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(receivedArgs.name, "Sala Fénix");
+  assert.deepEqual(receivedArgs.featureKeys, ["camilla", "mesa"]);
+  assert.equal(res.payload.id, 44);
+});
+
+test("PATCH /api/admin/resources/rooms/:id updates room scoped to admin center", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    updateResourceRoom: async (args) => {
+      receivedArgs = args;
+      return { id: 44, name: "Sala Fénix Editada", featureKeys: ["mesa"] };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/resources/rooms/:id", "patch");
+  const req = {
+    params: { id: "44" },
+    body: {
+      name: "Sala Fénix Editada",
+      capacity: 2,
+      isActive: true,
+      featureKeys: ["mesa"]
+    },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(receivedArgs.connection, connection);
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(receivedArgs.roomId, "44");
+  assert.equal(receivedArgs.name, "Sala Fénix Editada");
+  assert.deepEqual(receivedArgs.featureKeys, ["mesa"]);
+  assert.equal(res.payload.name, "Sala Fénix Editada");
+});
