@@ -47,6 +47,7 @@ No copiar archivos sin una decision explicita.
 - Google Calendar no decide disponibilidad.
 - No tocar runtime/deploy junto con features.
 - No ejecutar scripts de escritura contra DB remota sin confirmacion explicita de Daniel.
+- Operar siempre en Speed/Standard. Nunca usar FAST.
 
 ## Archivos Sensibles
 
