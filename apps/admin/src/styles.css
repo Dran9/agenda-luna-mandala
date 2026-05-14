@@ -247,6 +247,30 @@ select {
   gap: 8px;
 }
 
+.control-date-nav {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.control-date-step {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.control-date-step:hover {
+  background: var(--surface-muted);
+}
+
 .control-field,
 .control-check {
   min-height: 40px;
@@ -280,6 +304,16 @@ select {
 }
 
 .control-input {
+  min-height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.84rem;
+}
+
+.control-date-input {
   min-height: 28px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -608,7 +642,7 @@ select {
 }
 
 .manual-assignment-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .manual-timezone-grid {
@@ -616,6 +650,130 @@ select {
   align-items: start;
   justify-content: start;
   column-gap: 10px;
+}
+
+.manual-date-row {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 240px) auto auto;
+  gap: 6px;
+  align-items: end;
+  justify-content: start;
+}
+
+.manual-date-field {
+  min-width: 0;
+}
+
+.manual-date-step {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.manual-date-step:hover {
+  background: var(--surface-muted);
+}
+
+.manual-slot-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.manual-slot-group {
+  display: grid;
+  gap: 5px;
+}
+
+.manual-slot-group p {
+  margin: 0;
+  color: var(--subtle);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.manual-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.manual-slot-button {
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  display: grid;
+  gap: 1px;
+  cursor: pointer;
+}
+
+.manual-slot-button:hover {
+  background: var(--primary-soft);
+}
+
+.manual-slot-button.is-selected {
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.manual-slot-time {
+  color: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.manual-slot-meta {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manual-slot-empty,
+.manual-slot-muted,
+.manual-selected-slot {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.manual-slot-empty {
+  padding: 4px 2px;
+}
+
+.manual-slot-empty.is-error {
+  color: var(--danger);
+}
+
+.manual-selected-slot {
+  border: 1px solid var(--primary-line);
+  border-radius: 8px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  padding: 7px 9px;
+  font-weight: 700;
 }
 
 .manual-modal-actions {
@@ -2771,7 +2929,9 @@ select {
 
   .manual-launch-panel,
   .manual-fields-grid,
-  .manual-timezone-grid {
+  .manual-timezone-grid,
+  .manual-date-row,
+  .manual-slot-grid {
     grid-template-columns: 1fr;
   }
 

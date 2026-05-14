@@ -37,7 +37,7 @@ const MENU = [
 ];
 
 const VIEW_TABS = [
-  { id: "today", label: "Hoy", Icon: CalendarCheck },
+  { id: "today", label: "Día", Icon: CalendarCheck },
   { id: "timeline", label: "Timeline", Icon: Clock },
   { id: "history", label: "Historial", Icon: ClockCounterClockwise },
   { id: "rooms", label: "Salas", Icon: Door }
@@ -612,6 +612,57 @@ function formatDateOnly(value, timezone) {
   }
 }
 
+function getDateKeyForTimezone(value = new Date(), timezone = DEFAULT_TIMEZONE) {
+  const parsed = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone || DEFAULT_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(parsed);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  } catch {
+    return parsed.toISOString().slice(0, 10);
+  }
+}
+
+function getHourInTimezone(value, timezone = DEFAULT_TIMEZONE) {
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return 0;
+  }
+
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone || DEFAULT_TIMEZONE,
+      hour: "2-digit",
+      hour12: false
+    }).formatToParts(parsed);
+    return Number(parts.find((part) => part.type === "hour")?.value || 0);
+  } catch {
+    return parsed.getHours();
+  }
+}
+
+function shiftDateKey(dateKey, amount) {
+  const parsed = new Date(`${dateKey || getDateKeyForTimezone()}T12:00:00Z`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return getDateKeyForTimezone();
+  }
+
+  parsed.setUTCDate(parsed.getUTCDate() + amount);
+  return parsed.toISOString().slice(0, 10);
+}
+
 function sanitizePhoneForWa(value) {
   const digits = String(value || "").replace(/\D/g, "");
 
@@ -670,9 +721,9 @@ function groupTimezoneOptions(options) {
   return Array.from(groups.entries());
 }
 
-function buildQuery({ includeUpcoming, limit }) {
+function buildQuery({ date, includeUpcoming, limit }) {
   const params = new URLSearchParams();
-  params.set("date", "today");
+  params.set("date", date || "today");
   params.set("upcoming", includeUpcoming ? "1" : "0");
   params.set("limit", String(limit));
   return params.toString();
@@ -1642,6 +1693,7 @@ function ManualAppointmentModal({
   services,
   therapists,
   rooms,
+  tenantSlug,
   resourcesLoaded,
   resourcesLoading,
   resourcesError,
@@ -1654,6 +1706,9 @@ function ManualAppointmentModal({
 }) {
   const [timezoneSearch, setTimezoneSearch] = useState("");
   const [timezonePickerOpen, setTimezonePickerOpen] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState("");
+  const [availabilitySlots, setAvailabilitySlots] = useState([]);
   const selectedTimezoneOption =
     COUNTRY_TIMEZONE_OPTIONS.find((option) => option.timezone === draft.timezone) ||
     COUNTRY_TIMEZONE_OPTIONS[0];
@@ -1700,6 +1755,97 @@ function ManualAppointmentModal({
   const selectedRoomCompatibility =
     roomCompatibility.find((entry) => String(entry.room.id) === String(draft.roomId)) || null;
   const hasSelectedRoomWarning = selectedRoomCompatibility?.missingFeatureKeys.length > 0;
+  const availabilityReady = Boolean(
+    open &&
+    tenantSlug &&
+    draft.serviceId &&
+    draft.date &&
+    isPhoneValid
+  );
+  const selectedAvailabilitySlot = useMemo(
+    () => availabilitySlots.find((slot) => String(slot.startsAt) === String(draft.startsAt)) || null,
+    [availabilitySlots, draft.startsAt]
+  );
+  const groupedAvailabilitySlots = useMemo(() => {
+    const groups = {
+      morning: [],
+      afternoon: []
+    };
+
+    for (const slot of availabilitySlots) {
+      const hour = getHourInTimezone(slot.startsAt, draft.timezone);
+      const target = hour < 13 ? "morning" : "afternoon";
+      groups[target].push(slot);
+    }
+
+    return groups;
+  }, [availabilitySlots, draft.timezone]);
+
+  useEffect(() => {
+    if (!availabilityReady) {
+      setAvailabilityLoading(false);
+      setAvailabilityError("");
+      setAvailabilitySlots([]);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+
+    async function loadAvailability() {
+      setAvailabilityLoading(true);
+      setAvailabilityError("");
+
+      try {
+        const response = await fetch("/api/public/booking/availability", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            tenantSlug,
+            phoneE164: buildPhonePayload(phoneDigits, selectedTimezoneOption),
+            serviceId: draft.serviceId,
+            therapistId: draft.therapistId || null,
+            date: draft.date,
+            timezone: draft.timezone,
+            stepMinutes: 30
+          }),
+          signal: controller.signal
+        });
+        const nextPayload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(getErrorMessage(nextPayload));
+        }
+
+        setAvailabilitySlots(Array.isArray(nextPayload?.slots) ? nextPayload.slots : []);
+      } catch (fetchError) {
+        if (fetchError.name === "AbortError") {
+          return;
+        }
+
+        setAvailabilitySlots([]);
+        setAvailabilityError(fetchError.message || "No se pudo consultar disponibilidad.");
+      } finally {
+        setAvailabilityLoading(false);
+      }
+    }
+
+    loadAvailability();
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    availabilityReady,
+    tenantSlug,
+    phoneDigits,
+    selectedTimezoneOption,
+    draft.serviceId,
+    draft.therapistId,
+    draft.date,
+    draft.timezone
+  ]);
 
   if (!open) {
     return null;
@@ -1708,7 +1854,14 @@ function ManualAppointmentModal({
   function updateField(field, value) {
     onChange((current) => ({
       ...current,
-      [field]: value
+      [field]: value,
+      ...(field === "serviceId" ||
+        field === "date" ||
+        field === "therapistId" ||
+        field === "timezone" ||
+        field === "phoneDigits"
+        ? { startsAt: "" }
+        : {})
     }));
   }
 
@@ -1716,7 +1869,8 @@ function ManualAppointmentModal({
     onChange((current) => ({
       ...current,
       timezone: option.timezone,
-      phoneDigits: ""
+      phoneDigits: "",
+      startsAt: ""
     }));
     setTimezoneSearch("");
     setTimezonePickerOpen(false);
@@ -1908,17 +2062,41 @@ function ManualAppointmentModal({
 
           <section className="manual-step" aria-label="Asignacion">
             <p className="manual-step-label">4. Horario y asignacion</p>
-            <div className="manual-fields-grid manual-assignment-grid">
-              <label className="client-filter-field" htmlFor="manual-starts-at">
-                <span>Fecha y hora</span>
+            <div className="manual-date-row">
+              <button
+                type="button"
+                className="manual-date-step"
+                onClick={() => updateField("date", shiftDateKey(draft.date, -1))}
+              >
+                Anterior
+              </button>
+              <label className="client-filter-field manual-date-field" htmlFor="manual-date">
+                <span>Fecha</span>
                 <input
-                  id="manual-starts-at"
-                  type="datetime-local"
-                  value={draft.startsAt}
-                  onChange={(event) => updateField("startsAt", event.target.value)}
+                  id="manual-date"
+                  type="date"
+                  value={draft.date || ""}
+                  onChange={(event) => updateField("date", event.target.value)}
                   required
                 />
               </label>
+              <button
+                type="button"
+                className="manual-date-step"
+                onClick={() => updateField("date", shiftDateKey(draft.date, 1))}
+              >
+                Siguiente
+              </button>
+              <button
+                type="button"
+                className="manual-date-step"
+                onClick={() => updateField("date", getDateKeyForTimezone(new Date(), draft.timezone))}
+              >
+                Hoy
+              </button>
+            </div>
+
+            <div className="manual-fields-grid manual-assignment-grid">
               <label className="client-filter-field" htmlFor="manual-therapist">
                 <span>Terapeuta</span>
                 <select
@@ -1977,6 +2155,78 @@ function ManualAppointmentModal({
                 {selectedRoomCompatibility.missingFeatureLabels.join(" ni ")} para este servicio.
               </p>
             ) : null}
+
+            <div className="manual-slot-panel" aria-live="polite">
+              {!tenantSlug ? (
+                <p className="manual-slot-empty">No se pudo resolver el centro para consultar disponibilidad.</p>
+              ) : !draft.serviceId ? (
+                <p className="manual-slot-empty">Elige un servicio para ver horarios disponibles.</p>
+              ) : !isPhoneValid ? (
+                <p className="manual-slot-empty">Ingresa un WhatsApp valido para consultar disponibilidad real.</p>
+              ) : availabilityLoading ? (
+                <p className="manual-slot-empty">Consultando disponibilidad...</p>
+              ) : availabilityError ? (
+                <p className="manual-slot-empty is-error">{availabilityError}</p>
+              ) : availabilitySlots.length === 0 ? (
+                <p className="manual-slot-empty">
+                  No hay slots disponibles para esta fecha con el servicio y terapeuta seleccionados.
+                </p>
+              ) : (
+                <>
+                  <div className="manual-slot-group">
+                    <p>Mañana</p>
+                    <div className="manual-slot-grid">
+                      {groupedAvailabilitySlots.morning.length ? (
+                        groupedAvailabilitySlots.morning.map((slot) => (
+                          <button
+                            key={`manual-slot-${slot.startsAt}`}
+                            type="button"
+                            className={`manual-slot-button${draft.startsAt === slot.startsAt ? " is-selected" : ""}`}
+                            onClick={() => updateField("startsAt", slot.startsAt)}
+                          >
+                            <span className="manual-slot-time">{formatClock(slot.startsAt, draft.timezone)}</span>
+                            <span className="manual-slot-meta">
+                              {slot.therapistName} · {slot.roomName}
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <span className="manual-slot-muted">Sin horarios.</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="manual-slot-group">
+                    <p>Tarde</p>
+                    <div className="manual-slot-grid">
+                      {groupedAvailabilitySlots.afternoon.length ? (
+                        groupedAvailabilitySlots.afternoon.map((slot) => (
+                          <button
+                            key={`manual-slot-${slot.startsAt}`}
+                            type="button"
+                            className={`manual-slot-button${draft.startsAt === slot.startsAt ? " is-selected" : ""}`}
+                            onClick={() => updateField("startsAt", slot.startsAt)}
+                          >
+                            <span className="manual-slot-time">{formatClock(slot.startsAt, draft.timezone)}</span>
+                            <span className="manual-slot-meta">
+                              {slot.therapistName} · {slot.roomName}
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <span className="manual-slot-muted">Sin horarios.</span>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {selectedAvailabilitySlot ? (
+              <p className="manual-selected-slot">
+                Seleccionado: {formatDateTime(selectedAvailabilitySlot.startsAt, draft.timezone)} ·{" "}
+                {selectedAvailabilitySlot.therapistName} · {selectedAvailabilitySlot.roomName}
+              </p>
+            ) : null}
           </section>
 
           {error ? <p className="feedback error compact-feedback">{error}</p> : null}
@@ -1991,6 +2241,7 @@ function ManualAppointmentModal({
               className="confirm-primary"
               disabled={
                 loading ||
+                availabilityLoading ||
                 !services.length ||
                 !draft.serviceId ||
                 !draft.firstName.trim() ||
@@ -3742,6 +3993,7 @@ function AdminApp() {
   const [activeSection, setActiveSection] = useState("control");
 
   const [activeTab, setActiveTab] = useState("today");
+  const [controlDate, setControlDate] = useState(() => getDateKeyForTimezone());
   const [includeUpcoming, setIncludeUpcoming] = useState(true);
   const [limit, setLimit] = useState(20);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -3826,6 +4078,7 @@ function AdminApp() {
     serviceId: "",
     therapistId: "",
     roomId: "",
+    date: getDateKeyForTimezone(),
     startsAt: ""
   });
   const [manualModalOpen, setManualModalOpen] = useState(false);
@@ -4099,7 +4352,7 @@ function AdminApp() {
       setError("");
 
       try {
-        const query = buildQuery({ includeUpcoming, limit });
+        const query = buildQuery({ date: controlDate, includeUpcoming, limit });
         const response = await fetch(`/api/admin/appointments?${query}`, {
           method: "GET",
           headers: {
@@ -4140,7 +4393,7 @@ function AdminApp() {
     return () => {
       controller.abort();
     };
-  }, [authToken, activeSection, includeUpcoming, limit, refreshTick, handleUnauthorized]);
+  }, [authToken, activeSection, controlDate, includeUpcoming, limit, refreshTick, handleUnauthorized]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -5543,6 +5796,7 @@ function AdminApp() {
       }
 
       setManualCreateSuccess("Cita manual creada y confirmada.");
+      setControlDate(manualDraft.date || controlDate);
       setManualDraft((value) => ({
         ...value,
         firstName: "",
@@ -5558,7 +5812,12 @@ function AdminApp() {
         openDrawer(Number(nextPayload.appointment.id));
       }
     } catch (createError) {
-      setManualCreateError(createError.message || "No se pudo crear la cita manual.");
+      const message = createError.message || "No se pudo crear la cita manual.";
+      setManualCreateError(
+        message.toLowerCase().includes("slot")
+          ? "Ese horario ya no tiene terapeuta/sala disponible. Vuelve a elegir un slot disponible."
+          : message
+      );
     } finally {
       setManualCreateLoading(false);
     }
@@ -5694,6 +5953,52 @@ function AdminApp() {
                 </>
               ) : (
                 <>
+                  <div className="control-date-nav" aria-label="Fecha operativa">
+                    <button
+                      type="button"
+                      className="control-date-step"
+                      onClick={() => {
+                        setActiveTab("today");
+                        setControlDate((value) => shiftDateKey(value, -1));
+                      }}
+                    >
+                      Anterior
+                    </button>
+                    <label className="control-field" htmlFor="control-date">
+                      <span>Fecha</span>
+                      <input
+                        id="control-date"
+                        className="control-date-input"
+                        type="date"
+                        value={controlDate}
+                        onChange={(event) => {
+                          setActiveTab("today");
+                          setControlDate(event.target.value || getDateKeyForTimezone(new Date(), timezone));
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="control-date-step"
+                      onClick={() => {
+                        setActiveTab("today");
+                        setControlDate((value) => shiftDateKey(value, 1));
+                      }}
+                    >
+                      Siguiente
+                    </button>
+                    <button
+                      type="button"
+                      className="control-date-step"
+                      onClick={() => {
+                        setActiveTab("today");
+                        setControlDate(getDateKeyForTimezone(new Date(), timezone));
+                      }}
+                    >
+                      Hoy
+                    </button>
+                  </div>
+
                   <label className="control-field" htmlFor="limit-select">
                     <span>Limit</span>
                     <select
@@ -5844,7 +6149,7 @@ function AdminApp() {
                     ) : (
                       <>
                         <p>
-                          Fecha: <strong>{payload?.filters?.date || "today"}</strong>
+                          Fecha: <strong>{payload?.filters?.date || controlDate}</strong>
                         </p>
                         <p>
                           Upcoming: <strong>{toBoolLabel(includeUpcoming)}</strong>
@@ -6021,6 +6326,11 @@ function AdminApp() {
                               onClick={() => {
                                 setManualCreateError("");
                                 setManualCreateSuccess("");
+                                setManualDraft((value) => ({
+                                  ...value,
+                                  date: controlDate || getDateKeyForTimezone(new Date(), value.timezone),
+                                  startsAt: ""
+                                }));
                                 setManualModalOpen(true);
                               }}
                               disabled={hasResourcesData && !manualServices.length}
@@ -6075,9 +6385,9 @@ function AdminApp() {
                             </div>
                           </section>
 
-                          <section className="panel" aria-label="Citas de hoy">
+                          <section className="panel" aria-label="Citas del día">
                             <div className="panel-heading">
-                              <h2>Citas de hoy</h2>
+                              <h2>Citas del día</h2>
                               <p>{todayAppointments.length} registros</p>
                             </div>
                             <AppointmentTable
@@ -6376,6 +6686,7 @@ function AdminApp() {
         services={manualServices}
         therapists={manualTherapists}
         rooms={manualRooms}
+        tenantSlug={payload?.center?.slug || resourcesPayload?.center?.slug || ""}
         resourcesLoaded={hasResourcesData}
         resourcesLoading={resourcesLoading || resourcesRefreshing}
         resourcesError={resourcesError}
