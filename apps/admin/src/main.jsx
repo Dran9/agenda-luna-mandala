@@ -22,6 +22,7 @@ import {
   UserGear,
   UsersThree,
   Wallet,
+  WarningCircle,
   X
 } from "@phosphor-icons/react";
 import "./styles.css";
@@ -62,6 +63,27 @@ const SETTINGS_STATUS_FILTERS = [
 const ROOM_FEATURE_OPTIONS = [
   { key: "camilla", label: "Camilla" },
   { key: "mesa", label: "Mesa" }
+];
+const ROOM_FEATURE_LABELS = new Map(ROOM_FEATURE_OPTIONS.map((option) => [option.key, option.label]));
+const SERVICE_ROOM_REQUIREMENT_RULES = [
+  { match: ["tarot", "carta astral", "registros akhasicos", "registros akashicos"], featureKeys: ["mesa"] },
+  {
+    match: [
+      "masaje",
+      "craneosacral",
+      "osteopatia",
+      "osteopatía",
+      "reiki",
+      "bioenergetica",
+      "bioenergética",
+      "chakras",
+      "aura",
+      "lazos karmicos",
+      "lazos kármicos",
+      "aromaterapia"
+    ],
+    featureKeys: ["camilla"]
+  }
 ];
 
 const STATUS_META = {
@@ -104,6 +126,35 @@ const THERAPISTS_AUTO_REFRESH_MS = 60000;
 
 const ADMIN_TOKEN_KEY = "agenda-admin-token";
 const ADMIN_PROFILE_KEY = "agenda-admin-profile";
+
+function normalizeForMatch(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function uniqueFeatureKeys(featureKeys) {
+  return Array.from(new Set((featureKeys || []).map((key) => String(key || "").trim()).filter(Boolean)));
+}
+
+function getRequiredFeatureKeysForService(serviceName) {
+  const normalizedName = normalizeForMatch(serviceName);
+  const requiredKeys = [];
+
+  for (const rule of SERVICE_ROOM_REQUIREMENT_RULES) {
+    const matches = rule.match.some((entry) => normalizedName.includes(normalizeForMatch(entry)));
+    if (matches) {
+      requiredKeys.push(...rule.featureKeys);
+    }
+  }
+
+  return uniqueFeatureKeys(requiredKeys);
+}
+
+function featureLabels(featureKeys) {
+  return uniqueFeatureKeys(featureKeys).map((key) => ROOM_FEATURE_LABELS.get(key) || key);
+}
 
 function readTheme() {
   const byQuery = new URLSearchParams(window.location.search).get("theme");
@@ -948,7 +999,11 @@ function RoomsKanban({
     if (!targetRoomId || !appointmentId || targetRoomId === sourceRoomId) {
       return;
     }
-    onMoveToRoom?.(appointmentId, targetRoomId, column.roomName);
+    onMoveToRoom?.({
+      appointmentId,
+      nextRoomId: targetRoomId,
+      roomLabel: column.roomName
+    });
   }
 
   return (
@@ -1332,6 +1387,123 @@ function AppointmentDrawer({
           </div>
         ) : null}
       </aside>
+    </div>
+  );
+}
+
+function RoomMoveConfirmModal({ request, loading, onCancel, onConfirm }) {
+  if (!request) return null;
+
+  const hasResourceWarning = request.missingFeatureLabels?.length > 0;
+
+  return (
+    <div className="confirm-overlay" role="presentation" onClick={loading ? undefined : onCancel}>
+      <section
+        className="confirm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Confirmar cambio de sala"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="confirm-header">
+          <div className={`confirm-icon${hasResourceWarning ? " is-warning" : ""}`}>
+            {hasResourceWarning ? (
+              <WarningCircle size={22} weight="bold" />
+            ) : (
+              <Door size={22} weight="bold" />
+            )}
+          </div>
+          <div>
+            <p className="confirm-kicker">Cambio de sala</p>
+            <h2>{hasResourceWarning ? "Revisar recursos antes de mover" : "Confirmar movimiento"}</h2>
+          </div>
+        </header>
+
+        <div className="confirm-body">
+          <p>
+            Vas a mover <strong>{request.clientName}</strong> de{" "}
+            <strong>{request.currentRoomName}</strong> a <strong>{request.targetRoomName}</strong>.
+          </p>
+          <dl className="confirm-grid">
+            <dt>Servicio</dt>
+            <dd>{request.serviceName}</dd>
+            <dt>Horario</dt>
+            <dd>{request.timeLabel}</dd>
+            <dt>Recursos de destino</dt>
+            <dd>{request.targetFeatureLabels.length ? request.targetFeatureLabels.join(", ") : "Solo sillas"}</dd>
+          </dl>
+
+          {hasResourceWarning ? (
+            <div className="confirm-warning" role="alert">
+              <strong>Esta sala no tiene {request.missingFeatureLabels.join(" ni ")}.</strong>
+              <span>
+                El servicio esta marcado como que requiere {request.requiredFeatureLabels.join(" y ")}.
+                Confirma solo si Daniel valido una excepcion operativa.
+              </span>
+            </div>
+          ) : (
+            <p className="confirm-note">
+              La sala destino esta disponible para este horario. Al confirmar se vuelven a crear los claims de sala.
+            </p>
+          )}
+        </div>
+
+        <footer className="confirm-actions">
+          <button type="button" className="confirm-secondary" onClick={onCancel} disabled={loading}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className={hasResourceWarning ? "confirm-danger" : "confirm-primary"}
+            onClick={onConfirm}
+            disabled={loading}
+          >
+            {loading ? <CircleNotch size={16} className="spin" /> : null}
+            <span>{hasResourceWarning ? "Confirmar excepcion" : "Confirmar cambio"}</span>
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function StatusConfirmModal({ request, loading, onCancel, onConfirm }) {
+  if (!request) return null;
+
+  return (
+    <div className="confirm-overlay" role="presentation" onClick={loading ? undefined : onCancel}>
+      <section
+        className="confirm-modal compact"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Confirmar estado terminal"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="confirm-header">
+          <div className="confirm-icon is-warning">
+            <WarningCircle size={22} weight="bold" />
+          </div>
+          <div>
+            <p className="confirm-kicker">Estado terminal</p>
+            <h2>Confirmar accion</h2>
+          </div>
+        </header>
+        <div className="confirm-body">
+          <p>
+            Confirma cambiar esta cita a <strong>{ACTION_LABELS[request.nextStatus] || request.nextStatus}</strong>.
+            Esta accion es terminal.
+          </p>
+        </div>
+        <footer className="confirm-actions">
+          <button type="button" className="confirm-secondary" onClick={onCancel} disabled={loading}>
+            Cancelar
+          </button>
+          <button type="button" className="confirm-danger" onClick={onConfirm} disabled={loading}>
+            {loading ? <CircleNotch size={16} className="spin" /> : null}
+            <span>Confirmar</span>
+          </button>
+        </footer>
+      </section>
     </div>
   );
 }
@@ -3048,6 +3220,8 @@ function AdminApp() {
   const [kanbanMoving, setKanbanMoving] = useState(false);
   const [kanbanPending, setKanbanPending] = useState(null);
   const [kanbanError, setKanbanError] = useState("");
+  const [roomMoveRequest, setRoomMoveRequest] = useState(null);
+  const [statusConfirmRequest, setStatusConfirmRequest] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [deleteAppointmentsLoading, setDeleteAppointmentsLoading] = useState(false);
   const [deleteAppointmentsError, setDeleteAppointmentsError] = useState("");
@@ -3964,6 +4138,22 @@ function AdminApp() {
     () => resourcesSettings.rooms.filter((room) => room.status === "ACTIVE"),
     [resourcesSettings]
   );
+  const roomInfoById = useMemo(() => {
+    const map = new Map();
+    for (const room of resourcesSettings.rooms) {
+      const roomId = Number(room.id);
+      if (Number.isInteger(roomId) && roomId > 0) {
+        map.set(roomId, room);
+      }
+    }
+    for (const room of payload?.rooms || []) {
+      const roomId = Number(room.id);
+      if (Number.isInteger(roomId) && roomId > 0 && !map.has(roomId)) {
+        map.set(roomId, room);
+      }
+    }
+    return map;
+  }, [payload?.rooms, resourcesSettings.rooms]);
   const manualTherapists = useMemo(() => {
     if (listedTherapists.length) {
       return listedTherapists.filter((therapist) => therapist.isActive);
@@ -4073,6 +4263,8 @@ function AdminApp() {
     setMutationError("");
     setRoomMutationLoading(false);
     setRoomMutationError("");
+    setRoomMoveRequest(null);
+    setStatusConfirmRequest(null);
     setDeleteAppointmentsError("");
     setArmedDeleteAppointmentId(null);
     setConfirmBulkAppointmentsDelete(false);
@@ -4210,6 +4402,8 @@ function AdminApp() {
     setDetailError("");
     setMutationError("");
     setRoomMutationError("");
+    setRoomMoveRequest(null);
+    setStatusConfirmRequest(null);
     setDeleteAppointmentsError("");
     setDeleteAppointmentsLoading(false);
     setSelectedAppointmentIds([]);
@@ -4251,21 +4445,7 @@ function AdminApp() {
     setActiveSection("control");
   }
 
-  async function handleStatusChange(nextStatus) {
-    if (!selectedAppointmentId || mutationLoading) {
-      return;
-    }
-
-    if (TERMINAL_ACTIONS.has(nextStatus)) {
-      const confirmed = window.confirm(
-        `Confirma cambiar estado a "${ACTION_LABELS[nextStatus] || nextStatus}". Esta accion es terminal.`
-      );
-
-      if (!confirmed) {
-        return;
-      }
-    }
-
+  async function applyStatusChange(nextStatus) {
     setMutationLoading(true);
     setMutationError("");
 
@@ -4296,93 +4476,105 @@ function AdminApp() {
       setMutationError(mutationRequestError.message || "No se pudo cambiar el estado.");
     } finally {
       setMutationLoading(false);
+      setStatusConfirmRequest(null);
     }
   }
 
-  const handleRoomKanbanMove = useCallback(
-    async (appointmentId, nextRoomId, roomLabel) => {
-      if (!authToken || !appointmentId || !nextRoomId || kanbanMoving) {
-        return;
-      }
-      const numericRoomId = Number(nextRoomId);
-      const numericAppointmentId = Number(appointmentId);
-      if (!Number.isInteger(numericAppointmentId) || numericAppointmentId <= 0) return;
-      if (!Number.isInteger(numericRoomId) || numericRoomId <= 0) return;
-
-      const confirmLabel = roomLabel
-        ? `¿Mover esta cita a Sala ${roomLabel}?`
-        : "¿Mover esta cita de sala?";
-      const confirmed = window.confirm(confirmLabel);
-      if (!confirmed) return;
-
-      setKanbanError("");
-      setKanbanMoving(true);
-      setKanbanPending({ appointmentId: numericAppointmentId, roomId: numericRoomId });
-
-      try {
-        const response = await fetch(
-          `/api/admin/appointments/${numericAppointmentId}/room`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${authToken}`
-            },
-            body: JSON.stringify({ roomId: numericRoomId })
-          }
-        );
-
-        const responsePayload = await response.json();
-
-        if (response.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-
-        if (!response.ok) {
-          throw new Error(getErrorMessage(responsePayload));
-        }
-
-        setRefreshTick((value) => value + 1);
-        if (
-          drawerOpen &&
-          Number(selectedAppointmentId) === numericAppointmentId &&
-          responsePayload?.appointment
-        ) {
-          setDetailPayload(responsePayload);
-        }
-      } catch (error) {
-        setKanbanError(error.message || "No se pudo mover la cita.");
-      } finally {
-        setKanbanMoving(false);
-        setKanbanPending(null);
-      }
-    },
-    [
-      authToken,
-      drawerOpen,
-      handleUnauthorized,
-      kanbanMoving,
-      selectedAppointmentId
-    ]
-  );
-
-  async function handleRoomChange(nextRoomId) {
-    if (!selectedAppointmentId || !nextRoomId || roomMutationLoading) {
+  async function handleStatusChange(nextStatus) {
+    if (!selectedAppointmentId || mutationLoading) {
       return;
     }
 
-    setRoomMutationLoading(true);
+    if (TERMINAL_ACTIONS.has(nextStatus)) {
+      setStatusConfirmRequest({ nextStatus });
+      return;
+    }
+
+    await applyStatusChange(nextStatus);
+  }
+
+  function findAppointmentForMove(appointmentId) {
+    const numericAppointmentId = Number(appointmentId);
+    if (detailPayload?.appointment && Number(detailPayload.appointment.id) === numericAppointmentId) {
+      return detailPayload.appointment;
+    }
+    return listAppointments.find((item) => Number(item.id) === numericAppointmentId) || null;
+  }
+
+  function buildRoomMoveRequest({ appointmentId, nextRoomId, roomLabel, mode }) {
+    const numericAppointmentId = Number(appointmentId);
+    const numericRoomId = Number(nextRoomId);
+    if (!Number.isInteger(numericAppointmentId) || numericAppointmentId <= 0) return null;
+    if (!Number.isInteger(numericRoomId) || numericRoomId <= 0) return null;
+
+    const appointment = findAppointmentForMove(numericAppointmentId);
+    const targetRoom = roomInfoById.get(numericRoomId) || {};
+    const serviceName = appointment?.service?.name || "Servicio";
+    const requiredFeatureKeys = getRequiredFeatureKeysForService(serviceName);
+    const targetFeatureKeys = Array.isArray(targetRoom.featureKeys)
+      ? uniqueFeatureKeys(targetRoom.featureKeys)
+      : [];
+    const missingFeatureKeys = Array.isArray(targetRoom.featureKeys)
+      ? requiredFeatureKeys.filter((key) => !targetFeatureKeys.includes(key))
+      : [];
+
+    return {
+      mode,
+      appointmentId: numericAppointmentId,
+      targetRoomId: numericRoomId,
+      targetRoomName: targetRoom.name || roomLabel || `Sala ${numericRoomId}`,
+      currentRoomName: appointment?.room?.name || "sala actual",
+      clientName: appointment?.client?.fullName || "esta cita",
+      serviceName,
+      timeLabel: appointment?.startsAt && appointment?.endsAt
+        ? `${formatClock(appointment.startsAt, timezone)} - ${formatClock(appointment.endsAt, timezone)}`
+        : "-",
+      requiredFeatureLabels: featureLabels(requiredFeatureKeys),
+      targetFeatureLabels: featureLabels(targetFeatureKeys),
+      missingFeatureLabels: featureLabels(missingFeatureKeys)
+    };
+  }
+
+  function requestRoomMove({ appointmentId, nextRoomId, roomLabel, mode }) {
+    if (!authToken || kanbanMoving || roomMutationLoading) return;
+    const request = buildRoomMoveRequest({ appointmentId, nextRoomId, roomLabel, mode });
+    if (!request) return;
+    setKanbanError("");
     setRoomMutationError("");
+    setRoomMoveRequest(request);
+  }
+
+  const handleRoomKanbanMove = useCallback(
+    ({ appointmentId, nextRoomId, roomLabel }) => {
+      requestRoomMove({ appointmentId, nextRoomId, roomLabel, mode: "kanban" });
+    },
+    [authToken, kanbanMoving, listAppointments, roomInfoById, roomMutationLoading, timezone]
+  );
+
+  async function executeRoomMove(request) {
+    if (!request || !authToken) return;
+    const numericAppointmentId = Number(request.appointmentId);
+    const numericRoomId = Number(request.targetRoomId);
+    if (!Number.isInteger(numericAppointmentId) || numericAppointmentId <= 0) return;
+    if (!Number.isInteger(numericRoomId) || numericRoomId <= 0) return;
+
+    if (request.mode === "drawer") {
+      setRoomMutationLoading(true);
+      setRoomMutationError("");
+    } else {
+      setKanbanMoving(true);
+      setKanbanError("");
+      setKanbanPending({ appointmentId: numericAppointmentId, roomId: numericRoomId });
+    }
 
     try {
-      const response = await fetch(`/api/admin/appointments/${selectedAppointmentId}/room`, {
+      const response = await fetch(`/api/admin/appointments/${numericAppointmentId}/room`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${authToken}`
         },
-        body: JSON.stringify({ roomId: nextRoomId })
+        body: JSON.stringify({ roomId: numericRoomId })
       });
 
       const mutationPayload = await response.json();
@@ -4396,13 +4588,41 @@ function AdminApp() {
         throw new Error(getErrorMessage(mutationPayload));
       }
 
-      setDetailPayload(mutationPayload);
       setRefreshTick((value) => value + 1);
+      if (
+        request.mode === "drawer" ||
+        (drawerOpen && Number(selectedAppointmentId) === numericAppointmentId)
+      ) {
+        setDetailPayload(mutationPayload);
+      }
+      setRoomMoveRequest(null);
     } catch (mutationRequestError) {
-      setRoomMutationError(mutationRequestError.message || "No se pudo cambiar la sala.");
+      const message = mutationRequestError.message || "No se pudo cambiar la sala.";
+      if (request.mode === "drawer") {
+        setRoomMutationError(message);
+      } else {
+        setKanbanError(message);
+      }
     } finally {
-      setRoomMutationLoading(false);
+      if (request.mode === "drawer") {
+        setRoomMutationLoading(false);
+      } else {
+        setKanbanMoving(false);
+        setKanbanPending(null);
+      }
     }
+  }
+
+  function handleRoomChange(nextRoomId) {
+    if (!selectedAppointmentId || !nextRoomId || roomMutationLoading) {
+      return;
+    }
+    requestRoomMove({
+      appointmentId: selectedAppointmentId,
+      nextRoomId,
+      roomLabel: roomInfoById.get(Number(nextRoomId))?.name,
+      mode: "drawer"
+    });
   }
 
   function toggleAppointmentSelection(appointmentId, checked) {
@@ -5678,6 +5898,28 @@ function AdminApp() {
         authToken={authToken}
         onUnauthorized={handleUnauthorized}
         onResolveAction={handleSearchAction}
+      />
+
+      <RoomMoveConfirmModal
+        request={roomMoveRequest}
+        loading={kanbanMoving || roomMutationLoading}
+        onCancel={() => {
+          if (!kanbanMoving && !roomMutationLoading) {
+            setRoomMoveRequest(null);
+          }
+        }}
+        onConfirm={() => executeRoomMove(roomMoveRequest)}
+      />
+
+      <StatusConfirmModal
+        request={statusConfirmRequest}
+        loading={mutationLoading}
+        onCancel={() => {
+          if (!mutationLoading) {
+            setStatusConfirmRequest(null);
+          }
+        }}
+        onConfirm={() => applyStatusChange(statusConfirmRequest?.nextStatus)}
       />
     </div>
   );
