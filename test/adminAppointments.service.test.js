@@ -95,6 +95,7 @@ function createServiceConnection(seed) {
     therapists: (seed.therapists || []).map((entry) => ({ ...entry })),
     rooms: (seed.rooms || []).map((entry) => ({ ...entry })),
     serviceRooms: (seed.serviceRooms || []).map((entry) => ({ ...entry })),
+    serviceRoomRequirements: (seed.serviceRoomRequirements || []).map((entry) => ({ ...entry })),
     appointments: (seed.appointments || []).map((entry) => ({ ...entry })),
     claims: (seed.claims || []).map((entry) => ({ ...entry })),
     payments: (seed.payments || []).map((entry) => ({ ...entry }))
@@ -310,6 +311,26 @@ function createServiceConnection(seed) {
         }
 
         const rows = Array.from(groups.entries()).map(([status, total]) => ({ status, total }));
+        return [rows];
+      }
+
+      if (normalizedSql.includes("TABLE_NAME = 'service_room_requirements'")) {
+        return [[{ tableCount: 1 }]];
+      }
+
+      if (normalizedSql.includes("FROM service_room_requirements")) {
+        const centerId = Number(params[0]);
+        const serviceIds = params.slice(1).map((entry) => Number(entry));
+        const rows = this.state.serviceRoomRequirements
+          .filter((entry) => entry.centerId === centerId)
+          .filter((entry) => serviceIds.includes(Number(entry.serviceId)))
+          .filter((entry) => entry.isActive !== 0)
+          .map((entry) => ({
+            serviceId: entry.serviceId,
+            featureKey: entry.featureKey
+          }))
+          .sort((left, right) => Number(left.serviceId) - Number(right.serviceId) || String(left.featureKey).localeCompare(String(right.featureKey)));
+
         return [rows];
       }
 
@@ -642,6 +663,7 @@ function baseSeed() {
     therapists: [{ id: 1, name: "Ana" }],
     rooms: [{ id: 1, name: "Sala Luna", isActive: 1 }],
     serviceRooms: [{ centerId: 1, serviceId: 1, roomId: 1, isActive: 1 }],
+    serviceRoomRequirements: [{ centerId: 1, serviceId: 1, featureKey: "camilla", isActive: 1 }],
     appointments: [],
     claims: [],
     payments: []
@@ -701,6 +723,7 @@ test("listAdminAppointments incluye cita creada por booking en recentCreated aun
   assert.equal(payload.recentCreated[0].publicCode, "PUB-BOOK-0002");
   assert.equal(payload.recentCreated[0].client.fullName, "Cliente Dos");
   assert.equal(payload.recentCreated[0].service.name, "Masaje Relajante");
+  assert.deepEqual(payload.recentCreated[0].service.requiredFeatureKeys, ["camilla"]);
   assert.equal(payload.recentCreated[0].therapist.name, "Ana");
   assert.equal(payload.recentCreated[0].room.name, "Sala Luna");
   assert.equal(payload.recentCreated[0].status, "confirmed");
@@ -963,6 +986,7 @@ test("getAdminAppointmentDetail devuelve joins reales, claims y pagos", async ()
   assert.equal(payload.appointment.client.fullName, "Cliente Uno");
   assert.equal(payload.appointment.client.onboardingComplete, true);
   assert.equal(payload.appointment.claims.length, 1);
+  assert.deepEqual(payload.appointment.service.requiredFeatureKeys, ["camilla"]);
   assert.equal(payload.appointment.payments.length, 1);
   assert.equal(payload.appointment.paymentsSummary.totalPayments, 1);
   assert.equal(payload.appointment.clientContext.activeAppointments.length, 1);

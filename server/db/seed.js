@@ -31,6 +31,11 @@ const SERVICES = [
     priceAmount: 220
   }
 ];
+const SERVICE_ROOM_REQUIREMENTS = {
+  "masaje-relajante": ["camilla"],
+  "reiki-integral": ["camilla"],
+  aromaterapia: ["camilla"]
+};
 
 const ROOMS = [
   { slug: "sala-fenix", name: "Sala Fénix", capacity: 1, features: ["camilla", "mesa"] },
@@ -162,6 +167,24 @@ async function upsertServices(connection, centerId) {
 
   const [rows] = await connection.query("SELECT id, slug FROM services WHERE center_id = ?", [centerId]);
   return new Map(rows.map((row) => [row.slug, row.id]));
+}
+
+async function upsertServiceRoomRequirements(connection, centerId, serviceBySlug) {
+  for (const [serviceSlug, featureKeys] of Object.entries(SERVICE_ROOM_REQUIREMENTS)) {
+    const serviceId = serviceBySlug.get(serviceSlug);
+    if (!serviceId) continue;
+
+    for (const featureKey of featureKeys) {
+      await connection.query(
+        `INSERT INTO service_room_requirements (center_id, service_id, feature_key, is_active)
+         VALUES (?, ?, ?, 1)
+         ON DUPLICATE KEY UPDATE
+           is_active = VALUES(is_active),
+           updated_at = CURRENT_TIMESTAMP`,
+        [centerId, serviceId, featureKey]
+      );
+    }
+  }
 }
 
 async function upsertRooms(connection, centerId) {
@@ -369,6 +392,7 @@ async function runSeed() {
     const therapistBySlug = await upsertTherapists(connection, centerId);
 
     await deactivateObsoleteRooms(connection, centerId);
+    await upsertServiceRoomRequirements(connection, centerId, serviceBySlug);
     await upsertRoomFeatures(connection, centerId, roomBySlug);
     await upsertTherapistServices(connection, centerId, serviceBySlug, therapistBySlug);
     await upsertServiceRooms(connection, centerId, serviceBySlug, roomBySlug);

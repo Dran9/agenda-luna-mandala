@@ -92,6 +92,17 @@ test("listAdminResources devuelve settings semantico con labels y summary", asyn
       ]
     },
     {
+      includes: "TABLE_NAME = 'service_room_requirements'",
+      rows: [{ tableCount: 1 }]
+    },
+    {
+      includes: "FROM service_room_requirements",
+      rows: [
+        { serviceId: 10, featureKey: "camilla" },
+        { serviceId: 10, featureKey: "mesa" }
+      ]
+    },
+    {
       includes: "FROM resource_schedules rs",
       rows: [
         {
@@ -144,6 +155,8 @@ test("listAdminResources devuelve settings semantico con labels y summary", asyn
   assert.equal(payload.settings.services[0].priceLabel, "180 BOB");
   assert.equal(payload.settings.services[0].status, "ACTIVE");
   assert.equal(payload.settings.services[0].compatibleRoomsCount, 1);
+  assert.deepEqual(payload.settings.services[0].requiredFeatureKeys, ["camilla", "mesa"]);
+  assert.equal(payload.settings.services[0].requiredFeaturesLabel, "Camilla, Mesa");
 
   assert.equal(payload.settings.rooms[0].name, "Sala Luna");
   assert.equal(payload.settings.rooms[0].capacityLabel, "2 personas");
@@ -191,6 +204,10 @@ test("listAdminResources aplica filtro resourceType para horarios", async () => 
     {
       includes: "FROM room_features",
       rows: []
+    },
+    {
+      includes: "TABLE_NAME = 'service_room_requirements'",
+      rows: [{ tableCount: 0 }]
     },
     {
       includes: "WHERE rs.center_id = ? AND rs.resource_type = ?",

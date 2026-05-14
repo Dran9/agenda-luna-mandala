@@ -11,6 +11,7 @@ const EXPECTED_CORE_TABLES = [
   "therapist_services",
   "rooms",
   "room_features",
+  "service_room_requirements",
   "service_rooms",
   "resource_schedules",
   "resource_blocks",

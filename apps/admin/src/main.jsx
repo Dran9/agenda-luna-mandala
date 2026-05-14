@@ -229,27 +229,6 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "15123456789"
   }
 ];
-const SERVICE_ROOM_REQUIREMENT_RULES = [
-  { match: ["tarot", "carta astral", "registros akhasicos", "registros akashicos"], featureKeys: ["mesa"] },
-  {
-    match: [
-      "masaje",
-      "craneosacral",
-      "osteopatia",
-      "osteopatía",
-      "reiki",
-      "bioenergetica",
-      "bioenergética",
-      "chakras",
-      "aura",
-      "lazos karmicos",
-      "lazos kármicos",
-      "aromaterapia"
-    ],
-    featureKeys: ["camilla"]
-  }
-];
-
 const STATUS_META = {
   pending: { label: "Pendiente", className: "status-pending" },
   confirmed: { label: "Confirmada", className: "status-confirmed" },
@@ -291,29 +270,8 @@ const THERAPISTS_AUTO_REFRESH_MS = 60000;
 const ADMIN_TOKEN_KEY = "agenda-admin-token";
 const ADMIN_PROFILE_KEY = "agenda-admin-profile";
 
-function normalizeForMatch(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
 function uniqueFeatureKeys(featureKeys) {
   return Array.from(new Set((featureKeys || []).map((key) => String(key || "").trim()).filter(Boolean)));
-}
-
-function getRequiredFeatureKeysForService(serviceName) {
-  const normalizedName = normalizeForMatch(serviceName);
-  const requiredKeys = [];
-
-  for (const rule of SERVICE_ROOM_REQUIREMENT_RULES) {
-    const matches = rule.match.some((entry) => normalizedName.includes(normalizeForMatch(entry)));
-    if (matches) {
-      requiredKeys.push(...rule.featureKeys);
-    }
-  }
-
-  return uniqueFeatureKeys(requiredKeys);
 }
 
 function featureLabels(featureKeys) {
@@ -474,7 +432,10 @@ function normalizeSettingsPayload(resources) {
       priceLabel,
       status,
       statusLabel: entry?.statusLabel || getStatusLabelFromValue(status),
-      compatibleRoomsCount: Number(entry?.compatibleRoomsCount || 0)
+      compatibleRoomsCount: Number(entry?.compatibleRoomsCount || 0),
+      requiredFeatureKeys: uniqueFeatureKeys(entry?.requiredFeatureKeys || []),
+      requiredFeatures: Array.isArray(entry?.requiredFeatures) ? entry.requiredFeatures : [],
+      requiredFeaturesLabel: entry?.requiredFeaturesLabel || "Solo sillas"
     };
   });
 
@@ -1766,7 +1727,9 @@ function ManualAppointmentModal({
                       onClick={() => updateField("serviceId", String(service.id))}
                     >
                       <strong>{service.name}</strong>
-                      <span>{service.durationLabel || "Duracion configurada"}</span>
+                      <span>
+                        {service.durationLabel || "Duracion configurada"} · {service.requiredFeaturesLabel || "Solo sillas"}
+                      </span>
                     </button>
                   );
                 })}
@@ -5025,7 +4988,7 @@ function AdminApp() {
     const appointment = findAppointmentForMove(numericAppointmentId);
     const targetRoom = roomInfoById.get(numericRoomId) || {};
     const serviceName = appointment?.service?.name || "Servicio";
-    const requiredFeatureKeys = getRequiredFeatureKeysForService(serviceName);
+    const requiredFeatureKeys = uniqueFeatureKeys(appointment?.service?.requiredFeatureKeys || []);
     const targetFeatureKeys = Array.isArray(targetRoom.featureKeys)
       ? uniqueFeatureKeys(targetRoom.featureKeys)
       : [];

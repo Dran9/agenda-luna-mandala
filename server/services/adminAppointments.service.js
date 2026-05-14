@@ -23,6 +23,10 @@ const ALLOWED_STATUS_TRANSITIONS = {
   pending: new Set(["confirmed", "completed", "cancelled", "no_show"]),
   confirmed: new Set(["completed", "cancelled", "no_show"])
 };
+const ROOM_FEATURE_LABELS = {
+  camilla: "Camilla",
+  mesa: "Mesa"
+};
 
 class AdminAppointmentsError extends Error {
   constructor({
@@ -335,6 +339,62 @@ function buildInClause(values) {
   };
 }
 
+function featureKeyToViewModel(featureKey) {
+  const key = String(featureKey || "").trim();
+  return key ? { key, label: ROOM_FEATURE_LABELS[key] || key } : null;
+}
+
+async function hasServiceRoomRequirementsTable(connection) {
+  const [rows] = await connection.query(
+    `SELECT COUNT(*) AS tableCount
+     FROM information_schema.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'service_room_requirements'`
+  );
+
+  return Number(rows[0]?.tableCount || 0) > 0;
+}
+
+async function loadServiceRoomRequirementsByServiceId({ connection, centerId, serviceIds }) {
+  const normalizedIds = Array.from(
+    new Set(
+      (serviceIds || [])
+        .map((entry) => Number(entry))
+        .filter((entry) => Number.isInteger(entry) && entry > 0)
+    )
+  );
+
+  const result = new Map();
+  if (!normalizedIds.length || !(await hasServiceRoomRequirementsTable(connection))) {
+    return result;
+  }
+
+  const inClause = buildInClause(normalizedIds);
+  const [rows] = await connection.query(
+    `SELECT
+      service_id AS serviceId,
+      feature_key AS featureKey
+     FROM service_room_requirements
+     WHERE center_id = ?
+       AND is_active = 1
+       AND service_id IN ${inClause.sql}
+     ORDER BY service_id ASC, feature_key ASC`,
+    [centerId, ...inClause.values]
+  );
+
+  for (const row of rows) {
+    const serviceId = Number(row.serviceId);
+    const feature = featureKeyToViewModel(row.featureKey);
+    if (!serviceId || !feature) continue;
+    if (!result.has(serviceId)) {
+      result.set(serviceId, []);
+    }
+    result.get(serviceId).push(feature);
+  }
+
+  return result;
+}
+
 function baseAppointmentSelectSql() {
   return `SELECT
     a.id,
@@ -364,7 +424,7 @@ function baseAppointmentSelectSql() {
      ON r.id = a.room_id`;
 }
 
-function mapAppointmentRow(row) {
+function mapAppointmentRow(row, requiredFeatures = []) {
   return {
     id: Number(row.id),
     publicCode: row.publicCode,
@@ -380,7 +440,12 @@ function mapAppointmentRow(row) {
     },
     service: {
       id: Number(row.serviceId),
-      name: row.serviceName
+      name: row.serviceName,
+      requiredFeatures,
+      requiredFeatureKeys: requiredFeatures.map((feature) => feature.key),
+      requiredFeaturesLabel: requiredFeatures.length
+        ? requiredFeatures.map((feature) => feature.label).join(", ")
+        : "Solo sillas"
     },
     therapist: {
       id: Number(row.therapistId),
@@ -435,7 +500,7 @@ function isClientOnboardingComplete(row) {
   );
 }
 
-function mapAppointmentDetail(row, { claims = [], payments = [] } = {}) {
+function mapAppointmentDetail(row, { claims = [], payments = [], requiredFeatures = [] } = {}) {
   const paymentsSummary = {
     totalPayments: payments.length,
     byStatus: {
@@ -479,7 +544,12 @@ function mapAppointmentDetail(row, { claims = [], payments = [] } = {}) {
     },
     service: {
       id: Number(row.serviceId),
-      name: row.serviceName
+      name: row.serviceName,
+      requiredFeatures,
+      requiredFeatureKeys: requiredFeatures.map((feature) => feature.key),
+      requiredFeaturesLabel: requiredFeatures.length
+        ? requiredFeatures.map((feature) => feature.label).join(", ")
+        : "Solo sillas"
     },
     therapist: {
       id: Number(row.therapistId),
@@ -579,6 +649,12 @@ function sortRowsByStartsAtAsc(rows) {
 
     return Number(left.id) - Number(right.id);
   });
+}
+
+function mapAppointmentRowsWithRequirements(rows, requirementsByServiceId) {
+  return rows.map((row) =>
+    mapAppointmentRow(row, requirementsByServiceId.get(Number(row.serviceId)) || [])
+  );
 }
 
 function isRoomActiveAppointmentRow(row, nowDate) {
@@ -949,9 +1025,18 @@ async function buildAppointmentDetail({ connection, centerId, appointmentId, row
       appointmentRow
     })
   ]);
+  const requirementsByServiceId = await loadServiceRoomRequirementsByServiceId({
+    connection,
+    centerId,
+    serviceIds: [appointmentRow.serviceId]
+  });
 
   return {
-    ...mapAppointmentDetail(appointmentRow, { claims, payments }),
+    ...mapAppointmentDetail(appointmentRow, {
+      claims,
+      payments,
+      requiredFeatures: requirementsByServiceId.get(Number(appointmentRow.serviceId)) || []
+    }),
     clientContext,
     roomOptions
   };
@@ -1046,6 +1131,11 @@ async function listAdminAppointments({
       isRoomActiveAppointmentRow(row, nowDate)
     )
   );
+  const requirementsByServiceId = await loadServiceRoomRequirementsByServiceId({
+    connection,
+    centerId: center.id,
+    serviceIds: mergeAppointmentRowsById(todayRows, upcomingRows, recentRows).map((row) => row.serviceId)
+  });
 
   return {
     generatedAt: nowDate.toISOString(),
@@ -1056,10 +1146,10 @@ async function listAdminAppointments({
       limit: rowLimit
     },
     summary: createSummary(summaryRows),
-    today: todayRows.map(mapAppointmentRow),
-    upcoming: upcomingRows.map(mapAppointmentRow),
-    recentCreated: recentRows.map(mapAppointmentRow),
-    roomsActive: roomsActiveRows.map(mapAppointmentRow),
+    today: mapAppointmentRowsWithRequirements(todayRows, requirementsByServiceId),
+    upcoming: mapAppointmentRowsWithRequirements(upcomingRows, requirementsByServiceId),
+    recentCreated: mapAppointmentRowsWithRequirements(recentRows, requirementsByServiceId),
+    roomsActive: mapAppointmentRowsWithRequirements(roomsActiveRows, requirementsByServiceId),
     rooms: roomRows.map((row) => ({
       id: Number(row.id),
       slug: row.slug,
@@ -1118,6 +1208,11 @@ async function listAdminAppointmentHistory({
      LIMIT ?`,
     [...params, rowLimit]
   );
+  const requirementsByServiceId = await loadServiceRoomRequirementsByServiceId({
+    connection,
+    centerId: center.id,
+    serviceIds: historyRows.map((row) => row.serviceId)
+  });
 
   return {
     generatedAt: nowDate.toISOString(),
@@ -1128,7 +1223,7 @@ async function listAdminAppointmentHistory({
       order: orderFilter,
       limit: rowLimit
     },
-    history: historyRows.map(mapAppointmentRow),
+    history: mapAppointmentRowsWithRequirements(historyRows, requirementsByServiceId),
     visible: historyRows.length,
     metadata: {
       dbNow: nowDb

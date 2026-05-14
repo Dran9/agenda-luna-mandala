@@ -7,6 +7,10 @@ const migrationSql = fs.readFileSync(
   path.resolve(__dirname, "../server/db/migrations/0004_canonical_rooms.sql"),
   "utf8"
 );
+const serviceRequirementsMigrationSql = fs.readFileSync(
+  path.resolve(__dirname, "../server/db/migrations/0005_service_room_requirements.sql"),
+  "utf8"
+);
 
 test("0004 canonical rooms migration applies the four real rooms and disables demo rooms", () => {
   for (const [slug, name] of [
@@ -30,4 +34,13 @@ test("0004 canonical rooms migration connects features, compatibilities, and roo
   assert.match(migrationSql, /INSERT INTO service_rooms/);
   assert.match(migrationSql, /INSERT INTO resource_schedules/);
   assert.match(migrationSql, /'room'/);
+});
+
+test("0005 service room requirements stores required room resources by service", () => {
+  assert.match(serviceRequirementsMigrationSql, /CREATE TABLE IF NOT EXISTS service_room_requirements/);
+  assert.match(serviceRequirementsMigrationSql, /PRIMARY KEY \(center_id, service_id, feature_key\)/);
+  assert.match(serviceRequirementsMigrationSql, /FOREIGN KEY \(service_id\) REFERENCES services\(id\)/);
+  assert.match(serviceRequirementsMigrationSql, /INSERT INTO service_room_requirements/);
+  assert.match(serviceRequirementsMigrationSql, /'mesa'/);
+  assert.match(serviceRequirementsMigrationSql, /'camilla'/);
 });

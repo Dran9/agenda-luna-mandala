@@ -132,6 +132,41 @@ function toResourceTypeLabel(resourceTypeRaw) {
   return RESOURCE_TYPE_LABELS[normalizedType] || "Recurso";
 }
 
+function featureKeyToViewModel(featureKey) {
+  const key = String(featureKey || "").trim();
+  return key ? { key, label: ROOM_FEATURE_LABELS[key] || key } : null;
+}
+
+async function hasServiceRoomRequirementsTable(connection) {
+  const [rows] = await connection.query(
+    `SELECT COUNT(*) AS tableCount
+     FROM information_schema.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'service_room_requirements'`
+  );
+
+  return Number(rows[0]?.tableCount || 0) > 0;
+}
+
+async function loadServiceRoomRequirements(connection, centerId) {
+  if (!(await hasServiceRoomRequirementsTable(connection))) {
+    return [];
+  }
+
+  const [rows] = await connection.query(
+    `SELECT
+      service_id AS serviceId,
+      feature_key AS featureKey
+     FROM service_room_requirements
+     WHERE center_id = ?
+       AND is_active = 1
+     ORDER BY service_id ASC, feature_key ASC`,
+    [centerId]
+  );
+
+  return rows;
+}
+
 async function resolveCenter({ connection, tenantSlug, adminSession }) {
   const normalizedTenant = typeof tenantSlug === "string" ? tenantSlug.trim() : "";
   const adminCenterId = parseAdminCenterId(adminSession);
@@ -188,7 +223,7 @@ async function listAdminResources({
   const normalizedResourceType = normalizeResourceType(resourceType);
   const nowDate = toDate(now);
 
-  const [[serviceRows], [roomRows], [compatibilityRows], [featureRows]] = await Promise.all([
+  const [[serviceRows], [roomRows], [compatibilityRows], [featureRows], requirementRows] = await Promise.all([
     connection.query(
       `SELECT
         id,
@@ -239,7 +274,8 @@ async function listAdminResources({
        WHERE center_id = ?
        ORDER BY room_id ASC, feature_key ASC`,
       [center.id]
-    )
+    ),
+    loadServiceRoomRequirements(connection, center.id)
   ]);
 
   const scheduleWhere = ["rs.center_id = ?"];
@@ -307,6 +343,20 @@ async function listAdminResources({
     featuresByRoomId.get(roomId).push(featureKey);
   }
 
+  const requiredFeaturesByServiceId = new Map();
+  for (const row of requirementRows) {
+    const serviceId = Number(row.serviceId);
+    const feature = featureKeyToViewModel(row.featureKey);
+    if (!serviceId || !feature) {
+      continue;
+    }
+
+    if (!requiredFeaturesByServiceId.has(serviceId)) {
+      requiredFeaturesByServiceId.set(serviceId, []);
+    }
+    requiredFeaturesByServiceId.get(serviceId).push(feature);
+  }
+
   for (const row of compatibilityRows) {
     const isActive = Number(row.isActive) === 1;
     if (!isActive) {
@@ -330,6 +380,7 @@ async function listAdminResources({
     const durationMinutes = Math.max(0, Math.trunc(toSafeNumber(row.durationMinutes, 0)));
     const priceAmount = toSafeNumber(row.priceAmount, 0);
     const statusMeta = toStatusMeta(row.isActive);
+    const requiredFeatures = requiredFeaturesByServiceId.get(Number(row.id)) || [];
 
     return {
       id: Number(row.id),
@@ -340,7 +391,12 @@ async function listAdminResources({
       priceLabel: toPriceLabel(priceAmount, row.currencyCode),
       status: statusMeta.status,
       statusLabel: statusMeta.statusLabel,
-      compatibleRoomsCount: activeCompatibilityByServiceId.get(Number(row.id)) || 0
+      compatibleRoomsCount: activeCompatibilityByServiceId.get(Number(row.id)) || 0,
+      requiredFeatures,
+      requiredFeatureKeys: requiredFeatures.map((feature) => feature.key),
+      requiredFeaturesLabel: requiredFeatures.length
+        ? requiredFeatures.map((feature) => feature.label).join(", ")
+        : "Solo sillas"
     };
   });
 
@@ -349,10 +405,7 @@ async function listAdminResources({
     const statusMeta = toStatusMeta(row.isActive);
     const roomId = Number(row.id);
     const featureKeys = featuresByRoomId.get(roomId) || [];
-    const features = featureKeys.map((key) => ({
-      key,
-      label: ROOM_FEATURE_LABELS[key] || key
-    }));
+    const features = featureKeys.map(featureKeyToViewModel).filter(Boolean);
 
     return {
       id: roomId,
@@ -503,7 +556,7 @@ function normalizeRoomIsActive(value) {
 
 function toRoomMutationResult(roomRow, featureRows = []) {
   const featureKeys = featureRows.map((row) => String(row.featureKey || "").trim()).filter(Boolean);
-  const features = featureKeys.map((key) => ({ key, label: ROOM_FEATURE_LABELS[key] || key }));
+  const features = featureKeys.map(featureKeyToViewModel).filter(Boolean);
 
   return {
     id: Number(roomRow.id),
