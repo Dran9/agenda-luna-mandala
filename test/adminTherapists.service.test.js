@@ -32,6 +32,10 @@ function createScriptedConnection(steps) {
       }
 
       callIndex += 1;
+      if (step.resultSets) {
+        return [step.resultSets];
+      }
+
       return [step.rows || []];
     },
     assertDone() {
@@ -81,27 +85,28 @@ test("listAdminTherapists entrega view-model semantico con summary y schedulesBy
       ]
     },
     {
-      includes: "FROM therapist_services ts",
-      rows: [
-        { therapistId: 11, serviceId: 201, serviceName: "Masaje" },
-        { therapistId: 11, serviceId: 202, serviceName: "Reiki" },
-        { therapistId: 12, serviceId: 203, serviceName: "Aromaterapia" }
-      ]
-    },
-    {
-      includes: "FROM resource_schedules",
-      rows: [
-        { therapistId: 11, weekday: 1, startTime: "09:00:00", endTime: "13:00:00", slotMinutes: 60, isActive: 1 },
-        { therapistId: 11, weekday: 2, startTime: "09:00:00", endTime: "13:00:00", slotMinutes: 60, isActive: 1 },
-        { therapistId: 11, weekday: 3, startTime: "09:00:00", endTime: "13:00:00", slotMinutes: 60, isActive: 1 },
-        { therapistId: 11, weekday: 5, startTime: "14:00:00", endTime: "18:00:00", slotMinutes: 30, isActive: 0 },
-        { therapistId: 12, weekday: 4, startTime: "08:00:00", endTime: "10:00:00", slotMinutes: 30, isActive: 0 }
-      ]
-    },
-    {
-      includes: "COUNT(DISTINCT r.id) AS compatibleRoomsCount",
-      rows: [
-        { therapistId: 11, compatibleRoomsCount: 2 }
+      includes: "admin_therapists_hydration:services",
+      assert({ sql, params }) {
+        assert.equal(sql.includes("admin_therapists_hydration:schedules"), true);
+        assert.equal(sql.includes("admin_therapists_hydration:rooms"), true);
+        assert.deepEqual(params, [1, 11, 12, 1, 11, 12, 1, 11, 12]);
+      },
+      resultSets: [
+        [
+          { therapistId: 11, serviceId: 201, serviceName: "Masaje" },
+          { therapistId: 11, serviceId: 202, serviceName: "Reiki" },
+          { therapistId: 12, serviceId: 203, serviceName: "Aromaterapia" }
+        ],
+        [
+          { therapistId: 11, weekday: 1, startTime: "09:00:00", endTime: "13:00:00", slotMinutes: 60, isActive: 1 },
+          { therapistId: 11, weekday: 2, startTime: "09:00:00", endTime: "13:00:00", slotMinutes: 60, isActive: 1 },
+          { therapistId: 11, weekday: 3, startTime: "09:00:00", endTime: "13:00:00", slotMinutes: 60, isActive: 1 },
+          { therapistId: 11, weekday: 5, startTime: "14:00:00", endTime: "18:00:00", slotMinutes: 30, isActive: 0 },
+          { therapistId: 12, weekday: 4, startTime: "08:00:00", endTime: "10:00:00", slotMinutes: 30, isActive: 0 }
+        ],
+        [
+          { therapistId: 11, compatibleRoomsCount: 2 }
+        ]
       ]
     }
   ]);
@@ -282,25 +287,21 @@ test("listAdminTherapists cuenta salas compatibles sin duplicados y excluye sala
       ]
     },
     {
-      includes: "FROM therapist_services ts",
-      rows: [
-        { therapistId: 55, serviceId: 401, serviceName: "Servicio A" },
-        { therapistId: 55, serviceId: 402, serviceName: "Servicio B" }
-      ]
-    },
-    {
-      includes: "FROM resource_schedules",
-      rows: []
-    },
-    {
-      includes: "COUNT(DISTINCT r.id) AS compatibleRoomsCount",
+      includes: "admin_therapists_hydration:services",
       assert({ sql }) {
         assert.equal(sql.includes("ts.is_active = 1"), true);
         assert.equal(sql.includes("s.is_active = 1"), true);
         assert.equal(sql.includes("sr.is_active = 1"), true);
         assert.equal(sql.includes("r.is_active = 1"), true);
       },
-      rows: [{ therapistId: 55, compatibleRoomsCount: 2 }]
+      resultSets: [
+        [
+          { therapistId: 55, serviceId: 401, serviceName: "Servicio A" },
+          { therapistId: 55, serviceId: 402, serviceName: "Servicio B" }
+        ],
+        [],
+        [{ therapistId: 55, compatibleRoomsCount: 2 }]
+      ]
     }
   ]);
 

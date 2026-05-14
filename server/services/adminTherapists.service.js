@@ -280,28 +280,7 @@ async function resolveCenter({ connection, tenantSlug, adminSession }) {
   });
 }
 
-async function loadTherapistSchedulesByIds({ connection, centerId, therapistIds }) {
-  if (!therapistIds.length) {
-    return new Map();
-  }
-
-  const inClause = `(${therapistIds.map(() => "?").join(", ")})`;
-  const [rows] = await connection.query(
-    `SELECT
-      resource_id AS therapistId,
-      weekday,
-      start_time AS startTime,
-      end_time AS endTime,
-      slot_minutes AS slotMinutes,
-      is_active AS isActive
-     FROM resource_schedules
-     WHERE center_id = ?
-       AND resource_type = 'therapist'
-       AND resource_id IN ${inClause}
-     ORDER BY resource_id ASC, weekday ASC, start_time ASC`,
-    [centerId, ...therapistIds]
-  );
-
+function mapTherapistSchedulesByRows(rows) {
   const map = new Map();
 
   for (const row of rows) {
@@ -315,29 +294,7 @@ async function loadTherapistSchedulesByIds({ connection, centerId, therapistIds 
   return map;
 }
 
-async function loadTherapistServicesByIds({ connection, centerId, therapistIds }) {
-  if (!therapistIds.length) {
-    return new Map();
-  }
-
-  const inClause = `(${therapistIds.map(() => "?").join(", ")})`;
-  const [rows] = await connection.query(
-    `SELECT
-      ts.therapist_id AS therapistId,
-      s.id AS serviceId,
-      s.name AS serviceName
-     FROM therapist_services ts
-     INNER JOIN services s
-       ON s.center_id = ts.center_id
-      AND s.id = ts.service_id
-     WHERE ts.center_id = ?
-       AND ts.therapist_id IN ${inClause}
-       AND ts.is_active = 1
-       AND s.is_active = 1
-     ORDER BY ts.therapist_id ASC, s.name ASC, s.id ASC`,
-    [centerId, ...therapistIds]
-  );
-
+function mapTherapistServicesByRows(rows) {
   const map = new Map();
 
   for (const row of rows) {
@@ -355,14 +312,56 @@ async function loadTherapistServicesByIds({ connection, centerId, therapistIds }
   return map;
 }
 
-async function loadTherapistCompatibleRoomsCountByIds({ connection, centerId, therapistIds }) {
+function mapTherapistCompatibleRoomsCountByRows(rows) {
+  const map = new Map();
+
+  for (const row of rows) {
+    map.set(Number(row.therapistId), Number(row.compatibleRoomsCount || 0));
+  }
+
+  return map;
+}
+
+async function loadTherapistListHydrationByIds({ connection, centerId, therapistIds }) {
   if (!therapistIds.length) {
-    return new Map();
+    return {
+      servicesByTherapist: new Map(),
+      schedulesByTherapist: new Map(),
+      compatibleRoomsCountByTherapist: new Map()
+    };
   }
 
   const inClause = `(${therapistIds.map(() => "?").join(", ")})`;
-  const [rows] = await connection.query(
-    `SELECT
+  const [resultSets] = await connection.query(
+    `/* admin_therapists_hydration:services */
+     SELECT
+      ts.therapist_id AS therapistId,
+      s.id AS serviceId,
+      s.name AS serviceName
+     FROM therapist_services ts
+     INNER JOIN services s
+       ON s.center_id = ts.center_id
+      AND s.id = ts.service_id
+     WHERE ts.center_id = ?
+       AND ts.therapist_id IN ${inClause}
+       AND ts.is_active = 1
+       AND s.is_active = 1
+     ORDER BY ts.therapist_id ASC, s.name ASC, s.id ASC;
+     /* admin_therapists_hydration:schedules */
+     SELECT
+      resource_id AS therapistId,
+      weekday,
+      start_time AS startTime,
+      end_time AS endTime,
+      slot_minutes AS slotMinutes,
+      is_active AS isActive
+     FROM resource_schedules
+     WHERE center_id = ?
+       AND resource_type = 'therapist'
+       AND resource_id IN ${inClause}
+     ORDER BY resource_id ASC, weekday ASC, start_time ASC;
+     /* admin_therapists_hydration:rooms */
+     SELECT
       ts.therapist_id AS therapistId,
       COUNT(DISTINCT r.id) AS compatibleRoomsCount
      FROM therapist_services ts
@@ -382,16 +381,23 @@ async function loadTherapistCompatibleRoomsCountByIds({ connection, centerId, th
        AND sr.is_active = 1
        AND r.is_active = 1
      GROUP BY ts.therapist_id`,
-    [centerId, ...therapistIds]
+    [
+      centerId,
+      ...therapistIds,
+      centerId,
+      ...therapistIds,
+      centerId,
+      ...therapistIds
+    ]
   );
 
-  const map = new Map();
+  const [serviceRows = [], scheduleRows = [], compatibleRoomRows = []] = resultSets || [];
 
-  for (const row of rows) {
-    map.set(Number(row.therapistId), Number(row.compatibleRoomsCount || 0));
-  }
-
-  return map;
+  return {
+    servicesByTherapist: mapTherapistServicesByRows(serviceRows),
+    schedulesByTherapist: mapTherapistSchedulesByRows(scheduleRows),
+    compatibleRoomsCountByTherapist: mapTherapistCompatibleRoomsCountByRows(compatibleRoomRows)
+  };
 }
 
 async function listAdminTherapists({
@@ -445,23 +451,15 @@ async function listAdminTherapists({
 
   const therapists = rows.map(mapBaseTherapistRow);
   const therapistIds = therapists.map((entry) => entry.id);
-  const [servicesByTherapist, schedulesByTherapist, compatibleRoomsCountByTherapist] = await Promise.all([
-    loadTherapistServicesByIds({
-      connection,
-      centerId: center.id,
-      therapistIds
-    }),
-    loadTherapistSchedulesByIds({
-      connection,
-      centerId: center.id,
-      therapistIds
-    }),
-    loadTherapistCompatibleRoomsCountByIds({
-      connection,
-      centerId: center.id,
-      therapistIds
-    })
-  ]);
+  const {
+    servicesByTherapist,
+    schedulesByTherapist,
+    compatibleRoomsCountByTherapist
+  } = await loadTherapistListHydrationByIds({
+    connection,
+    centerId: center.id,
+    therapistIds
+  });
 
   const hydrated = therapists.map((therapist) => ({
     ...therapist,
