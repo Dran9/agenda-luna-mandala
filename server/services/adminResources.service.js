@@ -222,82 +222,61 @@ async function resolveCenter({ connection, tenantSlug, adminSession }) {
   };
 }
 
-async function listAdminResources({
-  connection,
-  adminSession,
-  tenantSlug,
-  resourceType,
-  now = new Date()
-}) {
-  const center = await resolveCenter({ connection, tenantSlug, adminSession });
-  const normalizedResourceType = normalizeResourceType(resourceType);
-  const nowDate = toDate(now);
-
-  const [[serviceRows], [roomRows], [compatibilityRows], [featureRows], requirementRows] = await Promise.all([
-    connection.query(
-      `SELECT
-        id,
-        name,
-        duration_minutes AS durationMinutes,
-        price_amount AS priceAmount,
-        currency_code AS currencyCode,
-        is_active AS isActive
-       FROM services
-       WHERE center_id = ?
-       ORDER BY is_active DESC, name ASC, id ASC`,
-      [center.id]
-    ),
-    connection.query(
-      `SELECT
-        id,
-        name,
-        capacity,
-        is_active AS isActive
-       FROM rooms
-       WHERE center_id = ?
-       ORDER BY is_active DESC, name ASC, id ASC`,
-      [center.id]
-    ),
-    connection.query(
-      `SELECT
-        sr.service_id AS serviceId,
-        s.name AS serviceName,
-        sr.room_id AS roomId,
-        r.name AS roomName,
-        sr.is_active AS isActive
-       FROM service_rooms sr
-       INNER JOIN services s
-         ON s.center_id = sr.center_id
-        AND s.id = sr.service_id
-       INNER JOIN rooms r
-         ON r.center_id = sr.center_id
-        AND r.id = sr.room_id
-       WHERE sr.center_id = ?
-       ORDER BY sr.is_active DESC, s.name ASC, r.name ASC`,
-      [center.id]
-    ),
-    connection.query(
-      `SELECT
-        room_id AS roomId,
-        feature_key AS featureKey
-       FROM room_features
-       WHERE center_id = ?
-       ORDER BY room_id ASC, feature_key ASC`,
-      [center.id]
-    ),
-    loadServiceRoomRequirements(connection, center.id)
-  ]);
-
+async function fetchAdminResourcesBase({ connection, centerId, resourceType }) {
   const scheduleWhere = ["rs.center_id = ?"];
-  const scheduleParams = [center.id];
+  const scheduleParams = [centerId];
 
-  if (normalizedResourceType !== "all") {
+  if (resourceType !== "all") {
     scheduleWhere.push("rs.resource_type = ?");
-    scheduleParams.push(normalizedResourceType);
+    scheduleParams.push(resourceType);
   }
 
-  const [scheduleRows] = await connection.query(
-    `SELECT
+  const [resultSets] = await connection.query(
+    `/* admin_resources_base:services */
+     SELECT
+      id,
+      name,
+      duration_minutes AS durationMinutes,
+      price_amount AS priceAmount,
+      currency_code AS currencyCode,
+      is_active AS isActive
+     FROM services
+     WHERE center_id = ?
+     ORDER BY is_active DESC, name ASC, id ASC;
+     /* admin_resources_base:rooms */
+     SELECT
+      id,
+      name,
+      capacity,
+      is_active AS isActive
+     FROM rooms
+     WHERE center_id = ?
+     ORDER BY is_active DESC, name ASC, id ASC;
+     /* admin_resources_base:compatibilities */
+     SELECT
+      sr.service_id AS serviceId,
+      s.name AS serviceName,
+      sr.room_id AS roomId,
+      r.name AS roomName,
+      sr.is_active AS isActive
+     FROM service_rooms sr
+     INNER JOIN services s
+       ON s.center_id = sr.center_id
+      AND s.id = sr.service_id
+     INNER JOIN rooms r
+       ON r.center_id = sr.center_id
+      AND r.id = sr.room_id
+     WHERE sr.center_id = ?
+     ORDER BY sr.is_active DESC, s.name ASC, r.name ASC;
+     /* admin_resources_base:features */
+     SELECT
+      room_id AS roomId,
+      feature_key AS featureKey
+     FROM room_features
+     WHERE center_id = ?
+     ORDER BY room_id ASC, feature_key ASC;
+     /* admin_resources_base:schedules */
+     SELECT
       rs.id,
       rs.resource_type AS resourceType,
       rs.resource_id AS resourceId,
@@ -333,8 +312,49 @@ async function listAdminResources({
               rs.weekday ASC,
               rs.start_time ASC,
               rs.id ASC`,
-    scheduleParams
+    [centerId, centerId, centerId, centerId, ...scheduleParams]
   );
+
+  const [
+    serviceRows = [],
+    roomRows = [],
+    compatibilityRows = [],
+    featureRows = [],
+    scheduleRows = []
+  ] = resultSets || [];
+
+  return {
+    serviceRows,
+    roomRows,
+    compatibilityRows,
+    featureRows,
+    scheduleRows
+  };
+}
+
+async function listAdminResources({
+  connection,
+  adminSession,
+  tenantSlug,
+  resourceType,
+  now = new Date()
+}) {
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+  const normalizedResourceType = normalizeResourceType(resourceType);
+  const nowDate = toDate(now);
+
+  const {
+    serviceRows,
+    roomRows,
+    compatibilityRows,
+    featureRows,
+    scheduleRows
+  } = await fetchAdminResourcesBase({
+    connection,
+    centerId: center.id,
+    resourceType: normalizedResourceType
+  });
+  const requirementRows = await loadServiceRoomRequirements(connection, center.id);
 
   const activeCompatibilityByServiceId = new Map();
   const activeCompatibilityByRoomId = new Map();
