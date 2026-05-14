@@ -5,7 +5,7 @@ const { createAdminRouter } = require("../server/routes/admin.route");
 const { AdminAppointmentsError } = require("../server/services/adminAppointments.service");
 const { AdminClientsError } = require("../server/services/adminClients.service");
 const { AdminAuthError, verifyAdminToken } = require("../server/services/adminAuth.service");
-const { ValidationError } = require("../server/services/errors");
+const { PublicBookingError, SlotOccupiedError, ValidationError } = require("../server/services/errors");
 const { signToken } = require("../server/utils/jwt");
 
 function createResponseMock() {
@@ -1304,6 +1304,91 @@ test("POST /api/admin/appointments crea cita manual y retorna 201", async () => 
   assert.equal(receivedArgs.startsAt, "2026-05-20T10:00:00.000Z");
   assert.equal(receivedArgs.now instanceof Date, true);
   assert.equal(res.payload.creation.mode, "admin_manual");
+});
+
+test("POST /api/admin/appointments mapea errores de disponibilidad de reserva publica", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    createManualAppointment: async () => {
+      throw new PublicBookingError({
+        status: 409,
+        code: "SLOT_NOT_AVAILABLE",
+        message: "El slot ya no esta disponible",
+        details: { reason: "room_claim" }
+      });
+    }
+  });
+
+  const handler = getRouteHandler(router, "/appointments", "post");
+  const req = {
+    body: {
+      phoneE164: "59171234567",
+      clientFullName: "Lia Luna",
+      serviceId: "4",
+      startsAt: "2026-05-20T10:00:00.000Z"
+    },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.payload.error.code, "SLOT_NOT_AVAILABLE");
+  assert.equal(res.payload.error.message, "El slot ya no esta disponible");
+  assert.equal(res.payload.error.details.reason, "room_claim");
+});
+
+test("POST /api/admin/appointments mapea errores de claims ocupados", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    createManualAppointment: async () => {
+      throw new SlotOccupiedError("Slot ocupado para terapeuta o sala", { resourceType: "room" });
+    }
+  });
+
+  const handler = getRouteHandler(router, "/appointments", "post");
+  const req = {
+    body: {
+      phoneE164: "59171234567",
+      clientFullName: "Lia Luna",
+      serviceId: "4",
+      startsAt: "2026-05-20T10:00:00.000Z"
+    },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.payload.error.code, "SLOT_OCCUPIED");
+  assert.equal(res.payload.error.message, "Slot ocupado para terapeuta o sala");
+  assert.equal(res.payload.error.details.resourceType, "room");
 });
 
 test("GET /api/admin/therapists with token forwards filters and session", async () => {

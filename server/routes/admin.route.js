@@ -29,7 +29,7 @@ const {
   updateRoom
 } = require("../services/adminResources.service");
 const { searchAdmin } = require("../services/adminSearch.service");
-const { ValidationError } = require("../services/errors");
+const { PublicBookingError, SlotOccupiedError, ValidationError } = require("../services/errors");
 const { AdminAuthError, loginAdmin, verifyAdminToken } = require("../services/adminAuth.service");
 const { env } = require("../utils/env");
 
@@ -50,6 +50,24 @@ function toErrorResponse(error) {
       status: 400,
       code: error.code || "VALIDATION_ERROR",
       message: error.message,
+      details: error.details || {}
+    };
+  }
+
+  if (error instanceof PublicBookingError) {
+    return {
+      status: error.status || 400,
+      code: error.code || "PUBLIC_BOOKING_ERROR",
+      message: error.message,
+      details: error.details || {}
+    };
+  }
+
+  if (error instanceof SlotOccupiedError || error?.code === "SLOT_OCCUPIED") {
+    return {
+      status: 409,
+      code: error.code || "SLOT_OCCUPIED",
+      message: error.message || "El slot ya no esta disponible",
       details: error.details || {}
     };
   }

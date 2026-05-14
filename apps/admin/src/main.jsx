@@ -1792,73 +1792,76 @@ function ManualAppointmentModal({
           <section className="manual-step" aria-label="Pais y WhatsApp">
             <p className="manual-step-label">3. Pais, zona horaria y WhatsApp</p>
             <div className="manual-timezone-grid">
-              <div className="timezone-picker">
-                <button
-                  type="button"
-                  className="timezone-trigger"
-                  onClick={() => setTimezonePickerOpen((current) => !current)}
-                >
-                  <span className="timezone-trigger-main">
-                    <span className="timezone-flag">{selectedTimezoneOption.flag}</span>
-                    <span className="timezone-copy">
-                      <strong>{selectedTimezoneOption.country}</strong>
-                      <span>{selectedTimezoneOption.timezone}</span>
+              <div className="client-filter-field timezone-field">
+                <span>Pais / zona horaria</span>
+                <div className="timezone-picker">
+                  <button
+                    type="button"
+                    className="timezone-trigger"
+                    onClick={() => setTimezonePickerOpen((current) => !current)}
+                  >
+                    <span className="timezone-trigger-main">
+                      <span className="timezone-flag">{selectedTimezoneOption.flag}</span>
+                      <span className="timezone-copy">
+                        <strong>{selectedTimezoneOption.country}</strong>
+                        <span>{selectedTimezoneOption.timezone}</span>
+                      </span>
                     </span>
-                  </span>
-                  <span className="timezone-trigger-side">
-                    <CaretDown size={16} aria-hidden="true" />
-                  </span>
-                </button>
+                    <span className="timezone-trigger-side">
+                      <CaretDown size={16} aria-hidden="true" />
+                    </span>
+                  </button>
 
-                {timezonePickerOpen ? (
-                  <div className="timezone-panel">
-                    <label className="timezone-search">
-                      <MagnifyingGlass size={16} aria-hidden="true" />
-                      <input
-                        type="search"
-                        value={timezoneSearch}
-                        onChange={(event) => setTimezoneSearch(event.target.value)}
-                        placeholder="Buscar pais o zona horaria"
-                      />
-                    </label>
+                  {timezonePickerOpen ? (
+                    <div className="timezone-panel">
+                      <label className="timezone-search">
+                        <MagnifyingGlass size={16} aria-hidden="true" />
+                        <input
+                          type="search"
+                          value={timezoneSearch}
+                          onChange={(event) => setTimezoneSearch(event.target.value)}
+                          placeholder="Buscar pais o zona horaria"
+                        />
+                      </label>
 
-                    <div className="timezone-list">
-                      {groupedTimezoneOptions.length === 0 ? (
-                        <p className="timezone-empty">Sin resultados para la busqueda actual.</p>
-                      ) : null}
-                      {groupedTimezoneOptions.map(([region, options]) => (
-                        <div key={region} className="timezone-group">
-                          <p className="timezone-group-title">{region}</p>
-                          <ul className="timezone-option-list">
-                            {options.map((option) => {
-                              const isActive = option.timezone === selectedTimezoneOption.timezone;
-                              return (
-                                <li key={option.timezone}>
-                                  <button
-                                    type="button"
-                                    className={`timezone-option${isActive ? " is-active" : ""}`}
-                                    onClick={() => handleTimezoneSelect(option)}
-                                  >
-                                    <span className="timezone-option-main">
-                                      <span className="timezone-flag">{option.flag}</span>
-                                      <span className="timezone-copy">
-                                        <strong>{option.country}</strong>
-                                        <span>{option.timezone}</span>
+                      <div className="timezone-list">
+                        {groupedTimezoneOptions.length === 0 ? (
+                          <p className="timezone-empty">Sin resultados para la busqueda actual.</p>
+                        ) : null}
+                        {groupedTimezoneOptions.map(([region, options]) => (
+                          <div key={region} className="timezone-group">
+                            <p className="timezone-group-title">{region}</p>
+                            <ul className="timezone-option-list">
+                              {options.map((option) => {
+                                const isActive = option.timezone === selectedTimezoneOption.timezone;
+                                return (
+                                  <li key={option.timezone}>
+                                    <button
+                                      type="button"
+                                      className={`timezone-option${isActive ? " is-active" : ""}`}
+                                      onClick={() => handleTimezoneSelect(option)}
+                                    >
+                                      <span className="timezone-option-main">
+                                        <span className="timezone-flag">{option.flag}</span>
+                                        <span className="timezone-copy">
+                                          <strong>{option.country}</strong>
+                                          <span>{option.timezone}</span>
+                                        </span>
                                       </span>
-                                    </span>
-                                  </button>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      ))}
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
               </div>
 
-              <div>
+              <div className="manual-phone-field">
                 <label className="client-filter-field" htmlFor="manual-phone-digits">
                   <span>WhatsApp {selectedTimezoneOption.dialCode}</span>
                   <input

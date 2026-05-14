@@ -612,8 +612,10 @@ select {
 }
 
 .manual-timezone-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  grid-template-columns: minmax(190px, 220px) minmax(220px, 300px);
   align-items: start;
+  justify-content: start;
+  column-gap: 10px;
 }
 
 .manual-modal-actions {
@@ -643,11 +645,16 @@ select {
 .timezone-picker {
   position: relative;
   display: grid;
-  gap: 8px;
+  min-width: 0;
+}
+
+.timezone-field,
+.manual-phone-field {
+  min-width: 0;
 }
 
 .timezone-trigger {
-  min-height: 40px;
+  min-height: 36px;
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -664,9 +671,10 @@ select {
 .timezone-trigger-main,
 .timezone-option-main {
   min-width: 0;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
 }
 
 .timezone-flag {
@@ -683,6 +691,10 @@ select {
 .timezone-copy strong {
   font-size: 0.76rem;
   line-height: 1.15;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timezone-copy span {
@@ -694,6 +706,7 @@ select {
 }
 
 .timezone-trigger-side {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -703,10 +716,12 @@ select {
 
 .timezone-panel {
   position: absolute;
-  z-index: 40;
+  z-index: 80;
   top: calc(100% + 6px);
   left: 0;
-  right: 0;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
@@ -717,24 +732,29 @@ select {
 }
 
 .timezone-search {
+  width: 100%;
+  min-width: 0;
   min-height: 34px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 10px;
   color: var(--muted);
+  overflow: hidden;
 }
 
 .timezone-search input {
   min-width: 0;
+  width: 100%;
   flex: 1;
   border: 0;
   outline: none;
   background: transparent;
   color: var(--ink);
   font-size: 0.78rem;
+  text-overflow: ellipsis;
 }
 
 .timezone-list {
@@ -769,6 +789,7 @@ select {
 
 .timezone-option {
   width: 100%;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: transparent;
