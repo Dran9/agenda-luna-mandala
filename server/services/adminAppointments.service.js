@@ -392,6 +392,12 @@ async function loadServiceRoomRequirementsByServiceId({ connection, centerId, se
     [centerId, ...inClause.values]
   );
 
+  return mapServiceRoomRequirementRowsByServiceId(rows);
+}
+
+function mapServiceRoomRequirementRowsByServiceId(rows) {
+  const result = new Map();
+
   for (const row of rows) {
     const serviceId = Number(row.serviceId);
     const feature = featureKeyToViewModel(row.featureKey);
@@ -430,6 +436,12 @@ async function loadRoomFeaturesByRoomId({ connection, centerId, roomIds }) {
      ORDER BY room_id ASC, feature_key ASC`,
     [centerId, ...inClause.values]
   );
+
+  return mapRoomFeatureRowsByRoomId(rows);
+}
+
+function mapRoomFeatureRowsByRoomId(rows) {
+  const result = new Map();
 
   for (const row of rows) {
     const roomId = Number(row.roomId);
@@ -722,7 +734,8 @@ async function fetchAdminAppointmentsDashboard({
   dayStart,
   dayEnd,
   includeUpcoming,
-  rowLimit
+  rowLimit,
+  includeServiceRoomRequirements
 }) {
   const statements = [
     `/* admin_appointments_dashboard:today */
@@ -791,6 +804,35 @@ async function fetchAdminAppointmentsDashboard({
   );
   params.push(centerId);
 
+  statements.push(
+    `/* admin_appointments_dashboard:room_features */
+     SELECT
+      rf.room_id AS roomId,
+      rf.feature_key AS featureKey
+     FROM room_features rf
+     INNER JOIN rooms r
+       ON r.id = rf.room_id
+      AND r.center_id = rf.center_id
+     WHERE rf.center_id = ?
+       AND r.is_active = 1
+     ORDER BY rf.room_id ASC, rf.feature_key ASC`
+  );
+  params.push(centerId);
+
+  if (includeServiceRoomRequirements) {
+    statements.push(
+      `/* admin_appointments_dashboard:service_room_requirements */
+       SELECT
+        service_id AS serviceId,
+        feature_key AS featureKey
+       FROM service_room_requirements
+       WHERE center_id = ?
+         AND is_active = 1
+       ORDER BY service_id ASC, feature_key ASC`
+    );
+    params.push(centerId);
+  }
+
   const [resultSets] = await connection.query(statements.join(";\n"), params);
   let resultIndex = 0;
   const todayRows = resultSets[resultIndex++] || [];
@@ -798,13 +840,17 @@ async function fetchAdminAppointmentsDashboard({
   const summaryRows = resultSets[resultIndex++] || [];
   const recentRows = resultSets[resultIndex++] || [];
   const roomRows = resultSets[resultIndex++] || [];
+  const roomFeatureRows = resultSets[resultIndex++] || [];
+  const serviceRoomRequirementRows = includeServiceRoomRequirements ? resultSets[resultIndex++] || [] : [];
 
   return {
     todayRows,
     upcomingRows,
     summaryRows,
     recentRows,
-    roomRows
+    roomRows,
+    roomFeatureRows,
+    serviceRoomRequirementRows
   };
 }
 
@@ -1207,37 +1253,36 @@ async function listAdminAppointments({
 
   const dayStart = `${dateKey} 00:00:00`;
   const dayEnd = `${dateKey} 23:59:59`;
+  const includeServiceRoomRequirements = await hasServiceRoomRequirementsTable(connection);
 
   const {
     todayRows,
     upcomingRows,
     summaryRows,
     recentRows,
-    roomRows
+    roomRows,
+    roomFeatureRows,
+    serviceRoomRequirementRows
   } = await fetchAdminAppointmentsDashboard({
     connection,
     centerId: center.id,
     dayStart,
     dayEnd,
     includeUpcoming,
-    rowLimit
+    rowLimit,
+    includeServiceRoomRequirements
   });
-  const roomFeaturesByRoomId = await loadRoomFeaturesByRoomId({
-    connection,
-    centerId: center.id,
-    roomIds: roomRows.map((row) => row.id)
-  });
+  const roomFeaturesByRoomId = mapRoomFeatureRowsByRoomId(roomFeatureRows);
 
+  const visibleAppointmentRows = mergeAppointmentRowsById(todayRows, upcomingRows, recentRows);
   const roomsActiveRows = sortRowsByStartsAtAsc(
-    mergeAppointmentRowsById(todayRows, upcomingRows, recentRows).filter((row) =>
+    visibleAppointmentRows.filter((row) =>
       isRoomActiveAppointmentRow(row, nowDate)
     )
   );
-  const requirementsByServiceId = await loadServiceRoomRequirementsByServiceId({
-    connection,
-    centerId: center.id,
-    serviceIds: mergeAppointmentRowsById(todayRows, upcomingRows, recentRows).map((row) => row.serviceId)
-  });
+  const requirementsByServiceId = mapServiceRoomRequirementRowsByServiceId(
+    includeServiceRoomRequirements ? serviceRoomRequirementRows : []
+  );
 
   return {
     generatedAt: nowDate.toISOString(),

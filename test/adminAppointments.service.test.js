@@ -205,6 +205,7 @@ function createServiceConnection(seed) {
         resultSets.push(recentRows);
 
         const roomsCenterId = Number(params[paramIndex]);
+        paramIndex += 1;
         const roomRows = this.state.rooms
           .filter((entry) => (entry.centerId === undefined || Number(entry.centerId) === roomsCenterId) && entry.isActive !== 0)
           .map((entry) => ({
@@ -216,6 +217,34 @@ function createServiceConnection(seed) {
           }))
           .sort((left, right) => String(left.name).localeCompare(String(right.name)) || left.id - right.id);
         resultSets.push(roomRows);
+
+        const roomFeaturesCenterId = Number(params[paramIndex]);
+        paramIndex += 1;
+        const roomFeatureRows = this.state.roomFeatures
+          .filter((entry) => entry.centerId === roomFeaturesCenterId)
+          .filter((entry) => {
+            const room = this.state.rooms.find((item) => Number(item.id) === Number(entry.roomId));
+            return room && (room.centerId === undefined || Number(room.centerId) === roomFeaturesCenterId) && room.isActive !== 0;
+          })
+          .map((entry) => ({
+            roomId: entry.roomId,
+            featureKey: entry.featureKey
+          }))
+          .sort((left, right) => Number(left.roomId) - Number(right.roomId) || String(left.featureKey).localeCompare(String(right.featureKey)));
+        resultSets.push(roomFeatureRows);
+
+        if (normalizedSql.includes("admin_appointments_dashboard:service_room_requirements")) {
+          const requirementsCenterId = Number(params[paramIndex]);
+          const requirementRows = this.state.serviceRoomRequirements
+            .filter((entry) => entry.centerId === requirementsCenterId)
+            .filter((entry) => entry.isActive !== 0)
+            .map((entry) => ({
+              serviceId: entry.serviceId,
+              featureKey: entry.featureKey
+            }))
+            .sort((left, right) => Number(left.serviceId) - Number(right.serviceId) || String(left.featureKey).localeCompare(String(right.featureKey)));
+          resultSets.push(requirementRows);
+        }
 
         return [resultSets];
       }
@@ -902,6 +931,22 @@ test("listAdminAppointments agrupa lecturas principales en una sola consulta das
         !entry.sql.includes("admin_appointments_dashboard:today") &&
         entry.sql.includes("FROM appointments a") &&
         entry.sql.includes("ORDER BY a.created_at DESC")
+    ),
+    false
+  );
+  assert.equal(
+    connection.queryLog.some(
+      (entry) =>
+        !entry.sql.includes("admin_appointments_dashboard:room_features") &&
+        entry.sql.includes("FROM room_features")
+    ),
+    false
+  );
+  assert.equal(
+    connection.queryLog.some(
+      (entry) =>
+        !entry.sql.includes("admin_appointments_dashboard:service_room_requirements") &&
+        entry.sql.includes("FROM service_room_requirements")
     ),
     false
   );
