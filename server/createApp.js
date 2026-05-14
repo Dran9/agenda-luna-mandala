@@ -7,6 +7,13 @@ const { publicBookingRoute } = require("./routes/publicBooking.route");
 
 const bookingDistDir = path.resolve(__dirname, "../apps/booking/dist");
 const adminDistDir = path.resolve(__dirname, "../apps/admin/dist");
+const HASHED_ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
+function setStaticCacheHeaders(res, filePath) {
+  if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+    res.setHeader("Cache-Control", HASHED_ASSET_CACHE_CONTROL);
+  }
+}
 
 function createApp() {
   const app = express();
@@ -20,12 +27,12 @@ function createApp() {
   app.use("/api/admin", adminRoute);
   app.use("/api/public/booking", publicBookingRoute);
 
-  app.use("/admin", express.static(adminDistDir));
+  app.use("/admin", express.static(adminDistDir, { setHeaders: setStaticCacheHeaders }));
   app.get(["/admin", "/admin/{*splat}"], (_req, res) => {
     res.sendFile(path.join(adminDistDir, "index.html"));
   });
 
-  app.use(express.static(bookingDistDir));
+  app.use(express.static(bookingDistDir, { setHeaders: setStaticCacheHeaders }));
   app.get("/{*splat}", (req, res, next) => {
     if (req.path.startsWith("/api/") || req.path === "/api" || req.path.startsWith("/admin")) {
       return next();
