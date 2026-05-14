@@ -1670,6 +1670,31 @@ function ManualAppointmentModal({
 
     return groupTimezoneOptions(filtered);
   }, [timezoneSearch]);
+  const selectedService = useMemo(
+    () => services.find((service) => String(service.id) === String(draft.serviceId)) || null,
+    [services, draft.serviceId]
+  );
+  const requiredFeatureKeys = useMemo(
+    () => uniqueFeatureKeys(selectedService?.requiredFeatureKeys || []),
+    [selectedService]
+  );
+  const requiredFeatureLabels = featureLabels(requiredFeatureKeys);
+  const roomCompatibility = useMemo(() => {
+    return rooms.map((room) => {
+      const roomFeatureKeys = uniqueFeatureKeys(room.featureKeys || []);
+      const missingFeatureKeys = requiredFeatureKeys.filter((key) => !roomFeatureKeys.includes(key));
+      return {
+        room,
+        missingFeatureKeys,
+        missingFeatureLabels: featureLabels(missingFeatureKeys)
+      };
+    });
+  }, [rooms, requiredFeatureKeys]);
+  const compatibleRoomOptions = roomCompatibility.filter((entry) => entry.missingFeatureKeys.length === 0);
+  const overrideRoomOptions = roomCompatibility.filter((entry) => entry.missingFeatureKeys.length > 0);
+  const selectedRoomCompatibility =
+    roomCompatibility.find((entry) => String(entry.room.id) === String(draft.roomId)) || null;
+  const hasSelectedRoomWarning = selectedRoomCompatibility?.missingFeatureKeys.length > 0;
 
   if (!open) {
     return null;
@@ -1892,17 +1917,39 @@ function ManualAppointmentModal({
                   onChange={(event) => updateField("roomId", event.target.value)}
                 >
                   <option value="">Automatica</option>
-                  {rooms.map((room) => (
-                    <option key={`manual-room-${room.id}`} value={String(room.id)}>
-                      {room.name}
-                    </option>
-                  ))}
+                  {compatibleRoomOptions.length ? (
+                    <optgroup label="Compatibles">
+                      {compatibleRoomOptions.map(({ room }) => (
+                        <option key={`manual-room-${room.id}`} value={String(room.id)}>
+                          {room.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                  {overrideRoomOptions.length ? (
+                    <optgroup label="Override requiere revision">
+                      {overrideRoomOptions.map(({ room, missingFeatureLabels }) => (
+                        <option key={`manual-room-${room.id}`} value={String(room.id)}>
+                          {room.name} - falta {missingFeatureLabels.join(" y ")}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
                 </select>
               </label>
             </div>
             <p className="timezone-help">
+              {requiredFeatureLabels.length
+                ? `Este servicio requiere ${requiredFeatureLabels.join(" y ")}. `
+                : ""}
               Si no eliges terapeuta o sala, el backend asigna disponibilidad real con claims.
             </p>
+            {hasSelectedRoomWarning ? (
+              <p className="manual-room-warning" role="alert">
+                Override: {selectedRoomCompatibility.room.name} no tiene{" "}
+                {selectedRoomCompatibility.missingFeatureLabels.join(" ni ")} para este servicio.
+              </p>
+            ) : null}
           </section>
 
           {error ? <p className="feedback error compact-feedback">{error}</p> : null}
