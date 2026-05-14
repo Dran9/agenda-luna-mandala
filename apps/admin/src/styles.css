@@ -1081,6 +1081,38 @@ select {
   gap: 8px;
 }
 
+.control-filters-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.control-filters-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(130px, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+
+.control-filter-search {
+  grid-column: span 2;
+}
+
+.control-filters-panel .control-input,
+.control-filters-panel .client-filter-field input {
+  min-height: 38px;
+  width: 100%;
+}
+
+.control-filter-actions {
+  display: flex;
+  align-items: end;
+}
+
+.control-filter-actions .logout-button {
+  width: 100%;
+  justify-content: center;
+}
+
 .case-column {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1240,6 +1272,37 @@ select {
   color: var(--muted);
   white-space: nowrap;
   background: var(--surface-muted);
+}
+
+.appointment-group-row td {
+  padding: 8px 12px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.appointment-group-row span,
+.appointment-group-row strong {
+  display: inline-flex;
+  align-items: center;
+}
+
+.appointment-group-row span {
+  margin-right: 8px;
+}
+
+.appointment-group-row strong {
+  min-width: 24px;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.72rem;
+  letter-spacing: 0;
 }
 
 .history-table {
@@ -1442,6 +1505,27 @@ select {
 
 .history-results-panel .panel-heading-compact p {
   font-size: 0.78rem;
+}
+
+.appointment-card-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.appointment-card-group strong {
+  color: var(--ink);
+  letter-spacing: 0;
 }
 
 .appointment-card {
@@ -2901,6 +2985,12 @@ select {
 
   .client-command-bar {
     grid-template-columns: 1fr;
+  }
+
+  .control-filters-grid,
+  .control-filter-search {
+    grid-template-columns: 1fr;
+    grid-column: auto;
   }
 
   .history-command-bar {

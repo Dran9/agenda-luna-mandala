@@ -262,6 +262,22 @@ const HISTORY_ORDER_OPTIONS = [
   { id: "date_desc", label: "Mas reciente" },
   { id: "date_asc", label: "Mas antigua" }
 ];
+const CONTROL_STATUS_FILTERS = [
+  { id: "all", label: "Todos" },
+  { id: "pending", label: "Pendiente" },
+  { id: "confirmed", label: "Confirmada" },
+  { id: "cancelled", label: "Cancelada" },
+  { id: "completed", label: "Completada" },
+  { id: "no_show", label: "No show" }
+];
+const CONTROL_GROUP_OPTIONS = [
+  { id: "none", label: "Sin agrupar" },
+  { id: "date", label: "Fecha" },
+  { id: "status", label: "Estado" },
+  { id: "room", label: "Sala" },
+  { id: "therapist", label: "Terapeuta" },
+  { id: "service", label: "Servicio" }
+];
 const TERMINAL_ACTIONS = new Set(["completed", "cancelled", "no_show"]);
 const ACTIVE_ROOM_STATUSES = new Set(["pending", "confirmed"]);
 const CONTROL_AUTO_REFRESH_MS = 90000;
@@ -807,6 +823,182 @@ function sortByStartsAt(items) {
   });
 }
 
+function normalizeFilterText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function appointmentDateKey(appointment, timezone) {
+  return getDateKeyForTimezone(appointment?.startsAt, timezone);
+}
+
+function appointmentMatchesControlFilters(appointment, filters, timezone) {
+  const query = normalizeFilterText(filters.q);
+
+  if (query) {
+    const haystack = normalizeFilterText([
+      appointment?.client?.fullName,
+      appointment?.client?.whatsapp,
+      appointment?.publicCode,
+      appointment?.service?.name,
+      appointment?.therapist?.name,
+      appointment?.room?.name,
+      appointment?.status
+    ].join(" "));
+
+    if (!haystack.includes(query)) {
+      return false;
+    }
+  }
+
+  if (filters.status !== "all" && appointment?.status !== filters.status) {
+    return false;
+  }
+
+  if (filters.serviceId !== "all" && String(appointment?.service?.id || "") !== String(filters.serviceId)) {
+    return false;
+  }
+
+  if (filters.therapistId !== "all" && String(appointment?.therapist?.id || "") !== String(filters.therapistId)) {
+    return false;
+  }
+
+  if (filters.roomId !== "all" && String(appointment?.room?.id || "") !== String(filters.roomId)) {
+    return false;
+  }
+
+  const dateKey = appointmentDateKey(appointment, timezone);
+
+  if (filters.fromDate && dateKey && dateKey < filters.fromDate) {
+    return false;
+  }
+
+  if (filters.toDate && dateKey && dateKey > filters.toDate) {
+    return false;
+  }
+
+  return true;
+}
+
+function filterAppointmentsForControl(appointments, filters, timezone) {
+  return normalizeAppointmentList(appointments).filter((appointment) =>
+    appointmentMatchesControlFilters(appointment, filters, timezone)
+  );
+}
+
+function buildAppointmentEntityOptions({ appointments, resources, resourceType }) {
+  const map = new Map();
+
+  for (const item of normalizeAppointmentList(appointments)) {
+    const entity = item?.[resourceType];
+    const id = Number(entity?.id);
+    if (!Number.isInteger(id) || id <= 0 || map.has(String(id))) {
+      continue;
+    }
+
+    map.set(String(id), {
+      id: String(id),
+      label: entity?.name || `ID ${id}`
+    });
+  }
+
+  for (const resource of resources || []) {
+    const id = Number(resource?.id);
+    if (!Number.isInteger(id) || id <= 0 || map.has(String(id))) {
+      continue;
+    }
+
+    map.set(String(id), {
+      id: String(id),
+      label: resource?.name || resource?.displayName || resource?.fullName || `ID ${id}`
+    });
+  }
+
+  return Array.from(map.values()).sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function getAppointmentGroupMeta(appointment, groupBy, timezone) {
+  if (groupBy === "date") {
+    const key = appointmentDateKey(appointment, timezone) || "sin-fecha";
+    return {
+      key,
+      orderKey: key,
+      label: appointment?.startsAt ? formatDateOnly(appointment.startsAt, timezone) : "Sin fecha"
+    };
+  }
+
+  if (groupBy === "status") {
+    const status = appointment?.status || "sin-estado";
+    return {
+      key: status,
+      label: STATUS_META[status]?.label || status
+    };
+  }
+
+  if (groupBy === "room") {
+    const id = appointment?.room?.id || "sin-sala";
+    return {
+      key: String(id),
+      label: appointment?.room?.name || "Sin sala"
+    };
+  }
+
+  if (groupBy === "therapist") {
+    const id = appointment?.therapist?.id || "sin-terapeuta";
+    return {
+      key: String(id),
+      label: appointment?.therapist?.name || "Sin terapeuta"
+    };
+  }
+
+  if (groupBy === "service") {
+    const id = appointment?.service?.id || "sin-servicio";
+    return {
+      key: String(id),
+      label: appointment?.service?.name || "Sin servicio"
+    };
+  }
+
+  return {
+    key: "all",
+    label: "Todas"
+  };
+}
+
+function groupAppointmentsForControl(appointments, groupBy, timezone) {
+  if (!groupBy || groupBy === "none") {
+    return [
+      {
+        key: "all",
+        label: "Todas",
+        appointments
+      }
+    ];
+  }
+
+  const map = new Map();
+
+  for (const appointment of appointments) {
+    const meta = getAppointmentGroupMeta(appointment, groupBy, timezone);
+    if (!map.has(meta.key)) {
+      map.set(meta.key, {
+        key: meta.key,
+        orderKey: meta.orderKey || meta.label,
+        label: meta.label,
+        appointments: []
+      });
+    }
+    map.get(meta.key).appointments.push(appointment);
+  }
+
+  return Array.from(map.values()).sort((left, right) =>
+    String(left.orderKey).localeCompare(String(right.orderKey))
+  );
+}
+
 function isActiveRoomAppointment(appointment, nowDate = new Date()) {
   const status = String(appointment?.status || "").trim().toLowerCase();
 
@@ -868,9 +1060,149 @@ function SummaryCard({ label, value, className }) {
   );
 }
 
+function ControlFiltersPanel({
+  filters,
+  services,
+  therapists,
+  rooms,
+  filteredCount,
+  totalCount,
+  onChange,
+  onReset
+}) {
+  function updateFilter(field, value) {
+    onChange((current) => ({
+      ...current,
+      [field]: value
+    }));
+  }
+
+  return (
+    <section className="panel control-filters-panel" aria-label="Filtros de citas">
+      <div className="panel-heading panel-heading-compact">
+        <h2>Filtros</h2>
+        <p>{filteredCount} de {totalCount} registros</p>
+      </div>
+
+      <div className="control-filters-grid">
+        <label className="client-filter-field control-filter-search" htmlFor="control-filter-q">
+          <span>Nombre, WA o codigo</span>
+          <input
+            id="control-filter-q"
+            type="search"
+            value={filters.q}
+            onChange={(event) => updateFilter("q", event.target.value)}
+            placeholder="Buscar"
+          />
+        </label>
+
+        <label className="client-filter-field" htmlFor="control-filter-from">
+          <span>Desde</span>
+          <input
+            id="control-filter-from"
+            type="date"
+            value={filters.fromDate}
+            onChange={(event) => updateFilter("fromDate", event.target.value)}
+          />
+        </label>
+
+        <label className="client-filter-field" htmlFor="control-filter-to">
+          <span>Hasta</span>
+          <input
+            id="control-filter-to"
+            type="date"
+            value={filters.toDate}
+            onChange={(event) => updateFilter("toDate", event.target.value)}
+          />
+        </label>
+
+        <label className="client-filter-field" htmlFor="control-filter-status">
+          <span>Estado</span>
+          <select
+            id="control-filter-status"
+            className="control-input"
+            value={filters.status}
+            onChange={(event) => updateFilter("status", event.target.value)}
+          >
+            {CONTROL_STATUS_FILTERS.map((option) => (
+              <option key={option.id} value={option.id}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="client-filter-field" htmlFor="control-filter-service">
+          <span>Servicio</span>
+          <select
+            id="control-filter-service"
+            className="control-input"
+            value={filters.serviceId}
+            onChange={(event) => updateFilter("serviceId", event.target.value)}
+          >
+            <option value="all">Todos</option>
+            {services.map((option) => (
+              <option key={option.id} value={option.id}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="client-filter-field" htmlFor="control-filter-therapist">
+          <span>Terapeuta</span>
+          <select
+            id="control-filter-therapist"
+            className="control-input"
+            value={filters.therapistId}
+            onChange={(event) => updateFilter("therapistId", event.target.value)}
+          >
+            <option value="all">Todos</option>
+            {therapists.map((option) => (
+              <option key={option.id} value={option.id}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="client-filter-field" htmlFor="control-filter-room">
+          <span>Sala</span>
+          <select
+            id="control-filter-room"
+            className="control-input"
+            value={filters.roomId}
+            onChange={(event) => updateFilter("roomId", event.target.value)}
+          >
+            <option value="all">Todas</option>
+            {rooms.map((option) => (
+              <option key={option.id} value={option.id}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="client-filter-field" htmlFor="control-filter-group">
+          <span>Agrupar</span>
+          <select
+            id="control-filter-group"
+            className="control-input"
+            value={filters.groupBy}
+            onChange={(event) => updateFilter("groupBy", event.target.value)}
+          >
+            {CONTROL_GROUP_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="control-filter-actions">
+          <button type="button" className="logout-button" onClick={onReset}>
+            Limpiar
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function AppointmentTable({
   appointments,
   timezone,
+  groupBy = "none",
   onSelect,
   selectedIds,
   onToggleSelect,
@@ -884,6 +1216,8 @@ function AppointmentTable({
   }
 
   const allSelected = appointments.length > 0 && appointments.every((item) => selectedIds.has(item.id));
+  const groups = groupAppointmentsForControl(appointments, groupBy, timezone);
+  const showGroups = groupBy && groupBy !== "none";
 
   return (
     <>
@@ -917,84 +1251,106 @@ function AppointmentTable({
             </tr>
           </thead>
           <tbody>
-            {appointments.map((item) => (
-              <tr key={item.id}>
-                <td className="cell-check">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(item.id)}
-                    onChange={(event) => onToggleSelect(item.id, event.target.checked)}
-                    aria-label={`Seleccionar cita ${item.publicCode || item.id}`}
-                  />
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    className="table-open"
-                    onClick={() => onSelect(item.id)}
-                    title="Abrir detalle"
-                  >
-                    {item.client.fullName || "Sin nombre"}
-                  </button>
-                </td>
-                <td>{formatDateTime(item.startsAt, timezone)}</td>
-                <td>{item.client.whatsapp || "-"}</td>
-                <td>{item.service.name || "-"}</td>
-                <td>{item.therapist.name || "-"}</td>
-                <td>{item.room.name || "-"}</td>
-                <td>
-                  <StatusChip status={item.status} />
-                </td>
-                <td>{item.publicCode || "-"}</td>
-                <td>{formatDateTime(item.createdAt, timezone)}</td>
-                <td>
-                  <button
-                    type="button"
-                    className={`danger-button${armedDeleteId === item.id ? " is-armed" : ""}`}
-                    onClick={() => onDeleteOne(item.id)}
-                    disabled={deleteLoading}
-                  >
-                    <Trash size={14} weight="regular" aria-hidden="true" />
-                    <span>{armedDeleteId === item.id ? "¿Borrar?" : "Borrar"}</span>
-                  </button>
-                </td>
-              </tr>
+            {groups.map((group) => (
+              <React.Fragment key={`group-${group.key}`}>
+                {showGroups ? (
+                  <tr className="appointment-group-row">
+                    <td colSpan={11}>
+                      <span>{group.label}</span>
+                      <strong>{group.appointments.length}</strong>
+                    </td>
+                  </tr>
+                ) : null}
+                {group.appointments.map((item) => (
+                  <tr key={item.id}>
+                    <td className="cell-check">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(item.id)}
+                        onChange={(event) => onToggleSelect(item.id, event.target.checked)}
+                        aria-label={`Seleccionar cita ${item.publicCode || item.id}`}
+                      />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="table-open"
+                        onClick={() => onSelect(item.id)}
+                        title="Abrir detalle"
+                      >
+                        {item.client.fullName || "Sin nombre"}
+                      </button>
+                    </td>
+                    <td>{formatDateTime(item.startsAt, timezone)}</td>
+                    <td>{item.client.whatsapp || "-"}</td>
+                    <td>{item.service.name || "-"}</td>
+                    <td>{item.therapist.name || "-"}</td>
+                    <td>{item.room.name || "-"}</td>
+                    <td>
+                      <StatusChip status={item.status} />
+                    </td>
+                    <td>{item.publicCode || "-"}</td>
+                    <td>{formatDateTime(item.createdAt, timezone)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`danger-button${armedDeleteId === item.id ? " is-armed" : ""}`}
+                        onClick={() => onDeleteOne(item.id)}
+                        disabled={deleteLoading}
+                      >
+                        <Trash size={14} weight="regular" aria-hidden="true" />
+                        <span>{armedDeleteId === item.id ? "¿Borrar?" : "Borrar"}</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
       </div>
 
       <ul className="appointments-cards" aria-label="Lista de citas mobile">
-        {appointments.map((item) => (
-          <li key={`mobile-${item.id}`} className="appointment-card">
-            <label className="inline-check">
-              <input
-                type="checkbox"
-                checked={selectedIds.has(item.id)}
-                onChange={(event) => onToggleSelect(item.id, event.target.checked)}
-              />
-              <span>Seleccionar</span>
-            </label>
-            <button type="button" className="card-open" onClick={() => onSelect(item.id)}>
-              <span className="appointment-title">{item.client.fullName || "Sin nombre"}</span>
-              <StatusChip status={item.status} />
-            </button>
-            <p className="appointment-line">{formatDateTime(item.startsAt, timezone)}</p>
-            <p className="appointment-line">WhatsApp: {item.client.whatsapp || "-"}</p>
-            <p className="appointment-line">Servicio: {item.service.name || "-"}</p>
-            <p className="appointment-line">Terapeuta: {item.therapist.name || "-"}</p>
-            <p className="appointment-line">Sala: {item.room.name || "-"}</p>
-            <p className="appointment-line">Creada: {formatDateTime(item.createdAt, timezone)}</p>
-            <button
-              type="button"
-              className={`danger-button${armedDeleteId === item.id ? " is-armed" : ""}`}
-              onClick={() => onDeleteOne(item.id)}
-              disabled={deleteLoading}
-            >
-              <Trash size={14} weight="regular" aria-hidden="true" />
-              <span>{armedDeleteId === item.id ? "¿Borrar?" : "Borrar"}</span>
-            </button>
-          </li>
+        {groups.map((group) => (
+          <React.Fragment key={`mobile-group-${group.key}`}>
+            {showGroups ? (
+              <li className="appointment-card-group">
+                <span>{group.label}</span>
+                <strong>{group.appointments.length}</strong>
+              </li>
+            ) : null}
+            {group.appointments.map((item) => (
+              <li key={`mobile-${item.id}`} className="appointment-card">
+                <label className="inline-check">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(item.id)}
+                    onChange={(event) => onToggleSelect(item.id, event.target.checked)}
+                  />
+                  <span>Seleccionar</span>
+                </label>
+                <button type="button" className="card-open" onClick={() => onSelect(item.id)}>
+                  <span className="appointment-title">{item.client.fullName || "Sin nombre"}</span>
+                  <StatusChip status={item.status} />
+                </button>
+                <p className="appointment-line">{formatDateTime(item.startsAt, timezone)}</p>
+                <p className="appointment-line">WhatsApp: {item.client.whatsapp || "-"}</p>
+                <p className="appointment-line">Servicio: {item.service.name || "-"}</p>
+                <p className="appointment-line">Terapeuta: {item.therapist.name || "-"}</p>
+                <p className="appointment-line">Sala: {item.room.name || "-"}</p>
+                <p className="appointment-line">Creada: {formatDateTime(item.createdAt, timezone)}</p>
+                <button
+                  type="button"
+                  className={`danger-button${armedDeleteId === item.id ? " is-armed" : ""}`}
+                  onClick={() => onDeleteOne(item.id)}
+                  disabled={deleteLoading}
+                >
+                  <Trash size={14} weight="regular" aria-hidden="true" />
+                  <span>{armedDeleteId === item.id ? "¿Borrar?" : "Borrar"}</span>
+                </button>
+              </li>
+            ))}
+          </React.Fragment>
         ))}
       </ul>
     </>
@@ -3994,6 +4350,16 @@ function AdminApp() {
 
   const [activeTab, setActiveTab] = useState("today");
   const [controlDate, setControlDate] = useState(() => getDateKeyForTimezone());
+  const [controlFilters, setControlFilters] = useState({
+    q: "",
+    fromDate: "",
+    toDate: "",
+    status: "all",
+    serviceId: "all",
+    therapistId: "all",
+    roomId: "all",
+    groupBy: "none"
+  });
   const [includeUpcoming, setIncludeUpcoming] = useState(true);
   const [limit, setLimit] = useState(20);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -4934,26 +5300,6 @@ function AdminApp() {
     return sortByStartsAt(listAppointments.filter((entry) => isActiveRoomAppointment(entry)));
   }, [payload, listAppointments]);
 
-  const casesByStatus = useMemo(() => {
-    return [
-      {
-        status: "pending",
-        label: "Pendientes",
-        appointments: listAppointments.filter((item) => item.status === "pending")
-      },
-      {
-        status: "no_show",
-        label: "No show",
-        appointments: listAppointments.filter((item) => item.status === "no_show")
-      },
-      {
-        status: "cancelled",
-        label: "Canceladas",
-        appointments: listAppointments.filter((item) => item.status === "cancelled")
-      }
-    ];
-  }, [listAppointments]);
-
   const listedClients = clientsPayload?.clients || [];
   const historyAppointments = historyPayload?.history || [];
   const listedTherapists = therapistsPayload?.therapists || [];
@@ -5010,6 +5356,65 @@ function AdminApp() {
       String(left.displayName).localeCompare(String(right.displayName))
     );
   }, [listedTherapists, listAppointments]);
+  const controlServiceOptions = useMemo(
+    () => buildAppointmentEntityOptions({
+      appointments: listAppointments,
+      resources: manualServices,
+      resourceType: "service"
+    }),
+    [listAppointments, manualServices]
+  );
+  const controlTherapistOptions = useMemo(
+    () => buildAppointmentEntityOptions({
+      appointments: listAppointments,
+      resources: manualTherapists,
+      resourceType: "therapist"
+    }),
+    [listAppointments, manualTherapists]
+  );
+  const controlRoomOptions = useMemo(
+    () => buildAppointmentEntityOptions({
+      appointments: listAppointments,
+      resources: manualRooms,
+      resourceType: "room"
+    }),
+    [listAppointments, manualRooms]
+  );
+  const filteredTodayAppointments = useMemo(
+    () => filterAppointmentsForControl(todayAppointments, controlFilters, timezone),
+    [todayAppointments, controlFilters, timezone]
+  );
+  const filteredUpcomingAppointments = useMemo(
+    () => filterAppointmentsForControl(upcomingAppointments, controlFilters, timezone),
+    [upcomingAppointments, controlFilters, timezone]
+  );
+  const filteredRecentAppointments = useMemo(
+    () => filterAppointmentsForControl(recentAppointments, controlFilters, timezone),
+    [recentAppointments, controlFilters, timezone]
+  );
+  const filteredListAppointments = useMemo(
+    () => filterAppointmentsForControl(listAppointments, controlFilters, timezone),
+    [listAppointments, controlFilters, timezone]
+  );
+  const filteredCasesByStatus = useMemo(() => {
+    return [
+      {
+        status: "pending",
+        label: "Pendientes",
+        appointments: filteredListAppointments.filter((item) => item.status === "pending")
+      },
+      {
+        status: "no_show",
+        label: "No show",
+        appointments: filteredListAppointments.filter((item) => item.status === "no_show")
+      },
+      {
+        status: "cancelled",
+        label: "Canceladas",
+        appointments: filteredListAppointments.filter((item) => item.status === "cancelled")
+      }
+    ];
+  }, [filteredListAppointments]);
 
   const selectedAppointmentIdsSet = useMemo(
     () => new Set(selectedAppointmentIds),
@@ -6349,13 +6754,35 @@ function AdminApp() {
                             ) : null}
                           </section>
 
+                          <ControlFiltersPanel
+                            filters={controlFilters}
+                            services={controlServiceOptions}
+                            therapists={controlTherapistOptions}
+                            rooms={controlRoomOptions}
+                            filteredCount={filteredListAppointments.length}
+                            totalCount={listAppointments.length}
+                            onChange={setControlFilters}
+                            onReset={() =>
+                              setControlFilters({
+                                q: "",
+                                fromDate: "",
+                                toDate: "",
+                                status: "all",
+                                serviceId: "all",
+                                therapistId: "all",
+                                roomId: "all",
+                                groupBy: "none"
+                              })
+                            }
+                          />
+
                           <section className="panel" aria-label="Casos prioritarios">
                             <div className="panel-heading">
                               <h2>Casos</h2>
                               <p>Pending / No show / Canceladas</p>
                             </div>
                             <div className="cases-grid">
-                              {casesByStatus.map((group) => (
+                              {filteredCasesByStatus.map((group) => (
                                 <article key={group.status} className="case-column">
                                   <div className="case-column-head">
                                     <StatusChip status={group.status} />
@@ -6388,11 +6815,12 @@ function AdminApp() {
                           <section className="panel" aria-label="Citas del día">
                             <div className="panel-heading">
                               <h2>Citas del día</h2>
-                              <p>{todayAppointments.length} registros</p>
+                              <p>{filteredTodayAppointments.length} de {todayAppointments.length} registros</p>
                             </div>
                             <AppointmentTable
-                              appointments={todayAppointments}
+                              appointments={filteredTodayAppointments}
                               timezone={timezone}
+                              groupBy={controlFilters.groupBy}
                               onSelect={openDrawer}
                               selectedIds={selectedAppointmentIdsSet}
                               onToggleSelect={toggleAppointmentSelection}
@@ -6407,11 +6835,12 @@ function AdminApp() {
                             <section className="panel" aria-label="Proximas citas">
                               <div className="panel-heading">
                                 <h2>Proximas citas</h2>
-                                <p>{upcomingAppointments.length} registros</p>
+                                <p>{filteredUpcomingAppointments.length} de {upcomingAppointments.length} registros</p>
                               </div>
                               <AppointmentTable
-                                appointments={upcomingAppointments}
+                                appointments={filteredUpcomingAppointments}
                                 timezone={timezone}
+                                groupBy={controlFilters.groupBy}
                                 onSelect={openDrawer}
                                 selectedIds={selectedAppointmentIdsSet}
                                 onToggleSelect={toggleAppointmentSelection}
@@ -6426,11 +6855,12 @@ function AdminApp() {
                           <section className="panel" aria-label="Ultimas citas creadas">
                             <div className="panel-heading">
                               <h2>Ultimas citas creadas</h2>
-                              <p>{recentAppointments.length} registros</p>
+                              <p>{filteredRecentAppointments.length} de {recentAppointments.length} registros</p>
                             </div>
                             <AppointmentTable
-                              appointments={recentAppointments}
+                              appointments={filteredRecentAppointments}
                               timezone={timezone}
+                              groupBy={controlFilters.groupBy}
                               onSelect={openDrawer}
                               selectedIds={selectedAppointmentIdsSet}
                               onToggleSelect={toggleAppointmentSelection}
