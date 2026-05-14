@@ -1727,9 +1727,6 @@ function ManualAppointmentModal({
                       onClick={() => updateField("serviceId", String(service.id))}
                     >
                       <strong>{service.name}</strong>
-                      <span>
-                        {service.durationLabel || "Duracion configurada"} · {service.requiredFeaturesLabel || "Solo sillas"}
-                      </span>
                     </button>
                   );
                 })}
@@ -1784,7 +1781,6 @@ function ManualAppointmentModal({
                     </span>
                   </span>
                   <span className="timezone-trigger-side">
-                    <span>{formatTimezoneLocalClock(selectedTimezoneOption.timezone)}</span>
                     <CaretDown size={16} aria-hidden="true" />
                   </span>
                 </button>
@@ -1825,9 +1821,6 @@ function ManualAppointmentModal({
                                         <span>{option.timezone}</span>
                                       </span>
                                     </span>
-                                    <span className="timezone-option-side">
-                                      {formatTimezoneLocalClock(option.timezone)}
-                                    </span>
                                   </button>
                                 </li>
                               );
@@ -1863,7 +1856,7 @@ function ManualAppointmentModal({
 
           <section className="manual-step" aria-label="Asignacion">
             <p className="manual-step-label">4. Horario y asignacion</p>
-            <div className="manual-fields-grid">
+            <div className="manual-fields-grid manual-assignment-grid">
               <label className="client-filter-field" htmlFor="manual-starts-at">
                 <span>Fecha y hora</span>
                 <input
