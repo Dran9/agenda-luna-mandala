@@ -1060,16 +1060,20 @@ function SummaryCard({ label, value, className }) {
   );
 }
 
-function ControlFiltersPanel({
+function ControlToolbar({
   filters,
   services,
   therapists,
   rooms,
   filteredCount,
   totalCount,
+  createDisabled,
   onChange,
-  onReset
+  onReset,
+  onCreate
 }) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   function updateFilter(field, value) {
     onChange((current) => ({
       ...current,
@@ -1077,109 +1081,156 @@ function ControlFiltersPanel({
     }));
   }
 
-  return (
-    <section className="panel control-filters-panel" aria-label="Filtros de citas">
-      <div className="panel-heading panel-heading-compact">
-        <h2>Filtros</h2>
-        <p>{filteredCount} de {totalCount} registros</p>
-      </div>
+  const statusLabel = CONTROL_STATUS_FILTERS.find((option) => option.id === filters.status)?.label;
+  const serviceLabel = services.find((option) => option.id === filters.serviceId)?.label;
+  const therapistLabel = therapists.find((option) => option.id === filters.therapistId)?.label;
+  const roomLabel = rooms.find((option) => option.id === filters.roomId)?.label;
+  const groupLabel = CONTROL_GROUP_OPTIONS.find((option) => option.id === filters.groupBy)?.label;
+  const filterCount = [
+    filters.q,
+    filters.fromDate,
+    filters.toDate,
+    filters.status !== "all",
+    filters.serviceId !== "all",
+    filters.therapistId !== "all",
+    filters.roomId !== "all"
+  ].filter(Boolean).length;
+  const chips = [
+    filters.q ? `Busqueda: ${filters.q}` : null,
+    filters.fromDate ? `Desde: ${filters.fromDate}` : null,
+    filters.toDate ? `Hasta: ${filters.toDate}` : null,
+    filters.status !== "all" ? `Estado: ${statusLabel}` : null,
+    filters.serviceId !== "all" ? `Servicio: ${serviceLabel}` : null,
+    filters.therapistId !== "all" ? `Terapeuta: ${therapistLabel}` : null,
+    filters.roomId !== "all" ? `Sala: ${roomLabel}` : null,
+    filters.groupBy !== "none" ? `Agrupado por: ${groupLabel}` : null
+  ].filter(Boolean);
 
-      <div className="control-filters-grid">
-        <label className="client-filter-field control-filter-search" htmlFor="control-filter-q">
-          <span>Nombre, WA o codigo</span>
+  return (
+    <section className="control-toolbar" aria-label="Herramientas de citas">
+      <div className="control-toolbar-row">
+        <button
+          type="button"
+          className="control-primary-action"
+          onClick={onCreate}
+          disabled={createDisabled}
+        >
+          <CalendarDots size={16} weight="regular" aria-hidden="true" />
+          <span>Nueva cita</span>
+        </button>
+
+        <label className="control-toolbar-search" htmlFor="control-filter-q">
+          <MagnifyingGlass size={16} weight="regular" aria-hidden="true" />
           <input
             id="control-filter-q"
             type="search"
             value={filters.q}
             onChange={(event) => updateFilter("q", event.target.value)}
-            placeholder="Buscar"
+            placeholder="Buscar nombre, WA o codigo"
           />
         </label>
 
-        <label className="client-filter-field" htmlFor="control-filter-from">
-          <span>Desde</span>
-          <input
-            id="control-filter-from"
-            type="date"
-            value={filters.fromDate}
-            onChange={(event) => updateFilter("fromDate", event.target.value)}
-          />
-        </label>
-
-        <label className="client-filter-field" htmlFor="control-filter-to">
-          <span>Hasta</span>
-          <input
-            id="control-filter-to"
-            type="date"
-            value={filters.toDate}
-            onChange={(event) => updateFilter("toDate", event.target.value)}
-          />
-        </label>
-
-        <label className="client-filter-field" htmlFor="control-filter-status">
-          <span>Estado</span>
-          <select
-            id="control-filter-status"
-            className="control-input"
-            value={filters.status}
-            onChange={(event) => updateFilter("status", event.target.value)}
+        <div className="control-toolbar-menu">
+          <button
+            type="button"
+            className={`control-tool-button${filtersOpen ? " is-active" : ""}`}
+            onClick={() => setFiltersOpen((value) => !value)}
           >
-            {CONTROL_STATUS_FILTERS.map((option) => (
-              <option key={option.id} value={option.id}>{option.label}</option>
-            ))}
-          </select>
-        </label>
+            <SlidersHorizontal size={16} weight="regular" aria-hidden="true" />
+            <span>Filtrar</span>
+            {filterCount ? <strong>{filterCount}</strong> : null}
+          </button>
 
-        <label className="client-filter-field" htmlFor="control-filter-service">
-          <span>Servicio</span>
-          <select
-            id="control-filter-service"
-            className="control-input"
-            value={filters.serviceId}
-            onChange={(event) => updateFilter("serviceId", event.target.value)}
-          >
-            <option value="all">Todos</option>
-            {services.map((option) => (
-              <option key={option.id} value={option.id}>{option.label}</option>
-            ))}
-          </select>
-        </label>
+          {filtersOpen ? (
+            <div className="control-toolbar-popover" role="dialog" aria-label="Filtros de citas">
+              <div className="control-popover-grid">
+                <label className="client-filter-field" htmlFor="control-filter-from">
+                  <span>Desde</span>
+                  <input
+                    id="control-filter-from"
+                    type="date"
+                    value={filters.fromDate}
+                    onChange={(event) => updateFilter("fromDate", event.target.value)}
+                  />
+                </label>
 
-        <label className="client-filter-field" htmlFor="control-filter-therapist">
-          <span>Terapeuta</span>
-          <select
-            id="control-filter-therapist"
-            className="control-input"
-            value={filters.therapistId}
-            onChange={(event) => updateFilter("therapistId", event.target.value)}
-          >
-            <option value="all">Todos</option>
-            {therapists.map((option) => (
-              <option key={option.id} value={option.id}>{option.label}</option>
-            ))}
-          </select>
-        </label>
+                <label className="client-filter-field" htmlFor="control-filter-to">
+                  <span>Hasta</span>
+                  <input
+                    id="control-filter-to"
+                    type="date"
+                    value={filters.toDate}
+                    onChange={(event) => updateFilter("toDate", event.target.value)}
+                  />
+                </label>
 
-        <label className="client-filter-field" htmlFor="control-filter-room">
-          <span>Sala</span>
-          <select
-            id="control-filter-room"
-            className="control-input"
-            value={filters.roomId}
-            onChange={(event) => updateFilter("roomId", event.target.value)}
-          >
-            <option value="all">Todas</option>
-            {rooms.map((option) => (
-              <option key={option.id} value={option.id}>{option.label}</option>
-            ))}
-          </select>
-        </label>
+                <label className="client-filter-field" htmlFor="control-filter-status">
+                  <span>Estado</span>
+                  <select
+                    id="control-filter-status"
+                    className="control-input"
+                    value={filters.status}
+                    onChange={(event) => updateFilter("status", event.target.value)}
+                  >
+                    {CONTROL_STATUS_FILTERS.map((option) => (
+                      <option key={option.id} value={option.id}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
 
-        <label className="client-filter-field" htmlFor="control-filter-group">
+                <label className="client-filter-field" htmlFor="control-filter-service">
+                  <span>Servicio</span>
+                  <select
+                    id="control-filter-service"
+                    className="control-input"
+                    value={filters.serviceId}
+                    onChange={(event) => updateFilter("serviceId", event.target.value)}
+                  >
+                    <option value="all">Todos</option>
+                    {services.map((option) => (
+                      <option key={option.id} value={option.id}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="client-filter-field" htmlFor="control-filter-therapist">
+                  <span>Terapeuta</span>
+                  <select
+                    id="control-filter-therapist"
+                    className="control-input"
+                    value={filters.therapistId}
+                    onChange={(event) => updateFilter("therapistId", event.target.value)}
+                  >
+                    <option value="all">Todos</option>
+                    {therapists.map((option) => (
+                      <option key={option.id} value={option.id}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="client-filter-field" htmlFor="control-filter-room">
+                  <span>Sala</span>
+                  <select
+                    id="control-filter-room"
+                    className="control-input"
+                    value={filters.roomId}
+                    onChange={(event) => updateFilter("roomId", event.target.value)}
+                  >
+                    <option value="all">Todas</option>
+                    {rooms.map((option) => (
+                      <option key={option.id} value={option.id}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <label className="control-group-control" htmlFor="control-filter-group">
           <span>Agrupar</span>
           <select
             id="control-filter-group"
-            className="control-input"
             value={filters.groupBy}
             onChange={(event) => updateFilter("groupBy", event.target.value)}
           >
@@ -1189,12 +1240,22 @@ function ControlFiltersPanel({
           </select>
         </label>
 
-        <div className="control-filter-actions">
-          <button type="button" className="logout-button" onClick={onReset}>
+        {chips.length ? (
+          <button type="button" className="control-clear-button" onClick={onReset}>
             Limpiar
           </button>
-        </div>
+        ) : null}
+
+        <p className="control-result-count">{filteredCount} de {totalCount}</p>
       </div>
+
+      {chips.length ? (
+        <div className="control-filter-chips" aria-label="Filtros activos">
+          {chips.map((chip) => (
+            <span key={chip}>{chip}</span>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -6711,56 +6772,14 @@ function AdminApp() {
                     <>
                       {activeTab === "today" ? (
                         <>
-                          <section className="summary-grid" aria-label="Resumen por estado">
-                            <SummaryCard label="Pending" value={summary.pending} className="status-pending" />
-                            <SummaryCard label="Confirmed" value={summary.confirmed} className="status-confirmed" />
-                            <SummaryCard label="Cancelled" value={summary.cancelled} className="status-cancelled" />
-                            <SummaryCard label="Completed" value={summary.completed} className="status-completed" />
-                            <SummaryCard label="No show" value={summary.no_show} className="status-no-show" />
-                            <SummaryCard label="Total" value={summary.total} className="status-total" />
-                          </section>
-
-                          <section className="panel manual-launch-panel" aria-label="Nueva cita manual">
-                            <div className="manual-launch-copy">
-                              <h2>Nueva cita manual</h2>
-                              <p>Crear con servicio primero, cliente separado y asignacion automatica por claims.</p>
-                            </div>
-                            <button
-                              type="button"
-                              className="refresh-button manual-launch-button"
-                              onClick={() => {
-                                setManualCreateError("");
-                                setManualCreateSuccess("");
-                                setManualDraft((value) => ({
-                                  ...value,
-                                  date: controlDate || getDateKeyForTimezone(new Date(), value.timezone),
-                                  startsAt: ""
-                                }));
-                                setManualModalOpen(true);
-                              }}
-                              disabled={hasResourcesData && !manualServices.length}
-                            >
-                              <CalendarDots size={16} weight="regular" aria-hidden="true" />
-                              <span>Nueva cita</span>
-                            </button>
-                            {!hasResourcesData ? (
-                              <p className="manual-form-note">
-                                Los recursos se preparan en segundo plano o al abrir el modal.
-                              </p>
-                            ) : !manualServices.length ? (
-                              <p className="manual-form-note">
-                                Carga recursos para habilitar servicios activos.
-                              </p>
-                            ) : null}
-                          </section>
-
-                          <ControlFiltersPanel
+                          <ControlToolbar
                             filters={controlFilters}
                             services={controlServiceOptions}
                             therapists={controlTherapistOptions}
                             rooms={controlRoomOptions}
                             filteredCount={filteredListAppointments.length}
                             totalCount={listAppointments.length}
+                            createDisabled={hasResourcesData && !manualServices.length}
                             onChange={setControlFilters}
                             onReset={() =>
                               setControlFilters({
@@ -6774,7 +6793,26 @@ function AdminApp() {
                                 groupBy: "none"
                               })
                             }
+                            onCreate={() => {
+                              setManualCreateError("");
+                              setManualCreateSuccess("");
+                              setManualDraft((value) => ({
+                                ...value,
+                                date: controlDate || getDateKeyForTimezone(new Date(), value.timezone),
+                                startsAt: ""
+                              }));
+                              setManualModalOpen(true);
+                            }}
                           />
+
+                          <section className="summary-grid" aria-label="Resumen por estado">
+                            <SummaryCard label="Pending" value={summary.pending} className="status-pending" />
+                            <SummaryCard label="Confirmed" value={summary.confirmed} className="status-confirmed" />
+                            <SummaryCard label="Cancelled" value={summary.cancelled} className="status-cancelled" />
+                            <SummaryCard label="Completed" value={summary.completed} className="status-completed" />
+                            <SummaryCard label="No show" value={summary.no_show} className="status-no-show" />
+                            <SummaryCard label="Total" value={summary.total} className="status-total" />
+                          </section>
 
                           <section className="panel" aria-label="Casos prioritarios">
                             <div className="panel-heading">

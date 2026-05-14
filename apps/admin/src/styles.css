@@ -1081,36 +1081,171 @@ select {
   gap: 8px;
 }
 
-.control-filters-panel {
+.control-toolbar {
+  position: relative;
+  z-index: 5;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 8px;
   display: grid;
-  gap: 10px;
+  gap: 7px;
 }
 
-.control-filters-grid {
-  display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(130px, 1fr));
-  gap: 8px;
-  align-items: end;
-}
-
-.control-filter-search {
-  grid-column: span 2;
-}
-
-.control-filters-panel .control-input,
-.control-filters-panel .client-filter-field input {
-  min-height: 38px;
-  width: 100%;
-}
-
-.control-filter-actions {
+.control-toolbar-row {
   display: flex;
-  align-items: end;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
 }
 
-.control-filter-actions .logout-button {
-  width: 100%;
+.control-primary-action,
+.control-tool-button,
+.control-clear-button,
+.control-group-control {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.control-primary-action {
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.control-primary-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.control-tool-button,
+.control-clear-button {
+  cursor: pointer;
+}
+
+.control-tool-button:hover,
+.control-tool-button.is-active,
+.control-clear-button:hover {
+  background: var(--surface-muted);
+}
+
+.control-tool-button strong {
+  min-width: 18px;
+  min-height: 18px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--surface);
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  font-size: 0.68rem;
+}
+
+.control-toolbar-search {
+  min-height: 34px;
+  min-width: min(320px, 100%);
+  flex: 1 1 280px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.control-toolbar-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.control-toolbar-menu {
+  position: relative;
+}
+
+.control-toolbar-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(620px, calc(100vw - 48px));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  padding: 10px;
+}
+
+.control-popover-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.control-popover-grid .control-input,
+.control-popover-grid .client-filter-field input {
+  min-height: 36px;
+  width: 100%;
+}
+
+.control-group-control {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.control-group-control select {
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  outline: 0;
+}
+
+.control-clear-button {
+  color: var(--muted);
+}
+
+.control-result-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.control-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.control-filter-chips span {
+  min-height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .case-column {
@@ -2987,10 +3122,24 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .control-filters-grid,
-  .control-filter-search {
+  .control-toolbar-row,
+  .control-popover-grid {
     grid-template-columns: 1fr;
-    grid-column: auto;
+  }
+
+  .control-toolbar-row {
+    display: grid;
+  }
+
+  .control-result-count {
+    margin-left: 0;
+  }
+
+  .control-toolbar-popover {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+    margin-top: 6px;
   }
 
   .history-command-bar {
