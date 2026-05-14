@@ -263,7 +263,7 @@ const HISTORY_ORDER_OPTIONS = [
 ];
 const TERMINAL_ACTIONS = new Set(["completed", "cancelled", "no_show"]);
 const ACTIVE_ROOM_STATUSES = new Set(["pending", "confirmed"]);
-const CONTROL_AUTO_REFRESH_MS = 45000;
+const CONTROL_AUTO_REFRESH_MS = 90000;
 const CLIENTS_AUTO_REFRESH_MS = 60000;
 const HISTORY_AUTO_REFRESH_MS = 60000;
 const THERAPISTS_AUTO_REFRESH_MS = 60000;
@@ -4430,6 +4430,10 @@ function AdminApp() {
     }
 
     const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
       setRefreshTick((value) => value + 1);
     }, CONTROL_AUTO_REFRESH_MS);
 
