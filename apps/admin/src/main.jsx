@@ -67,6 +67,7 @@ const ROOM_FEATURE_OPTIONS = [
 ];
 const ROOM_FEATURE_LABELS = new Map(ROOM_FEATURE_OPTIONS.map((option) => [option.key, option.label]));
 const DEFAULT_TIMEZONE = "America/La_Paz";
+const CONTROL_RESOURCES_DEFER_MS = 1500;
 const COUNTRY_TIMEZONE_OPTIONS = [
   {
     region: "Sudamerica",
@@ -1640,6 +1641,9 @@ function ManualAppointmentModal({
   services,
   therapists,
   rooms,
+  resourcesLoaded,
+  resourcesLoading,
+  resourcesError,
   loading,
   error,
   success,
@@ -1737,7 +1741,26 @@ function ManualAppointmentModal({
           </button>
         </header>
 
-        <form className="manual-modal-body" onSubmit={onSubmit}>
+        {!resourcesLoaded ? (
+          <div className="manual-modal-body">
+            <section className="manual-step" aria-label="Recursos de cita">
+              <p className="manual-step-label">Recursos</p>
+              {resourcesError ? (
+                <p className="feedback error compact-feedback">{resourcesError}</p>
+              ) : (
+                <p className="feedback drawer-feedback">
+                  {resourcesLoading ? "Cargando servicios, terapeutas y salas..." : "Preparando recursos de cita..."}
+                </p>
+              )}
+            </section>
+            <footer className="manual-modal-actions">
+              <button type="button" className="confirm-secondary" onClick={onClose} disabled={loading}>
+                Cerrar
+              </button>
+            </footer>
+          </div>
+        ) : (
+          <form className="manual-modal-body" onSubmit={onSubmit}>
           <section className="manual-step" aria-label="Servicio">
             <p className="manual-step-label">1. Servicio</p>
             {services.length ? (
@@ -1979,7 +2002,8 @@ function ManualAppointmentModal({
               <span>{loading ? "Creando..." : "Crear cita"}</span>
             </button>
           </footer>
-        </form>
+          </form>
+        )}
       </section>
     </div>
   );
@@ -4253,6 +4277,7 @@ function AdminApp() {
 
   useEffect(() => {
     const controller = new AbortController();
+    let deferTimer = null;
 
     async function loadResources() {
       if (!authToken || (activeSection !== "ajustes" && activeSection !== "control")) {
@@ -4309,12 +4334,24 @@ function AdminApp() {
       }
     }
 
-    loadResources();
+    if (authToken && activeSection === "control" && !manualModalOpen && resourcesPayload) {
+      setResourcesLoading(false);
+      setResourcesRefreshing(false);
+    } else if (authToken && activeSection === "control" && !manualModalOpen && !resourcesPayload) {
+      setResourcesLoading(false);
+      setResourcesRefreshing(false);
+      deferTimer = window.setTimeout(loadResources, CONTROL_RESOURCES_DEFER_MS);
+    } else {
+      loadResources();
+    }
 
     return () => {
+      if (deferTimer) {
+        window.clearTimeout(deferTimer);
+      }
       controller.abort();
     };
-  }, [authToken, activeSection, resourcesRefreshTick, handleUnauthorized]);
+  }, [authToken, activeSection, manualModalOpen, resourcesPayload, resourcesRefreshTick, handleUnauthorized]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -5966,12 +6003,16 @@ function AdminApp() {
                                 setManualCreateSuccess("");
                                 setManualModalOpen(true);
                               }}
-                              disabled={!manualServices.length}
+                              disabled={hasResourcesData && !manualServices.length}
                             >
                               <CalendarDots size={16} weight="regular" aria-hidden="true" />
                               <span>Nueva cita</span>
                             </button>
-                            {!manualServices.length ? (
+                            {!hasResourcesData ? (
+                              <p className="manual-form-note">
+                                Los recursos se preparan en segundo plano o al abrir el modal.
+                              </p>
+                            ) : !manualServices.length ? (
                               <p className="manual-form-note">
                                 Carga recursos para habilitar servicios activos.
                               </p>
@@ -6315,6 +6356,9 @@ function AdminApp() {
         services={manualServices}
         therapists={manualTherapists}
         rooms={manualRooms}
+        resourcesLoaded={hasResourcesData}
+        resourcesLoading={resourcesLoading || resourcesRefreshing}
+        resourcesError={resourcesError}
         loading={manualCreateLoading}
         error={manualCreateError}
         success={manualCreateSuccess}
