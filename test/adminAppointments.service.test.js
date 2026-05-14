@@ -110,6 +110,7 @@ function createServiceConnection(seed) {
   const connection = {
     state,
     _snapshot: null,
+    queryLog: [],
     async beginTransaction() {
       this._snapshot = JSON.parse(JSON.stringify(this.state));
     },
@@ -124,6 +125,100 @@ function createServiceConnection(seed) {
     },
     async query(sql, params = []) {
       const normalizedSql = sql.replace(/\s+/g, " ").trim();
+      this.queryLog.push({
+        sql: normalizedSql,
+        params: [...params]
+      });
+
+      if (normalizedSql.includes("admin_appointments_dashboard:today")) {
+        let paramIndex = 0;
+        const todayCenterId = Number(params[paramIndex]);
+        const dayStart = params[paramIndex + 1];
+        const dayEnd = params[paramIndex + 2];
+        const todayLimit = Number(params[paramIndex + 3]);
+        paramIndex += 4;
+
+        const todayRows = this.state.appointments
+          .filter((entry) => {
+            if (entry.centerId !== todayCenterId) return false;
+            const startsAt = toComparableTime(entry.startsAt);
+            return startsAt >= toComparableTime(dayStart) && startsAt <= toComparableTime(dayEnd);
+          })
+          .sort((left, right) => toComparableTime(left.startsAt) - toComparableTime(right.startsAt) || left.id - right.id)
+          .slice(0, todayLimit)
+          .map((entry) => toJoinedListRow(this.state, entry));
+
+        const resultSets = [todayRows];
+
+        if (normalizedSql.includes("admin_appointments_dashboard:upcoming")) {
+          const upcomingCenterId = Number(params[paramIndex]);
+          const upcomingDayEnd = params[paramIndex + 1];
+          const upcomingLimit = Number(params[paramIndex + 2]);
+          paramIndex += 3;
+
+          const upcomingRows = this.state.appointments
+            .filter((entry) => {
+              if (entry.centerId !== upcomingCenterId) return false;
+              return toComparableTime(entry.startsAt) > toComparableTime(upcomingDayEnd);
+            })
+            .sort((left, right) => toComparableTime(left.startsAt) - toComparableTime(right.startsAt) || left.id - right.id)
+            .slice(0, upcomingLimit)
+            .map((entry) => toJoinedListRow(this.state, entry));
+
+          resultSets.push(upcomingRows);
+        }
+
+        const summaryCenterId = Number(params[paramIndex]);
+        const summaryDayStart = params[paramIndex + 1];
+        paramIndex += 2;
+        let summaryDayEnd = null;
+
+        if (!normalizedSql.includes("admin_appointments_dashboard:upcoming")) {
+          summaryDayEnd = params[paramIndex];
+          paramIndex += 1;
+        }
+
+        const filteredForSummary = this.state.appointments.filter((entry) => {
+          if (entry.centerId !== summaryCenterId) return false;
+
+          const startsAt = toComparableTime(entry.startsAt);
+          if (startsAt < toComparableTime(summaryDayStart)) return false;
+          if (summaryDayEnd !== null && startsAt > toComparableTime(summaryDayEnd)) return false;
+
+          return true;
+        });
+
+        const summaryGroups = new Map();
+        for (const appointment of filteredForSummary) {
+          summaryGroups.set(appointment.status, (summaryGroups.get(appointment.status) || 0) + 1);
+        }
+        resultSets.push(Array.from(summaryGroups.entries()).map(([status, total]) => ({ status, total })));
+
+        const recentCenterId = Number(params[paramIndex]);
+        const recentLimit = Number(params[paramIndex + 1]);
+        paramIndex += 2;
+        const recentRows = this.state.appointments
+          .filter((entry) => entry.centerId === recentCenterId)
+          .sort((left, right) => toComparableTime(right.createdAt) - toComparableTime(left.createdAt) || right.id - left.id)
+          .slice(0, recentLimit)
+          .map((entry) => toJoinedListRow(this.state, entry));
+        resultSets.push(recentRows);
+
+        const roomsCenterId = Number(params[paramIndex]);
+        const roomRows = this.state.rooms
+          .filter((entry) => (entry.centerId === undefined || Number(entry.centerId) === roomsCenterId) && entry.isActive !== 0)
+          .map((entry) => ({
+            id: entry.id,
+            slug: entry.slug || `sala-${entry.id}`,
+            name: entry.name,
+            capacity: entry.capacity || 1,
+            isActive: 1
+          }))
+          .sort((left, right) => String(left.name).localeCompare(String(right.name)) || left.id - right.id);
+        resultSets.push(roomRows);
+
+        return [resultSets];
+      }
 
       if (normalizedSql.includes("FROM centers") && normalizedSql.includes("WHERE id = ?") && normalizedSql.includes("is_active = 1") && normalizedSql.includes("LIMIT 1")) {
         if (normalizedSql.includes("AND slug = ?")) {
@@ -747,6 +842,118 @@ test("listAdminAppointments incluye cita creada por booking en recentCreated aun
   assert.equal(payload.recentCreated[0].therapist.name, "Ana");
   assert.equal(payload.recentCreated[0].room.name, "Sala Luna");
   assert.equal(payload.recentCreated[0].status, "confirmed");
+});
+
+test("listAdminAppointments agrupa lecturas principales en una sola consulta dashboard", async () => {
+  const seed = baseSeed();
+  seed.appointments = [
+    {
+      id: 120,
+      centerId: 1,
+      publicCode: "PUB-DASH-120",
+      status: "confirmed",
+      startsAt: "2026-05-08T14:00:00.000Z",
+      endsAt: "2026-05-08T15:00:00.000Z",
+      createdAt: "2026-05-08T09:00:00.000Z",
+      clientId: 1,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    },
+    {
+      id: 121,
+      centerId: 1,
+      publicCode: "PUB-DASH-121",
+      status: "pending",
+      startsAt: "2026-05-10T14:00:00.000Z",
+      endsAt: "2026-05-10T15:00:00.000Z",
+      createdAt: "2026-05-08T10:00:00.000Z",
+      clientId: 2,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    }
+  ];
+
+  const connection = createServiceConnection(seed);
+
+  const payload = await listAdminAppointments({
+    connection,
+    date: "today",
+    upcoming: true,
+    limit: 20,
+    now: new Date("2026-05-08T12:00:00.000Z"),
+    adminSession: { centerId: 1 }
+  });
+
+  assert.deepEqual(payload.today.map((entry) => entry.id), [120]);
+  assert.deepEqual(payload.upcoming.map((entry) => entry.id), [121]);
+  assert.equal(payload.summary.confirmed, 1);
+  assert.equal(payload.summary.pending, 1);
+  assert.equal(
+    connection.queryLog.filter((entry) => entry.sql.includes("admin_appointments_dashboard:today")).length,
+    1
+  );
+  assert.equal(
+    connection.queryLog.some(
+      (entry) =>
+        !entry.sql.includes("admin_appointments_dashboard:today") &&
+        entry.sql.includes("FROM appointments a") &&
+        entry.sql.includes("ORDER BY a.created_at DESC")
+    ),
+    false
+  );
+});
+
+test("listAdminAppointments conserva upcoming vacio cuando el filtro lo desactiva", async () => {
+  const seed = baseSeed();
+  seed.appointments = [
+    {
+      id: 130,
+      centerId: 1,
+      publicCode: "PUB-DASH-130",
+      status: "confirmed",
+      startsAt: "2026-05-08T14:00:00.000Z",
+      endsAt: "2026-05-08T15:00:00.000Z",
+      createdAt: "2026-05-08T09:00:00.000Z",
+      clientId: 1,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    },
+    {
+      id: 131,
+      centerId: 1,
+      publicCode: "PUB-DASH-131",
+      status: "confirmed",
+      startsAt: "2026-05-10T14:00:00.000Z",
+      endsAt: "2026-05-10T15:00:00.000Z",
+      createdAt: "2026-05-08T10:00:00.000Z",
+      clientId: 2,
+      serviceId: 1,
+      therapistId: 1,
+      roomId: 1,
+      holdToken: null
+    }
+  ];
+
+  const connection = createServiceConnection(seed);
+
+  const payload = await listAdminAppointments({
+    connection,
+    date: "today",
+    upcoming: false,
+    limit: 20,
+    now: new Date("2026-05-08T12:00:00.000Z"),
+    adminSession: { centerId: 1 }
+  });
+
+  assert.deepEqual(payload.today.map((entry) => entry.id), [130]);
+  assert.deepEqual(payload.upcoming, []);
+  assert.equal(payload.summary.total, 1);
 });
 
 test("listAdminAppointments filtra roomsActive por estados activos y end_at > ahora", async () => {

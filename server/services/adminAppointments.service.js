@@ -716,6 +716,98 @@ function isRoomActiveAppointmentRow(row, nowDate) {
   return toDate(row.endsAt).getTime() > nowDate.getTime();
 }
 
+async function fetchAdminAppointmentsDashboard({
+  connection,
+  centerId,
+  dayStart,
+  dayEnd,
+  includeUpcoming,
+  rowLimit
+}) {
+  const statements = [
+    `/* admin_appointments_dashboard:today */
+     ${baseAppointmentSelectSql()}
+     WHERE a.center_id = ?
+       AND a.starts_at >= ?
+       AND a.starts_at <= ?
+     ORDER BY a.starts_at ASC, a.id ASC
+     LIMIT ?`
+  ];
+  const params = [centerId, dayStart, dayEnd, rowLimit];
+
+  if (includeUpcoming) {
+    statements.push(
+      `/* admin_appointments_dashboard:upcoming */
+       ${baseAppointmentSelectSql()}
+       WHERE a.center_id = ?
+         AND a.starts_at > ?
+       ORDER BY a.starts_at ASC, a.id ASC
+       LIMIT ?`
+    );
+    params.push(centerId, dayEnd, rowLimit);
+  }
+
+  const summaryParams = [centerId, dayStart];
+  let summaryRangeSql = "";
+
+  if (!includeUpcoming) {
+    summaryRangeSql = " AND starts_at <= ?";
+    summaryParams.push(dayEnd);
+  }
+
+  statements.push(
+    `/* admin_appointments_dashboard:summary */
+     SELECT
+      status,
+      COUNT(*) AS total
+     FROM appointments
+     WHERE center_id = ?
+       AND starts_at >= ?${summaryRangeSql}
+     GROUP BY status`
+  );
+  params.push(...summaryParams);
+
+  statements.push(
+    `/* admin_appointments_dashboard:recent */
+     ${baseAppointmentSelectSql()}
+     WHERE a.center_id = ?
+     ORDER BY a.created_at DESC, a.id DESC
+     LIMIT ?`
+  );
+  params.push(centerId, rowLimit);
+
+  statements.push(
+    `/* admin_appointments_dashboard:rooms */
+     SELECT
+      id,
+      slug,
+      name,
+      capacity,
+      is_active AS isActive
+     FROM rooms
+     WHERE center_id = ?
+       AND is_active = 1
+     ORDER BY name ASC, id ASC`
+  );
+  params.push(centerId);
+
+  const [resultSets] = await connection.query(statements.join(";\n"), params);
+  let resultIndex = 0;
+  const todayRows = resultSets[resultIndex++] || [];
+  const upcomingRows = includeUpcoming ? resultSets[resultIndex++] || [] : [];
+  const summaryRows = resultSets[resultIndex++] || [];
+  const recentRows = resultSets[resultIndex++] || [];
+  const roomRows = resultSets[resultIndex++] || [];
+
+  return {
+    todayRows,
+    upcomingRows,
+    summaryRows,
+    recentRows,
+    roomRows
+  };
+}
+
 async function resolveCenter({ connection, tenantSlug, adminSession }) {
   const normalizedTenant = typeof tenantSlug === "string" ? tenantSlug.trim() : "";
   const adminCenterId = parseAdminCenterId(adminSession);
@@ -1116,71 +1208,20 @@ async function listAdminAppointments({
   const dayStart = `${dateKey} 00:00:00`;
   const dayEnd = `${dateKey} 23:59:59`;
 
-  const [todayRows] = await connection.query(
-    `${baseAppointmentSelectSql()}
-     WHERE a.center_id = ?
-       AND a.starts_at >= ?
-       AND a.starts_at <= ?
-     ORDER BY a.starts_at ASC, a.id ASC
-     LIMIT ?`,
-    [center.id, dayStart, dayEnd, rowLimit]
-  );
-
-  let upcomingRows = [];
-
-  if (includeUpcoming) {
-    const [rows] = await connection.query(
-      `${baseAppointmentSelectSql()}
-       WHERE a.center_id = ?
-         AND a.starts_at > ?
-       ORDER BY a.starts_at ASC, a.id ASC
-       LIMIT ?`,
-      [center.id, dayEnd, rowLimit]
-    );
-
-    upcomingRows = rows;
-  }
-
-  const summaryParams = [center.id, dayStart];
-  let summaryRangeSql = "";
-
-  if (!includeUpcoming) {
-    summaryRangeSql = " AND starts_at <= ?";
-    summaryParams.push(dayEnd);
-  }
-
-  const [summaryRows] = await connection.query(
-    `SELECT
-      status,
-      COUNT(*) AS total
-     FROM appointments
-     WHERE center_id = ?
-       AND starts_at >= ?${summaryRangeSql}
-     GROUP BY status`,
-    summaryParams
-  );
-
-  const [recentRows] = await connection.query(
-    `${baseAppointmentSelectSql()}
-     WHERE a.center_id = ?
-     ORDER BY a.created_at DESC, a.id DESC
-     LIMIT ?`,
-    [center.id, rowLimit]
-  );
-
-  const [roomRows] = await connection.query(
-    `SELECT
-      id,
-      slug,
-      name,
-      capacity,
-      is_active AS isActive
-     FROM rooms
-     WHERE center_id = ?
-       AND is_active = 1
-     ORDER BY name ASC, id ASC`,
-    [center.id]
-  );
+  const {
+    todayRows,
+    upcomingRows,
+    summaryRows,
+    recentRows,
+    roomRows
+  } = await fetchAdminAppointmentsDashboard({
+    connection,
+    centerId: center.id,
+    dayStart,
+    dayEnd,
+    includeUpcoming,
+    rowLimit
+  });
   const roomFeaturesByRoomId = await loadRoomFeaturesByRoomId({
     connection,
     centerId: center.id,
