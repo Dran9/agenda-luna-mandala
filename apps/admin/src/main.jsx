@@ -67,6 +67,7 @@ const ROOM_FEATURE_OPTIONS = [
 ];
 const ROOM_FEATURE_LABELS = new Map(ROOM_FEATURE_OPTIONS.map((option) => [option.key, option.label]));
 const DEFAULT_TIMEZONE = "America/La_Paz";
+const CONTROL_THERAPISTS_DEFER_MS = 2000;
 const CONTROL_RESOURCES_DEFER_MS = 1500;
 const COUNTRY_TIMEZONE_OPTIONS = [
   {
@@ -4209,10 +4210,13 @@ function AdminApp() {
 
   useEffect(() => {
     const controller = new AbortController();
+    let deferTimer = null;
 
     async function loadTherapists() {
       if (!authToken || (activeSection !== "terapeutas" && activeSection !== "control")) {
-        setTherapistsPayload(null);
+        if (!authToken) {
+          setTherapistsPayload(null);
+        }
         setTherapistsLoading(false);
         setTherapistsRefreshing(false);
         setTherapistsError("");
@@ -4268,12 +4272,24 @@ function AdminApp() {
       }
     }
 
-    loadTherapists();
+    if (authToken && activeSection === "control" && !manualModalOpen && therapistsPayloadRef.current) {
+      setTherapistsLoading(false);
+      setTherapistsRefreshing(false);
+    } else if (authToken && activeSection === "control" && !manualModalOpen && !therapistsPayloadRef.current) {
+      setTherapistsLoading(false);
+      setTherapistsRefreshing(false);
+      deferTimer = window.setTimeout(loadTherapists, CONTROL_THERAPISTS_DEFER_MS);
+    } else {
+      loadTherapists();
+    }
 
     return () => {
+      if (deferTimer) {
+        window.clearTimeout(deferTimer);
+      }
       controller.abort();
     };
-  }, [authToken, activeSection, therapistsRefreshTick, handleUnauthorized]);
+  }, [authToken, activeSection, manualModalOpen, therapistsRefreshTick, handleUnauthorized]);
 
   useEffect(() => {
     const controller = new AbortController();
