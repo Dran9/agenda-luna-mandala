@@ -77,6 +77,29 @@ Nunca mezclar cambios en esos archivos con features de admin, booking, pagos o U
 - Si una entrega visual/producto no cumple la referencia o contrato pedido, no tratar `npm test` o `npm run build` como suficiente.
 - Antes de push o entrega final de UI, incluir evidencia visual cuando aplique: screenshots desktop/mobile o explicar explicitamente por que no se pudieron generar.
 
+## UI/UX Guardrail Para Admin
+
+Admin es una superficie operativa. Debe sentirse como una herramienta de gestion densa, clara y elegante, no como una landing page ni como una sucesion de cards decorativas.
+
+Antes de tocar UI, especialmente `Control`, tablas, filtros, busquedas, agrupaciones, acciones o modales, el agente debe responder internamente:
+
+1. Esto es contenido principal o control de vista?
+2. Debe vivir como bloque permanente, toolbar compacta, menu flotante, drawer o modal?
+3. Estoy agregando superficie visual o reduciendo friccion?
+4. El cambio corta el flujo de lectura o empuja la tabla/lista principal hacia abajo?
+5. Estoy usando el patron mas silencioso posible?
+6. Hace falta proponer el plan visual antes de codificar?
+
+Reglas duras para Admin:
+
+- Filtros, agrupacion, orden, busqueda y configuracion de columnas son controles de vista. No deben agregarse como paneles grandes dentro del flujo principal salvo instruccion explicita.
+- Preferir toolbar compacta + chips de estado activo + popovers/menus flotantes.
+- Las acciones primarias como `Nueva cita` deben vivir como botones compactos en header/toolbar, no como bloques informativos permanentes.
+- No insertar secciones que empujen tablas, grids o listas hacia abajo si el objetivo es operar sobre esas tablas, grids o listas.
+- Evitar cards que solo contienen un boton, textos explicativos obvios, bloques narrativos para acciones simples y titulos gigantes para controles secundarios.
+- Si el patron correcto no esta claro, pausar y proponer 2 opciones visuales antes de tocar codigo.
+- Para UI operativa, priorizar densidad legible, bajo ruido visual, jerarquia clara, controles familiares y minimo desplazamiento.
+
 ## Calidad
 
 Una tarea no esta lista si:
