@@ -4,6 +4,7 @@ import {
   ArrowsClockwise,
   CalendarDots,
   CalendarCheck,
+  CaretDown,
   CaretRight,
   CircleNotch,
   Clock,
@@ -65,6 +66,169 @@ const ROOM_FEATURE_OPTIONS = [
   { key: "mesa", label: "Mesa" }
 ];
 const ROOM_FEATURE_LABELS = new Map(ROOM_FEATURE_OPTIONS.map((option) => [option.key, option.label]));
+const DEFAULT_TIMEZONE = "America/La_Paz";
+const COUNTRY_TIMEZONE_OPTIONS = [
+  {
+    region: "Sudamerica",
+    country: "Bolivia",
+    flag: "🇧🇴",
+    timezone: "America/La_Paz",
+    dialCode: "+591",
+    digitsMin: 8,
+    digitsMax: 8,
+    example: "71234567"
+  },
+  {
+    region: "Sudamerica",
+    country: "Argentina",
+    flag: "🇦🇷",
+    timezone: "America/Argentina/Buenos_Aires",
+    dialCode: "+54",
+    digitsMin: 10,
+    digitsMax: 11,
+    example: "1123456789"
+  },
+  {
+    region: "Sudamerica",
+    country: "Chile",
+    flag: "🇨🇱",
+    timezone: "America/Santiago",
+    dialCode: "+56",
+    digitsMin: 9,
+    digitsMax: 9,
+    example: "912345678"
+  },
+  {
+    region: "Sudamerica",
+    country: "Peru",
+    flag: "🇵🇪",
+    timezone: "America/Lima",
+    dialCode: "+51",
+    digitsMin: 9,
+    digitsMax: 9,
+    example: "912345678"
+  },
+  {
+    region: "Sudamerica",
+    country: "Colombia",
+    flag: "🇨🇴",
+    timezone: "America/Bogota",
+    dialCode: "+57",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "3012345678"
+  },
+  {
+    region: "Sudamerica",
+    country: "Uruguay",
+    flag: "🇺🇾",
+    timezone: "America/Montevideo",
+    dialCode: "+598",
+    digitsMin: 8,
+    digitsMax: 8,
+    example: "91234567"
+  },
+  {
+    region: "Sudamerica",
+    country: "Brasil",
+    flag: "🇧🇷",
+    timezone: "America/Sao_Paulo",
+    dialCode: "+55",
+    digitsMin: 10,
+    digitsMax: 11,
+    example: "11912345678"
+  },
+  {
+    region: "Norteamerica",
+    country: "Mexico",
+    flag: "🇲🇽",
+    timezone: "America/Mexico_City",
+    dialCode: "+52",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "5512345678"
+  },
+  {
+    region: "Norteamerica",
+    country: "USA Este",
+    flag: "🇺🇸",
+    timezone: "America/New_York",
+    dialCode: "+1",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "3051234567"
+  },
+  {
+    region: "Norteamerica",
+    country: "USA Centro",
+    flag: "🇺🇸",
+    timezone: "America/Chicago",
+    dialCode: "+1",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "3121234567"
+  },
+  {
+    region: "Norteamerica",
+    country: "USA Pacifico",
+    flag: "🇺🇸",
+    timezone: "America/Los_Angeles",
+    dialCode: "+1",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "4151234567"
+  },
+  {
+    region: "Norteamerica",
+    country: "Canada Este",
+    flag: "🇨🇦",
+    timezone: "America/Toronto",
+    dialCode: "+1",
+    digitsMin: 10,
+    digitsMax: 10,
+    example: "4161234567"
+  },
+  {
+    region: "Europa",
+    country: "Espana",
+    flag: "🇪🇸",
+    timezone: "Europe/Madrid",
+    dialCode: "+34",
+    digitsMin: 9,
+    digitsMax: 9,
+    example: "612345678"
+  },
+  {
+    region: "Europa",
+    country: "Francia",
+    flag: "🇫🇷",
+    timezone: "Europe/Paris",
+    dialCode: "+33",
+    digitsMin: 8,
+    digitsMax: 11,
+    example: "612345678"
+  },
+  {
+    region: "Europa",
+    country: "Italia",
+    flag: "🇮🇹",
+    timezone: "Europe/Rome",
+    dialCode: "+39",
+    digitsMin: 8,
+    digitsMax: 11,
+    example: "3123456789"
+  },
+  {
+    region: "Europa",
+    country: "Alemania",
+    flag: "🇩🇪",
+    timezone: "Europe/Berlin",
+    dialCode: "+49",
+    digitsMin: 10,
+    digitsMax: 11,
+    example: "15123456789"
+  }
+];
 const SERVICE_ROOM_REQUIREMENT_RULES = [
   { match: ["tarot", "carta astral", "registros akhasicos", "registros akashicos"], featureKeys: ["mesa"] },
   {
@@ -495,6 +659,54 @@ function sanitizePhoneForWa(value) {
   return digits;
 }
 
+function normalizePhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function formatTimezoneLocalClock(timezone) {
+  return new Date().toLocaleTimeString("es-BO", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatDigitsRule(option) {
+  if (option.digitsMin === option.digitsMax) {
+    return `${option.digitsMin} digitos`;
+  }
+
+  return `${option.digitsMin}-${option.digitsMax} digitos`;
+}
+
+function isPhoneValidByTimezone(phoneDigits, timezoneOption) {
+  const length = phoneDigits.length;
+  return length >= timezoneOption.digitsMin && length <= timezoneOption.digitsMax;
+}
+
+function isBoliviaMobilePhone(phoneDigits, timezoneOption) {
+  if (timezoneOption?.timezone !== DEFAULT_TIMEZONE) {
+    return true;
+  }
+
+  return /^[67]\d{7}$/.test(phoneDigits);
+}
+
+function buildPhonePayload(phoneDigits, timezoneOption) {
+  return `${timezoneOption.dialCode}${phoneDigits}`;
+}
+
+function groupTimezoneOptions(options) {
+  const groups = new Map();
+  for (const option of options) {
+    if (!groups.has(option.region)) {
+      groups.set(option.region, []);
+    }
+    groups.get(option.region).push(option);
+  }
+  return Array.from(groups.entries());
+}
+
 function buildQuery({ includeUpcoming, limit }) {
   const params = new URLSearchParams();
   params.set("date", "today");
@@ -758,7 +970,6 @@ function AppointmentTable({
             <p className="appointment-line">Servicio: {item.service.name || "-"}</p>
             <p className="appointment-line">Terapeuta: {item.therapist.name || "-"}</p>
             <p className="appointment-line">Sala: {item.room.name || "-"}</p>
-            <p className="appointment-line">Public code: {item.publicCode || "-"}</p>
             <p className="appointment-line">Creada: {formatDateTime(item.createdAt, timezone)}</p>
             <button
               type="button"
@@ -860,7 +1071,7 @@ function TimelineView({ appointments, timezone, onSelect }) {
               <StatusChip status={item.status} />
             </div>
             <p className="timeline-line">{item.service.name || "-"} · {item.therapist.name || "-"}</p>
-            <p className="timeline-line">Sala: {item.room.name || "-"} · {item.publicCode || "-"}</p>
+            <p className="timeline-line">Sala: {item.room.name || "-"}</p>
           </button>
         </li>
       ))}
@@ -1075,9 +1286,7 @@ function RoomsKanban({
                         }}
                         tabIndex={0}
                         role="button"
-                        aria-label={`Cita ${item.publicCode || item.id} ${
-                          item.client?.fullName || ""
-                        }`}
+                        aria-label={`Cita ${item.client?.fullName || "sin cliente"}`}
                       >
                         <p className="rooms-board-card-time">
                           <span className="rooms-board-card-bullet" aria-hidden="true" />
@@ -1102,9 +1311,6 @@ function RoomsKanban({
                           </span>
                         </p>
                         <footer className="rooms-board-card-footer">
-                          <span className="rooms-board-card-code">
-                            {item.publicCode || `ID ${item.id}`}
-                          </span>
                           <StatusChip status={item.status} />
                         </footer>
                       </article>
@@ -1215,7 +1421,7 @@ function AppointmentDrawer({
         <header className="drawer-header">
           <div>
             <p className="drawer-kicker">Detalle de cita</p>
-            <h2>{appointment?.publicCode || "Cita"}</h2>
+            <h2>{client.fullName || "Cita"}</h2>
           </div>
           <button type="button" className="drawer-close" onClick={onClose} aria-label="Cerrar detalle">
             <X size={18} weight="bold" />
@@ -1462,6 +1668,312 @@ function RoomMoveConfirmModal({ request, loading, onCancel, onConfirm }) {
             <span>{hasResourceWarning ? "Confirmar excepcion" : "Confirmar cambio"}</span>
           </button>
         </footer>
+      </section>
+    </div>
+  );
+}
+
+function ManualAppointmentModal({
+  open,
+  draft,
+  services,
+  therapists,
+  rooms,
+  loading,
+  error,
+  success,
+  onChange,
+  onClose,
+  onSubmit
+}) {
+  const [timezoneSearch, setTimezoneSearch] = useState("");
+  const [timezonePickerOpen, setTimezonePickerOpen] = useState(false);
+  const selectedTimezoneOption =
+    COUNTRY_TIMEZONE_OPTIONS.find((option) => option.timezone === draft.timezone) ||
+    COUNTRY_TIMEZONE_OPTIONS[0];
+  const phoneDigits = normalizePhone(draft.phoneDigits);
+  const isPhoneLengthValid = isPhoneValidByTimezone(phoneDigits, selectedTimezoneOption);
+  const isPhoneValid = isPhoneLengthValid && isBoliviaMobilePhone(phoneDigits, selectedTimezoneOption);
+  const phoneHelper = selectedTimezoneOption.timezone === DEFAULT_TIMEZONE
+    ? `Bolivia: 8 digitos, debe empezar con 6 o 7. Ingresaste ${phoneDigits.length}.`
+    : `${selectedTimezoneOption.flag} ${selectedTimezoneOption.country}: ${formatDigitsRule(selectedTimezoneOption)}. Ingresaste ${phoneDigits.length}.`;
+
+  const groupedTimezoneOptions = useMemo(() => {
+    const query = String(timezoneSearch || "").trim().toLowerCase();
+    const filtered = query
+      ? COUNTRY_TIMEZONE_OPTIONS.filter((option) => {
+          const searchable = `${option.country} ${option.timezone} ${option.region}`.toLowerCase();
+          return searchable.includes(query);
+        })
+      : COUNTRY_TIMEZONE_OPTIONS;
+
+    return groupTimezoneOptions(filtered);
+  }, [timezoneSearch]);
+
+  if (!open) {
+    return null;
+  }
+
+  function updateField(field, value) {
+    onChange((current) => ({
+      ...current,
+      [field]: value
+    }));
+  }
+
+  function handleTimezoneSelect(option) {
+    onChange((current) => ({
+      ...current,
+      timezone: option.timezone,
+      phoneDigits: ""
+    }));
+    setTimezoneSearch("");
+    setTimezonePickerOpen(false);
+  }
+
+  return (
+    <div className="confirm-overlay manual-modal-overlay" role="presentation" onClick={loading ? undefined : onClose}>
+      <section
+        className="manual-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Nueva cita manual"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="manual-modal-header">
+          <div>
+            <p className="confirm-kicker">Control</p>
+            <h2>Nueva cita manual</h2>
+            <span>Servicio primero. Terapeuta y sala quedan automaticos salvo override operativo.</span>
+          </div>
+          <button type="button" className="drawer-close" onClick={onClose} aria-label="Cerrar nueva cita">
+            <X size={18} weight="bold" />
+          </button>
+        </header>
+
+        <form className="manual-modal-body" onSubmit={onSubmit}>
+          <section className="manual-step" aria-label="Servicio">
+            <p className="manual-step-label">1. Servicio</p>
+            {services.length ? (
+              <div className="manual-service-grid">
+                {services.map((service) => {
+                  const selected = String(draft.serviceId) === String(service.id);
+                  return (
+                    <button
+                      key={`manual-service-card-${service.id}`}
+                      type="button"
+                      className={`manual-service-option${selected ? " is-selected" : ""}`}
+                      onClick={() => updateField("serviceId", String(service.id))}
+                    >
+                      <strong>{service.name}</strong>
+                      <span>{service.durationLabel || "Duracion configurada"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="manual-form-note">Carga recursos para habilitar servicios activos.</p>
+            )}
+          </section>
+
+          <section className="manual-step" aria-label="Cliente">
+            <p className="manual-step-label">2. Cliente</p>
+            <div className="manual-fields-grid">
+              <label className="client-filter-field" htmlFor="manual-first-name">
+                <span>Nombre</span>
+                <input
+                  id="manual-first-name"
+                  type="text"
+                  value={draft.firstName}
+                  onChange={(event) => updateField("firstName", event.target.value)}
+                  placeholder="Nombre"
+                  required
+                />
+              </label>
+              <label className="client-filter-field" htmlFor="manual-last-name">
+                <span>Apellido</span>
+                <input
+                  id="manual-last-name"
+                  type="text"
+                  value={draft.lastName}
+                  onChange={(event) => updateField("lastName", event.target.value)}
+                  placeholder="Apellido"
+                  required
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="manual-step" aria-label="Pais y WhatsApp">
+            <p className="manual-step-label">3. Pais, zona horaria y WhatsApp</p>
+            <div className="manual-timezone-grid">
+              <div className="timezone-picker">
+                <button
+                  type="button"
+                  className="timezone-trigger"
+                  onClick={() => setTimezonePickerOpen((current) => !current)}
+                >
+                  <span className="timezone-trigger-main">
+                    <span className="timezone-flag">{selectedTimezoneOption.flag}</span>
+                    <span className="timezone-copy">
+                      <strong>{selectedTimezoneOption.country}</strong>
+                      <span>{selectedTimezoneOption.timezone}</span>
+                    </span>
+                  </span>
+                  <span className="timezone-trigger-side">
+                    <span>{formatTimezoneLocalClock(selectedTimezoneOption.timezone)}</span>
+                    <CaretDown size={16} aria-hidden="true" />
+                  </span>
+                </button>
+
+                {timezonePickerOpen ? (
+                  <div className="timezone-panel">
+                    <label className="timezone-search">
+                      <MagnifyingGlass size={16} aria-hidden="true" />
+                      <input
+                        type="search"
+                        value={timezoneSearch}
+                        onChange={(event) => setTimezoneSearch(event.target.value)}
+                        placeholder="Buscar pais o zona horaria"
+                      />
+                    </label>
+
+                    <div className="timezone-list">
+                      {groupedTimezoneOptions.length === 0 ? (
+                        <p className="timezone-empty">Sin resultados para la busqueda actual.</p>
+                      ) : null}
+                      {groupedTimezoneOptions.map(([region, options]) => (
+                        <div key={region} className="timezone-group">
+                          <p className="timezone-group-title">{region}</p>
+                          <ul className="timezone-option-list">
+                            {options.map((option) => {
+                              const isActive = option.timezone === selectedTimezoneOption.timezone;
+                              return (
+                                <li key={option.timezone}>
+                                  <button
+                                    type="button"
+                                    className={`timezone-option${isActive ? " is-active" : ""}`}
+                                    onClick={() => handleTimezoneSelect(option)}
+                                  >
+                                    <span className="timezone-option-main">
+                                      <span className="timezone-flag">{option.flag}</span>
+                                      <span className="timezone-copy">
+                                        <strong>{option.country}</strong>
+                                        <span>{option.timezone}</span>
+                                      </span>
+                                    </span>
+                                    <span className="timezone-option-side">
+                                      {formatTimezoneLocalClock(option.timezone)}
+                                    </span>
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <label className="client-filter-field" htmlFor="manual-phone-digits">
+                  <span>WhatsApp {selectedTimezoneOption.dialCode}</span>
+                  <input
+                    id="manual-phone-digits"
+                    type="tel"
+                    inputMode="numeric"
+                    value={draft.phoneDigits}
+                    onChange={(event) => updateField("phoneDigits", normalizePhone(event.target.value))}
+                    maxLength={selectedTimezoneOption.digitsMax}
+                    placeholder={selectedTimezoneOption.example}
+                    required
+                  />
+                </label>
+                <p className={`phone-helper${!isPhoneValid && phoneDigits.length > 0 ? " is-invalid" : ""}`}>
+                  {phoneHelper}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="manual-step" aria-label="Asignacion">
+            <p className="manual-step-label">4. Horario y asignacion</p>
+            <div className="manual-fields-grid">
+              <label className="client-filter-field" htmlFor="manual-starts-at">
+                <span>Fecha y hora</span>
+                <input
+                  id="manual-starts-at"
+                  type="datetime-local"
+                  value={draft.startsAt}
+                  onChange={(event) => updateField("startsAt", event.target.value)}
+                  required
+                />
+              </label>
+              <label className="client-filter-field" htmlFor="manual-therapist">
+                <span>Terapeuta</span>
+                <select
+                  id="manual-therapist"
+                  className="control-input"
+                  value={draft.therapistId}
+                  onChange={(event) => updateField("therapistId", event.target.value)}
+                >
+                  <option value="">Automatico</option>
+                  {therapists.map((therapist) => (
+                    <option key={`manual-therapist-${therapist.id}`} value={String(therapist.id)}>
+                      {therapist.displayName || therapist.fullName || `Terapeuta ${therapist.id}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="client-filter-field" htmlFor="manual-room">
+                <span>Sala</span>
+                <select
+                  id="manual-room"
+                  className="control-input"
+                  value={draft.roomId}
+                  onChange={(event) => updateField("roomId", event.target.value)}
+                >
+                  <option value="">Automatica</option>
+                  {rooms.map((room) => (
+                    <option key={`manual-room-${room.id}`} value={String(room.id)}>
+                      {room.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="timezone-help">
+              Si no eliges terapeuta o sala, el backend asigna disponibilidad real con claims.
+            </p>
+          </section>
+
+          {error ? <p className="feedback error compact-feedback">{error}</p> : null}
+          {success ? <p className="feedback subtle compact-feedback">{success}</p> : null}
+
+          <footer className="manual-modal-actions">
+            <button type="button" className="confirm-secondary" onClick={onClose} disabled={loading}>
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="confirm-primary"
+              disabled={
+                loading ||
+                !services.length ||
+                !draft.serviceId ||
+                !draft.firstName.trim() ||
+                !draft.lastName.trim() ||
+                !draft.startsAt ||
+                !isPhoneValid
+              }
+            >
+              {loading ? <CircleNotch size={16} className="spin" /> : null}
+              <span>{loading ? "Creando..." : "Crear cita"}</span>
+            </button>
+          </footer>
+        </form>
       </section>
     </div>
   );
@@ -3276,13 +3788,16 @@ function AdminApp() {
   const [resourcesError, setResourcesError] = useState("");
   const [resourcesRefreshTick, setResourcesRefreshTick] = useState(0);
   const [manualDraft, setManualDraft] = useState({
-    clientFullName: "",
-    phoneE164: "",
+    firstName: "",
+    lastName: "",
+    phoneDigits: "",
+    timezone: DEFAULT_TIMEZONE,
     serviceId: "",
     therapistId: "",
     roomId: "",
     startsAt: ""
   });
+  const [manualModalOpen, setManualModalOpen] = useState(false);
   const [manualCreateLoading, setManualCreateLoading] = useState(false);
   const [manualCreateError, setManualCreateError] = useState("");
   const [manualCreateSuccess, setManualCreateSuccess] = useState("");
@@ -4052,7 +4567,7 @@ function AdminApp() {
     therapistsPayload?.center?.timezone ||
     resourcesPayload?.center?.timezone ||
     clientsPayload?.center?.timezone ||
-    "America/La_Paz";
+    DEFAULT_TIMEZONE;
   const generatedAtLabel = payload ? formatDateTime(payload.generatedAt, timezone) : "-";
   const clientsGeneratedAtLabel = clientsPayload
     ? formatDateTime(clientsPayload.generatedAt, timezone)
@@ -4917,13 +5432,28 @@ function AdminApp() {
     setManualCreateSuccess("");
 
     try {
+      const selectedTimezoneOption =
+        COUNTRY_TIMEZONE_OPTIONS.find((option) => option.timezone === manualDraft.timezone) ||
+        COUNTRY_TIMEZONE_OPTIONS[0];
+      const phoneDigits = normalizePhone(manualDraft.phoneDigits);
+      const fullName = `${manualDraft.firstName || ""} ${manualDraft.lastName || ""}`.trim();
+
+      if (!isPhoneValidByTimezone(phoneDigits, selectedTimezoneOption) ||
+          !isBoliviaMobilePhone(phoneDigits, selectedTimezoneOption)) {
+        throw new Error(
+          selectedTimezoneOption.timezone === DEFAULT_TIMEZONE
+            ? "WhatsApp invalido para Bolivia. Usa 8 digitos y empieza con 6 o 7."
+            : `WhatsApp invalido para ${selectedTimezoneOption.country}. Usa ${formatDigitsRule(selectedTimezoneOption)}.`
+        );
+      }
+
       const startsAtIso = manualDraft.startsAt
         ? new Date(manualDraft.startsAt).toISOString()
         : "";
 
       const payloadBody = {
-        phoneE164: manualDraft.phoneE164,
-        clientFullName: manualDraft.clientFullName || null,
+        phoneE164: buildPhonePayload(phoneDigits, selectedTimezoneOption),
+        clientFullName: fullName || null,
         serviceId: manualDraft.serviceId,
         startsAt: startsAtIso,
         therapistId: manualDraft.therapistId || null,
@@ -4952,9 +5482,14 @@ function AdminApp() {
       setManualCreateSuccess("Cita manual creada y confirmada.");
       setManualDraft((value) => ({
         ...value,
+        firstName: "",
+        lastName: "",
+        phoneDigits: "",
         startsAt: "",
+        therapistId: "",
         roomId: ""
       }));
+      setManualModalOpen(false);
       setRefreshTick((value) => value + 1);
       if (nextPayload?.appointment?.id) {
         openDrawer(Number(nextPayload.appointment.id));
@@ -5412,152 +5947,28 @@ function AdminApp() {
                             <SummaryCard label="Total" value={summary.total} className="status-total" />
                           </section>
 
-                          <section className="panel" aria-label="Nueva cita manual">
-                            <div className="panel-heading">
+                          <section className="panel manual-launch-panel" aria-label="Nueva cita manual">
+                            <div className="manual-launch-copy">
                               <h2>Nueva cita manual</h2>
-                              <p>Usa el mismo motor de claims y disponibilidad.</p>
+                              <p>Crear con servicio primero, cliente separado y asignacion automatica por claims.</p>
                             </div>
-                            <form className="manual-form-grid" onSubmit={handleCreateManualAppointment}>
-                              <label className="client-filter-field" htmlFor="manual-client-name">
-                                <span>Cliente</span>
-                                <input
-                                  id="manual-client-name"
-                                  type="text"
-                                  value={manualDraft.clientFullName}
-                                  onChange={(event) =>
-                                    setManualDraft((value) => ({
-                                      ...value,
-                                      clientFullName: event.target.value
-                                    }))
-                                  }
-                                  placeholder="Nombre completo (opcional)"
-                                />
-                              </label>
-
-                              <label className="client-filter-field" htmlFor="manual-phone">
-                                <span>WhatsApp</span>
-                                <input
-                                  id="manual-phone"
-                                  type="text"
-                                  value={manualDraft.phoneE164}
-                                  onChange={(event) =>
-                                    setManualDraft((value) => ({
-                                      ...value,
-                                      phoneE164: event.target.value
-                                    }))
-                                  }
-                                  placeholder="59171234567"
-                                  required
-                                />
-                              </label>
-
-                              <label className="client-filter-field" htmlFor="manual-service">
-                                <span>Servicio</span>
-                                <select
-                                  id="manual-service"
-                                  className="control-input"
-                                  value={manualDraft.serviceId}
-                                  onChange={(event) =>
-                                    setManualDraft((value) => ({
-                                      ...value,
-                                      serviceId: event.target.value
-                                    }))
-                                  }
-                                  required
-                                >
-                                  <option value="">Seleccionar servicio</option>
-                                  {manualServices.map((service) => (
-                                    <option key={`manual-service-${service.id}`} value={String(service.id)}>
-                                      {service.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-
-                              <label className="client-filter-field" htmlFor="manual-therapist">
-                                <span>Terapeuta</span>
-                                <select
-                                  id="manual-therapist"
-                                  className="control-input"
-                                  value={manualDraft.therapistId}
-                                  onChange={(event) =>
-                                    setManualDraft((value) => ({
-                                      ...value,
-                                      therapistId: event.target.value
-                                    }))
-                                  }
-                                >
-                                  <option value="">Automatico</option>
-                                  {manualTherapists.map((therapist) => (
-                                    <option
-                                      key={`manual-therapist-${therapist.id}`}
-                                      value={String(therapist.id)}
-                                    >
-                                      {therapist.displayName || therapist.fullName || `Terapeuta ${therapist.id}`}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-
-                              <label className="client-filter-field" htmlFor="manual-room">
-                                <span>Sala</span>
-                                <select
-                                  id="manual-room"
-                                  className="control-input"
-                                  value={manualDraft.roomId}
-                                  onChange={(event) =>
-                                    setManualDraft((value) => ({
-                                      ...value,
-                                      roomId: event.target.value
-                                    }))
-                                  }
-                                >
-                                  <option value="">Automatica</option>
-                                  {manualRooms.map((room) => (
-                                    <option key={`manual-room-${room.id}`} value={String(room.id)}>
-                                      {room.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-
-                              <label className="client-filter-field" htmlFor="manual-starts-at">
-                                <span>Fecha y hora</span>
-                                <input
-                                  id="manual-starts-at"
-                                  type="datetime-local"
-                                  value={manualDraft.startsAt}
-                                  onChange={(event) =>
-                                    setManualDraft((value) => ({
-                                      ...value,
-                                      startsAt: event.target.value
-                                    }))
-                                  }
-                                  required
-                                />
-                              </label>
-
-                              <div className="manual-form-actions">
-                                <button
-                                  type="submit"
-                                  className="refresh-button"
-                                  disabled={manualCreateLoading || !manualServices.length}
-                                >
-                                  {manualCreateLoading ? "Creando..." : "Crear cita"}
-                                </button>
-                                {!manualServices.length ? (
-                                  <p className="manual-form-note">
-                                    Carga recursos para habilitar servicios activos.
-                                  </p>
-                                ) : null}
-                              </div>
-                            </form>
-
-                            {manualCreateError ? (
-                              <p className="feedback error compact-feedback">{manualCreateError}</p>
-                            ) : null}
-                            {manualCreateSuccess ? (
-                              <p className="feedback subtle compact-feedback">{manualCreateSuccess}</p>
+                            <button
+                              type="button"
+                              className="refresh-button manual-launch-button"
+                              onClick={() => {
+                                setManualCreateError("");
+                                setManualCreateSuccess("");
+                                setManualModalOpen(true);
+                              }}
+                              disabled={!manualServices.length}
+                            >
+                              <CalendarDots size={16} weight="regular" aria-hidden="true" />
+                              <span>Nueva cita</span>
+                            </button>
+                            {!manualServices.length ? (
+                              <p className="manual-form-note">
+                                Carga recursos para habilitar servicios activos.
+                              </p>
                             ) : null}
                           </section>
 
@@ -5890,6 +6301,24 @@ function AdminApp() {
         loading={therapistDetailLoading}
         error={therapistDetailError}
         onClose={closeTherapistDrawer}
+      />
+
+      <ManualAppointmentModal
+        open={manualModalOpen}
+        draft={manualDraft}
+        services={manualServices}
+        therapists={manualTherapists}
+        rooms={manualRooms}
+        loading={manualCreateLoading}
+        error={manualCreateError}
+        success={manualCreateSuccess}
+        onChange={setManualDraft}
+        onClose={() => {
+          if (!manualCreateLoading) {
+            setManualModalOpen(false);
+          }
+        }}
+        onSubmit={handleCreateManualAppointment}
       />
 
       <GlobalSearchModal

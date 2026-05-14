@@ -172,7 +172,7 @@ const STATUS_LABELS = {
 function formatAppointmentTitle(row) {
   const startsAt = row.startsAt ? new Date(row.startsAt) : null;
   if (!startsAt || Number.isNaN(startsAt.getTime())) {
-    return row.publicCode || `Cita ${row.id}`;
+    return row.clientName || row.clientPhone || `Cita ${row.id}`;
   }
 
   const month = String(startsAt.getUTCMonth() + 1).padStart(2, "0");
@@ -194,7 +194,7 @@ function buildAppointmentResult(row) {
     entityId: Number(row.id),
     title: formatAppointmentTitle(row),
     subtitle: subtitleParts.join(" · "),
-    meta: row.publicCode || "",
+    meta: row.startsAt ? toIso(row.startsAt) : "",
     extras: {
       startsAt: toIso(row.startsAt),
       endsAt: toIso(row.endsAt),

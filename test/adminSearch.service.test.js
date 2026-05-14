@@ -258,7 +258,7 @@ test("searchAdmin filters cases by status pending/no_show/cancelled", async () =
   }
 });
 
-test("searchAdmin builds appointment results with publicCode meta", async () => {
+test("searchAdmin hides publicCode from appointment result meta", async () => {
   const connection = createConnectionMock(async ({ sql }) => {
     if (sql.includes("FROM centers")) {
       return centerRows();
@@ -300,7 +300,8 @@ test("searchAdmin builds appointment results with publicCode meta", async () => 
   assert.equal(result.type, "appointment");
   assert.equal(result.action.kind, "openAppointment");
   assert.equal(result.action.appointmentId, 50);
-  assert.equal(result.meta, "PUB-1234");
+  assert.notEqual(result.meta, "PUB-1234");
+  assert.match(result.meta, /2026-05-09/);
   assert.match(result.subtitle, /Sanacion Reiki/);
 });
 

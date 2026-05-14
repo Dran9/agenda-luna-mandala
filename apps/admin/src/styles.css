@@ -474,6 +474,319 @@ select {
   color: var(--muted);
 }
 
+.manual-launch-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.manual-launch-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.manual-launch-copy h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.manual-launch-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.manual-launch-button {
+  min-width: max-content;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.manual-modal-overlay {
+  align-items: center;
+}
+
+.manual-modal {
+  width: min(920px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 32px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.manual-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.manual-modal-header h2 {
+  margin: 2px 0 4px;
+  font-size: 1.35rem;
+}
+
+.manual-modal-header span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.manual-modal-body {
+  overflow-y: auto;
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+
+.manual-step {
+  display: grid;
+  gap: 10px;
+}
+
+.manual-step-label {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--subtle);
+  font-weight: 700;
+}
+
+.manual-service-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.manual-service-option {
+  width: 100%;
+  min-height: 74px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.manual-service-option:hover {
+  background: var(--surface-muted);
+}
+
+.manual-service-option.is-selected {
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.manual-service-option strong {
+  color: inherit;
+  line-height: 1.18;
+}
+
+.manual-service-option span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.manual-fields-grid,
+.manual-timezone-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.manual-timezone-grid {
+  align-items: start;
+}
+
+.manual-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.timezone-picker {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+.timezone-trigger {
+  min-height: 52px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.timezone-trigger-main,
+.timezone-option-main {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.timezone-flag {
+  font-size: 1rem;
+}
+
+.timezone-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.timezone-copy strong {
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.timezone-copy span {
+  font-size: 0.69rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timezone-trigger-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.timezone-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.timezone-search {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--muted);
+}
+
+.timezone-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+.timezone-list {
+  max-height: 250px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.timezone-group {
+  display: grid;
+  gap: 4px;
+}
+
+.timezone-group-title {
+  margin: 0;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--subtle);
+  font-weight: 700;
+}
+
+.timezone-option-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.timezone-option {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.timezone-option:hover {
+  background: var(--surface-muted);
+}
+
+.timezone-option.is-active {
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+}
+
+.timezone-option-side {
+  font-size: 0.69rem;
+  color: var(--muted);
+}
+
+.timezone-empty,
+.timezone-help,
+.phone-helper {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.phone-helper {
+  margin-top: 6px;
+}
+
+.phone-helper.is-invalid {
+  color: var(--danger);
+}
+
 .client-filter-field {
   display: grid;
   gap: 6px;
@@ -2337,6 +2650,10 @@ select {
     grid-template-columns: 1fr 1fr;
   }
 
+  .manual-service-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .settings-room-form-grid {
     grid-template-columns: 1fr;
   }
@@ -2397,6 +2714,34 @@ select {
 
   .manual-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .manual-launch-panel,
+  .manual-fields-grid,
+  .manual-timezone-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-launch-panel {
+    display: grid;
+  }
+
+  .manual-launch-button,
+  .manual-modal-actions {
+    width: 100%;
+  }
+
+  .manual-service-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-modal {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .manual-modal-actions {
+    display: grid;
   }
 
   .client-stats-list {
