@@ -6772,39 +6772,6 @@ function AdminApp() {
                     <>
                       {activeTab === "today" ? (
                         <>
-                          <ControlToolbar
-                            filters={controlFilters}
-                            services={controlServiceOptions}
-                            therapists={controlTherapistOptions}
-                            rooms={controlRoomOptions}
-                            filteredCount={filteredListAppointments.length}
-                            totalCount={listAppointments.length}
-                            createDisabled={hasResourcesData && !manualServices.length}
-                            onChange={setControlFilters}
-                            onReset={() =>
-                              setControlFilters({
-                                q: "",
-                                fromDate: "",
-                                toDate: "",
-                                status: "all",
-                                serviceId: "all",
-                                therapistId: "all",
-                                roomId: "all",
-                                groupBy: "none"
-                              })
-                            }
-                            onCreate={() => {
-                              setManualCreateError("");
-                              setManualCreateSuccess("");
-                              setManualDraft((value) => ({
-                                ...value,
-                                date: controlDate || getDateKeyForTimezone(new Date(), value.timezone),
-                                startsAt: ""
-                              }));
-                              setManualModalOpen(true);
-                            }}
-                          />
-
                           <section className="summary-grid" aria-label="Resumen por estado">
                             <SummaryCard label="Pending" value={summary.pending} className="status-pending" />
                             <SummaryCard label="Confirmed" value={summary.confirmed} className="status-confirmed" />
@@ -6849,6 +6816,39 @@ function AdminApp() {
                               ))}
                             </div>
                           </section>
+
+                          <ControlToolbar
+                            filters={controlFilters}
+                            services={controlServiceOptions}
+                            therapists={controlTherapistOptions}
+                            rooms={controlRoomOptions}
+                            filteredCount={filteredListAppointments.length}
+                            totalCount={listAppointments.length}
+                            createDisabled={hasResourcesData && !manualServices.length}
+                            onChange={setControlFilters}
+                            onReset={() =>
+                              setControlFilters({
+                                q: "",
+                                fromDate: "",
+                                toDate: "",
+                                status: "all",
+                                serviceId: "all",
+                                therapistId: "all",
+                                roomId: "all",
+                                groupBy: "none"
+                              })
+                            }
+                            onCreate={() => {
+                              setManualCreateError("");
+                              setManualCreateSuccess("");
+                              setManualDraft((value) => ({
+                                ...value,
+                                date: controlDate || getDateKeyForTimezone(new Date(), value.timezone),
+                                startsAt: ""
+                              }));
+                              setManualModalOpen(true);
+                            }}
+                          />
 
                           <section className="panel" aria-label="Citas del día">
                             <div className="panel-heading">
