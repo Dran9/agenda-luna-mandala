@@ -2,6 +2,10 @@ const mysql = require("mysql2/promise");
 
 const { env } = require("../utils/env");
 
+const RUNTIME_QUEUE_LIMIT = 20;
+const RUNTIME_CONNECT_TIMEOUT_MS = 10000;
+const RUNTIME_KEEP_ALIVE_DELAY_MS = 10000;
+
 function ensureDbConfig() {
   const missing = [];
 
@@ -16,25 +20,77 @@ function ensureDbConfig() {
   }
 }
 
-function createPool() {
+function createPool(options = {}) {
   ensureDbConfig();
 
-  return mysql.createPool({
+  const {
+    multipleStatements = false,
+    connectionLimit = env.DB_CONNECTION_LIMIT,
+    queueLimit = RUNTIME_QUEUE_LIMIT,
+    connectTimeout = RUNTIME_CONNECT_TIMEOUT_MS,
+    sessionTimezone = env.DB_TIMEZONE
+  } = options;
+
+  const pool = mysql.createPool({
     host: env.DB_HOST,
     port: env.DB_PORT,
     user: env.DB_USER,
     password: env.DB_PASSWORD,
     database: env.DB_NAME,
-    connectionLimit: env.DB_CONNECTION_LIMIT,
+    connectionLimit,
     waitForConnections: true,
-    queueLimit: 0,
+    queueLimit,
     timezone: env.DB_TIMEZONE,
     charset: "utf8mb4",
-    multipleStatements: true
+    multipleStatements,
+    connectTimeout,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: RUNTIME_KEEP_ALIVE_DELAY_MS
   });
+
+  if (sessionTimezone) {
+    pool.on("connection", (connection) => {
+      connection.query("SET time_zone = ?", [sessionTimezone]).catch(() => {
+        // Connection will be discarded by mysql2 if the SET fails; nothing else to do here.
+      });
+    });
+  }
+
+  return pool;
+}
+
+function createMigrationPool() {
+  return createPool({
+    multipleStatements: true,
+    connectionLimit: 1,
+    queueLimit: 0
+  });
+}
+
+let runtimePool = null;
+
+function getRuntimePool() {
+  if (!runtimePool) {
+    runtimePool = createPool();
+  }
+
+  return runtimePool;
+}
+
+async function closeRuntimePool() {
+  if (!runtimePool) {
+    return;
+  }
+
+  const pool = runtimePool;
+  runtimePool = null;
+  await pool.end();
 }
 
 module.exports = {
   createPool,
-  ensureDbConfig
+  createMigrationPool,
+  ensureDbConfig,
+  getRuntimePool,
+  closeRuntimePool
 };

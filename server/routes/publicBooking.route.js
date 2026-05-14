@@ -1,6 +1,6 @@
 const { Router } = require("express");
 
-const { createPool } = require("../db/pool");
+const { getRuntimePool } = require("../db/pool");
 const {
   confirm,
   getAvailability,
@@ -15,18 +15,6 @@ const {
   SlotOccupiedError,
   ValidationError
 } = require("../services/errors");
-const { env } = require("../utils/env");
-
-let sharedPool = null;
-const SESSION_TIMEZONE = env.DB_TIMEZONE || "-04:00";
-
-function getSharedPool() {
-  if (!sharedPool) {
-    sharedPool = createPool();
-  }
-
-  return sharedPool;
-}
 
 function toErrorResponse(error) {
   if (error instanceof PublicBookingError) {
@@ -64,23 +52,14 @@ function toErrorResponse(error) {
   };
 }
 
-function createPublicBookingRouter({ getPool = getSharedPool } = {}) {
+function createPublicBookingRouter({ getPool = getRuntimePool } = {}) {
   const router = Router();
-
-  async function ensureSessionTimezone(connection) {
-    if (!connection || typeof connection.query !== "function" || !SESSION_TIMEZONE) {
-      return;
-    }
-
-    await connection.query("SET time_zone = ?", [SESSION_TIMEZONE]);
-  }
 
   async function withConnection(res, handler) {
     const pool = getPool();
     const connection = await pool.getConnection();
 
     try {
-      await ensureSessionTimezone(connection);
       await handler(connection);
     } catch (error) {
       const mapped = toErrorResponse(error);

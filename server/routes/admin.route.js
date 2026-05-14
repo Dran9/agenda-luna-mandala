@@ -1,6 +1,6 @@
 const { Router } = require("express");
 
-const { createPool } = require("../db/pool");
+const { getRuntimePool } = require("../db/pool");
 const {
   AdminAppointmentsError,
   createAdminManualAppointment,
@@ -31,18 +31,6 @@ const {
 const { searchAdmin } = require("../services/adminSearch.service");
 const { PublicBookingError, SlotOccupiedError, ValidationError } = require("../services/errors");
 const { AdminAuthError, loginAdmin, verifyAdminToken } = require("../services/adminAuth.service");
-const { env } = require("../utils/env");
-
-let sharedPool = null;
-const SESSION_TIMEZONE = env.DB_TIMEZONE || "-04:00";
-
-function getSharedPool() {
-  if (!sharedPool) {
-    sharedPool = createPool();
-  }
-
-  return sharedPool;
-}
 
 function toErrorResponse(error) {
   if (error instanceof ValidationError) {
@@ -158,7 +146,7 @@ function authenticateAdmin(req, res, verifyToken) {
 }
 
 function createAdminRouter({
-  getPool = getSharedPool,
+  getPool = getRuntimePool,
   listAppointments = listAdminAppointments,
   listAppointmentHistory = listAdminAppointmentHistory,
   createManualAppointment = createAdminManualAppointment,
@@ -180,20 +168,11 @@ function createAdminRouter({
 } = {}) {
   const router = Router();
 
-  async function ensureSessionTimezone(connection) {
-    if (!connection || typeof connection.query !== "function" || !SESSION_TIMEZONE) {
-      return;
-    }
-
-    await connection.query("SET time_zone = ?", [SESSION_TIMEZONE]);
-  }
-
   async function withConnection(res, handler) {
     const pool = getPool();
     const connection = await pool.getConnection();
 
     try {
-      await ensureSessionTimezone(connection);
       await handler(connection);
     } catch (error) {
       writeErrorResponse(res, error);

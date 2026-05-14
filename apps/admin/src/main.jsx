@@ -4255,7 +4255,9 @@ function AdminApp() {
     const controller = new AbortController();
 
     async function loadResources() {
-      if (!authToken || (activeSection !== "ajustes" && activeSection !== "control")) {
+      const needsResources = activeSection === "ajustes" || manualModalOpen;
+
+      if (!authToken || !needsResources) {
         if (!authToken) {
           setResourcesPayload(null);
           setResourcesError("");
@@ -4314,7 +4316,7 @@ function AdminApp() {
     return () => {
       controller.abort();
     };
-  }, [authToken, activeSection, resourcesRefreshTick, handleUnauthorized]);
+  }, [authToken, activeSection, manualModalOpen, resourcesRefreshTick, handleUnauthorized]);
 
   useEffect(() => {
     const controller = new AbortController();

@@ -2,7 +2,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { createPool } = require("./pool");
+const { createMigrationPool } = require("./pool");
 const { runDbPreflight } = require("./verify");
 
 const MIGRATIONS_DIR = path.resolve(__dirname, "migrations");
@@ -64,7 +64,7 @@ async function applyMigration(connection, migrationFileName) {
 }
 
 async function runMigrations() {
-  const pool = createPool();
+  const pool = createMigrationPool();
   const connection = await pool.getConnection();
 
   try {

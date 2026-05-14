@@ -344,7 +344,13 @@ function featureKeyToViewModel(featureKey) {
   return key ? { key, label: ROOM_FEATURE_LABELS[key] || key } : null;
 }
 
+let serviceRoomRequirementsTableExists = false;
+
 async function hasServiceRoomRequirementsTable(connection) {
+  if (serviceRoomRequirementsTableExists) {
+    return true;
+  }
+
   const [rows] = await connection.query(
     `SELECT COUNT(*) AS tableCount
      FROM information_schema.TABLES
@@ -352,7 +358,12 @@ async function hasServiceRoomRequirementsTable(connection) {
        AND TABLE_NAME = 'service_room_requirements'`
   );
 
-  return Number(rows[0]?.tableCount || 0) > 0;
+  const exists = Number(rows[0]?.tableCount || 0) > 0;
+  if (exists) {
+    serviceRoomRequirementsTableExists = true;
+  }
+
+  return exists;
 }
 
 async function loadServiceRoomRequirementsByServiceId({ connection, centerId, serviceIds }) {
