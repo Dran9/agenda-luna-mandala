@@ -81,7 +81,8 @@ const env = Object.freeze({
   DB_NAME: readString(process.env.DB_NAME),
   DB_CONNECTION_LIMIT: parseInteger(process.env.DB_CONNECTION_LIMIT, DEFAULT_DB_CONNECTION_LIMIT),
   DB_TIMEZONE: readString(process.env.DB_TIMEZONE, "-04:00"),
-  APP_TIMEZONE: readString(process.env.APP_TIMEZONE, "America/La_Paz")
+  APP_TIMEZONE: readString(process.env.APP_TIMEZONE, "America/La_Paz"),
+  API_CORS_ORIGINS: readString(process.env.API_CORS_ORIGINS)
 });
 
 module.exports = {
