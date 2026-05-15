@@ -7,17 +7,26 @@ Antes de considerar cualquier fase lista:
 ```bash
 npm test
 npm run build
-npm start
-curl -s http://127.0.0.1:3000/api/health
+```
+
+Si la fase toca runtime/deploy, agregar:
+
+```bash
+docker compose up -d
+curl -fsS http://127.0.0.1/api/health
+docker compose ps
 ```
 
 ## Gate Runtime
 
 - No se toco `server/index.js` salvo tarea runtime.
+- No se tocaron `Dockerfile`, `compose*.yaml`, `ops/`, `.env.example`, `package.json` o workflows salvo tarea runtime/deploy.
 - `/api/health` responde local.
-- `/api/health` responde Hostinger.
-- `/` responde.
-- `/admin/` responde.
+- `/api/health` responde via Docker/Caddy cuando aplica.
+- `/api/health` responde en VPS/staging/produccion cuando aplica.
+- `/` responde si Express conserva fallback estatico.
+- `/admin/` responde si Express conserva fallback estatico.
+- Si Cloudflare Pages sirve estaticos, Reserva publica y Admin consumen la API sin CORS abierto a `*`.
 
 ## Gate DB
 

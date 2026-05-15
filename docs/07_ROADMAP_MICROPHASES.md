@@ -1,8 +1,84 @@
 # 07 - Roadmap Por Microfases
 
-## Fase 0 - Tuberia Hostinger
+## Nota Runtime Vigente
+
+Este roadmap historico de producto nacio con Hostinger Web/Node.js. El runtime vigente ahora es VPS Docker, segun `docs/15_VPS_DOCKER_MIGRATION_PLAN.md` y `docs/04_HOSTINGER_DEPLOY_CONTRACT.md`.
+
+Las fases de producto se conservan, pero cualquier trabajo nuevo de runtime/deploy debe seguir las fases D0-D8 del plan VPS Docker.
+
+## Fase D0 - Fuente De Verdad VPS Docker
 
 Objetivo:
+
+Alinear documentos para que no haya contradiccion entre Hostinger Web y VPS Docker antes de tocar runtime.
+
+Entregables:
+
+- `AGENTS.md`, `README.md` y docs base actualizados.
+- Contrato 04 convertido a contrato VPS Docker.
+- `docs/15_VPS_DOCKER_MIGRATION_PLAN.md` como plan operativo.
+
+Gate:
+
+- Una busqueda de frases legacy no encuentra contratos vigentes contradictorios.
+
+## Fase D1 - Docker Local Base
+
+Objetivo:
+
+Levantar API + DB localmente con Docker Desktop sin cambiar producto.
+
+Entregables:
+
+- `.dockerignore`;
+- `Dockerfile`;
+- `compose.local.yaml`;
+- env example para Docker local;
+- comandos documentados.
+
+Gate:
+
+- `docker compose -f compose.local.yaml up -d db api`;
+- `/api/health` responde local;
+- migracion/seed/verify corren solo contra DB local Docker.
+
+## Fase D2 - Compose Prod-Sim
+
+Objetivo:
+
+Tener topologia local parecida a produccion antes de tocar el VPS.
+
+Entregables:
+
+- `compose.yaml`;
+- Caddy reverse proxy;
+- healthchecks;
+- restart policies;
+- volumen DB;
+- log rotation.
+
+Gate:
+
+- `docker compose up -d`;
+- `/api/health` responde via Caddy;
+- DB no queda publica.
+
+## Fase D3-D8 - Infra VPS Endurecida
+
+Resumen:
+
+- D3: Cloudflare Pages para estaticos.
+- D4: CI/CD con GHCR y deploy por SHA.
+- D5: observabilidad con `pino`, Sentry y UptimeRobot Free.
+- D6: backups off-site con restore drill.
+- D7: hardening VPS.
+- D8: spike Postgres opcional, no antes de Docker/CI/backups.
+
+Ver detalle en `docs/15_VPS_DOCKER_MIGRATION_PLAN.md`.
+
+## Fase 0 - Tuberia Inicial Legacy
+
+Objetivo historico:
 
 Probar que el repo nuevo despliega sin romperse.
 
@@ -27,7 +103,7 @@ Prohibido:
 
 Gate:
 
-- Hostinger responde `/api/health`.
+- Runtime local responde `/api/health`.
 - `/` y `/admin/` cargan.
 
 ## Fase 0.5 - Direccion Visual Base
@@ -191,13 +267,12 @@ Entregables:
 
 Objetivo:
 
-Preparar venta/deploy.
+Preparar venta/deploy sobre VPS Docker.
 
 Entregables:
 
 - logs;
 - rate limits;
 - backups/export;
-- deploy checklist;
+- deploy checklist Docker/VPS;
 - QA visual.
-

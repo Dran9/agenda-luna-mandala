@@ -17,10 +17,12 @@ Leer siempre:
 11. `docs/07_ROADMAP_MICROPHASES.md`
 12. `docs/08_ACCEPTANCE_GATES.md`
 13. `docs/10_PUBLIC_BOOKING_SPEC.md`
+14. `docs/15_VPS_DOCKER_MIGRATION_PLAN.md`
+15. `docs/19_LOCAL_PRODUCT_CLOSURE_BACKLOG.md`
 
 Si la tarea es arrancar implementacion desde cero, leer tambien:
 
-14. `docs/09_CODEX_START_PROMPT.md`
+16. `docs/09_CODEX_START_PROMPT.md`
 
 ## Proyecto Nuevo
 
@@ -38,8 +40,10 @@ No copiar archivos sin una decision explicita.
 
 ## Reglas Tecnicas Duras
 
-- Hostinger Web/Node.js v1.
-- Express sirve API y builds estaticos.
+- VPS Docker v1 en Hostinger KVM.
+- Desarrollo local con Docker Desktop.
+- Express sirve API; puede servir builds estaticos como fallback local/prod-sim.
+- Cloudflare Pages puede servir Reserva publica y Admin estaticos en produccion.
 - MySQL/MariaDB es la fuente de verdad.
 - Claims por minuto evitan doble reserva.
 - `DESIGN_BRIEF_AGENDA_LUNA.md` y `design.md` son contrato visual activo.
@@ -57,6 +61,10 @@ Estos archivos solo se tocan en tareas cuyo objetivo explicito sea runtime/deplo
 - `server/index.js`
 - `server/utils/env.js`
 - `.env.example`
+- `Dockerfile`
+- `compose*.yaml`
+- `ops/`
+- `.github/workflows/`
 - scripts de deploy/start/build
 - migraciones ya aplicadas
 
@@ -69,7 +77,8 @@ Nunca mezclar cambios en esos archivos con features de admin, booking, pagos o U
 - No reescribir historia.
 - No usar `git reset --hard`.
 - No borrar ramas o archivos no propios.
-- Antes de push: `npm test`, `npm run build`, `npm start`, `/api/health`.
+- Antes de push: `npm test`, `npm run build` y `/api/health` local.
+- Si la tarea toca runtime/deploy: validar tambien Docker Compose segun `docs/04_HOSTINGER_DEPLOY_CONTRACT.md`.
 
 ## Decision Con Daniel
 
