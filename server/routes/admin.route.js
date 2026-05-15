@@ -19,13 +19,20 @@ const {
 } = require("../services/adminClients.service");
 const {
   AdminTherapistsError,
+  createAdminTherapist,
   getAdminTherapistDetail,
-  listAdminTherapists
+  listAdminTherapists,
+  updateAdminTherapistAvailability,
+  updateAdminTherapistProfile,
+  updateAdminTherapistService
 } = require("../services/adminTherapists.service");
 const {
   AdminResourcesError,
   createRoom,
+  createService,
   listAdminResources,
+  updateService,
+  updateServiceRoomCompatibility,
   updateRoom
 } = require("../services/adminResources.service");
 const { searchAdmin } = require("../services/adminSearch.service");
@@ -170,10 +177,17 @@ function createAdminRouter({
   getClientById = getAdminClientDetail,
   removeClients = deleteAdminClients,
   listTherapists = listAdminTherapists,
+  createTherapist = createAdminTherapist,
   getTherapistById = getAdminTherapistDetail,
+  updateTherapistAvailability = updateAdminTherapistAvailability,
+  updateTherapistProfile = updateAdminTherapistProfile,
+  updateTherapistService = updateAdminTherapistService,
   listResources = listAdminResources,
+  createResourceService = createService,
   createResourceRoom = createRoom,
+  updateResourceService = updateService,
   updateResourceRoom = updateRoom,
+  updateResourceCompatibility = updateServiceRoomCompatibility,
   search = searchAdmin,
   login = loginAdmin,
   verifyToken = verifyAdminToken
@@ -428,6 +442,30 @@ function createAdminRouter({
     });
   });
 
+  router.post("/therapists", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await createTherapist({
+        connection,
+        tenantSlug: req.body?.tenantSlug,
+        fullName: req.body?.fullName,
+        displayName: req.body?.displayName,
+        phone: req.body?.phone,
+        telegramChatId: req.body?.telegramChatId,
+        isActive: req.body?.isActive,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(201).json(payload);
+    });
+  });
+
   router.get("/therapists/:id", async (req, res) => {
     const adminSession = authenticateAdmin(req, res, verifyToken);
 
@@ -440,6 +478,74 @@ function createAdminRouter({
         connection,
         tenantSlug: req.query.tenantSlug,
         therapistId: req.params.id,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.patch("/therapists/:id", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await updateTherapistProfile({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        therapistId: req.params.id,
+        fullName: req.body?.fullName,
+        displayName: req.body?.displayName,
+        phone: req.body?.phone,
+        telegramChatId: req.body?.telegramChatId,
+        isActive: req.body?.isActive,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.patch("/therapists/:id/availability", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await updateTherapistAvailability({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        therapistId: req.params.id,
+        days: req.body?.days,
+        now: new Date(),
+        adminSession
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.patch("/therapists/:id/services/:serviceId", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await updateTherapistService({
+        connection,
+        tenantSlug: req.query.tenantSlug,
+        therapistId: req.params.id,
+        serviceId: req.params.serviceId,
+        isActive: req.body?.isActive,
         now: new Date(),
         adminSession
       });
@@ -465,6 +571,28 @@ function createAdminRouter({
       });
 
       res.status(200).json(payload);
+    });
+  });
+
+  router.post("/resources/services", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await createResourceService({
+        connection,
+        adminSession,
+        name: req.body?.name,
+        durationMinutes: req.body?.durationMinutes,
+        priceAmount: req.body?.priceAmount,
+        isActive: req.body?.isActive,
+        requiredFeatureKeys: req.body?.requiredFeatureKeys
+      });
+
+      res.status(201).json(payload);
     });
   });
 
@@ -504,6 +632,49 @@ function createAdminRouter({
         capacity: req.body?.capacity,
         isActive: req.body?.isActive,
         featureKeys: req.body?.featureKeys
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.patch("/resources/services/:id", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await updateResourceService({
+        connection,
+        adminSession,
+        serviceId: req.params.id,
+        name: req.body?.name,
+        durationMinutes: req.body?.durationMinutes,
+        priceAmount: req.body?.priceAmount,
+        isActive: req.body?.isActive,
+        requiredFeatureKeys: req.body?.requiredFeatureKeys
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.patch("/resources/compatibilities/:serviceId/:roomId", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await updateResourceCompatibility({
+        connection,
+        adminSession,
+        serviceId: req.params.serviceId,
+        roomId: req.params.roomId,
+        isActive: req.body?.isActive
       });
 
       res.status(200).json(payload);

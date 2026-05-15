@@ -3,7 +3,10 @@ const test = require("node:test");
 
 const {
   getAdminTherapistDetail,
-  listAdminTherapists
+  listAdminTherapists,
+  updateAdminTherapistAvailability,
+  updateAdminTherapistProfile,
+  updateAdminTherapistService
 } = require("../server/services/adminTherapists.service");
 
 function createScriptedConnection(steps) {
@@ -131,6 +134,14 @@ test("listAdminTherapists entrega view-model semantico con summary y schedulesBy
   assert.equal(firstTherapist.isActive, true);
   assert.equal(firstTherapist.status, "ACTIVE");
   assert.equal(firstTherapist.statusLabel, "Activo");
+  assert.deepEqual(firstTherapist.avatar, {
+    kind: "initials",
+    initials: "AL",
+    imageUrl: null,
+    status: "NOT_CONFIGURED",
+    statusLabel: "Sin foto",
+    storageProvider: null
+  });
   assert.equal(firstTherapist.contactSummary, "59170001111");
   assert.equal(firstTherapist.servicesCount, 2);
   assert.equal(firstTherapist.compatibleRoomsCount, 2);
@@ -231,6 +242,29 @@ test("getAdminTherapistDetail agrega status semantico en terapeuta, servicios y 
     {
       includes: "COUNT(DISTINCT r.id) AS compatibleRoomsCount",
       rows: [{ compatibleRoomsCount: 2 }]
+    },
+    {
+      includes: "LEFT JOIN therapist_services",
+      rows: [
+        {
+          id: 300,
+          slug: "reiki",
+          name: "Reiki",
+          durationMinutes: 45,
+          isActive: 1,
+          priority: 1,
+          relationIsActive: 1
+        },
+        {
+          id: 302,
+          slug: "osteopatia",
+          name: "Osteopatia",
+          durationMinutes: 60,
+          isActive: 1,
+          priority: 100,
+          relationIsActive: 0
+        }
+      ]
     }
   ]);
 
@@ -246,6 +280,14 @@ test("getAdminTherapistDetail agrega status semantico en terapeuta, servicios y 
   assert.equal(payload.therapist.id, 12);
   assert.equal(payload.therapist.status, "INACTIVE");
   assert.equal(payload.therapist.statusLabel, "Inactivo");
+  assert.deepEqual(payload.therapist.avatar, {
+    kind: "initials",
+    initials: "BS",
+    imageUrl: null,
+    status: "NOT_CONFIGURED",
+    statusLabel: "Sin foto",
+    storageProvider: null
+  });
   assert.equal(payload.therapist.compatibleRoomsCount, 2);
   assert.equal(payload.therapist.acceptsNew, true);
 
@@ -255,6 +297,9 @@ test("getAdminTherapistDetail agrega status semantico en terapeuta, servicios y 
   assert.equal(payload.services[0].statusLabel, "Activo");
   assert.equal(payload.services[1].relationStatus, "INACTIVE");
   assert.equal(payload.services[1].statusLabel, "Inactivo");
+  assert.equal(payload.availableServices.length, 2);
+  assert.equal(payload.availableServices[0].relationIsActive, true);
+  assert.equal(payload.availableServices[1].relationStatus, "INACTIVE");
 
   assert.equal(payload.schedules.length, 2);
   assert.equal(payload.schedules[0].status, "ACTIVE");
@@ -263,6 +308,354 @@ test("getAdminTherapistDetail agrega status semantico en terapeuta, servicios y 
   assert.equal(payload.schedules[1].statusLabel, "Inactivo");
 
   assertNoForbiddenStatusLiterals(payload);
+});
+
+test("updateAdminTherapistAvailability reemplaza horarios con rangos de 30 minutos", async () => {
+  const steps = [];
+  const connection = {
+    async beginTransaction() {
+      steps.push("begin");
+    },
+    async commit() {
+      steps.push("commit");
+    },
+    async rollback() {
+      steps.push("rollback");
+    },
+    async query(sql, params = []) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      steps.push({ sql: normalizedSql, params });
+
+      if (normalizedSql.includes("FROM centers")) {
+        return [[{ id: 1, slug: "luna", name: "Luna Mandala", timezone: "America/La_Paz" }]];
+      }
+
+      if (normalizedSql.includes("FROM therapists") && normalizedSql.includes("FOR UPDATE")) {
+        assert.deepEqual(params, [1, 12]);
+        return [[{ id: 12 }]];
+      }
+
+      if (normalizedSql.startsWith("DELETE FROM resource_schedules")) {
+        assert.deepEqual(params, [1, 12]);
+        return [{ affectedRows: 3 }];
+      }
+
+      if (normalizedSql.startsWith("INSERT INTO resource_schedules")) {
+        assert.deepEqual(params, [
+          1, 12, 1, "09:00:00", "17:00:00",
+          1, 12, 1, "17:00:00", "18:00:00",
+          1, 12, 2, "09:30:00", "13:00:00"
+        ]);
+        return [{ affectedRows: 3 }];
+      }
+
+      if (normalizedSql.includes("FROM therapists") && normalizedSql.includes("WHERE center_id = ? AND id = ? LIMIT 1")) {
+        return [[{
+          id: 12,
+          slug: "ana",
+          fullName: "Ana Luna",
+          displayName: "Ana",
+          phone: null,
+          telegramChatId: null,
+          isActive: 1,
+          createdAt: "2026-05-10T10:00:00.000Z"
+        }]];
+      }
+
+      if (normalizedSql.includes("FROM therapist_services ts")) {
+        return [[]];
+      }
+
+      if (normalizedSql.includes("FROM resource_schedules")) {
+        return [[
+          { id: 901, weekday: 1, startTime: "09:00:00", endTime: "17:00:00", slotMinutes: 30, validFrom: null, validTo: null, isActive: 1 },
+          { id: 902, weekday: 1, startTime: "17:00:00", endTime: "18:00:00", slotMinutes: 30, validFrom: null, validTo: null, isActive: 1 },
+          { id: 903, weekday: 2, startTime: "09:30:00", endTime: "13:00:00", slotMinutes: 30, validFrom: null, validTo: null, isActive: 1 }
+        ]];
+      }
+
+      if (normalizedSql.includes("COUNT(DISTINCT r.id) AS compatibleRoomsCount")) {
+        return [[{ compatibleRoomsCount: 0 }]];
+      }
+
+      if (normalizedSql.includes("FROM services s") && normalizedSql.includes("LEFT JOIN therapist_services")) {
+        return [[]];
+      }
+
+      throw new Error(`Query no esperada: ${normalizedSql}`);
+    }
+  };
+
+  const payload = await updateAdminTherapistAvailability({
+    connection,
+    adminSession: { centerId: 1 },
+    therapistId: 12,
+    days: [
+      {
+        weekday: 1,
+        isActive: true,
+        ranges: [
+          { startTime: "09:00", endTime: "17:00" },
+          { startTime: "17:00", endTime: "18:00" }
+        ]
+      },
+      {
+        weekday: 2,
+        isActive: true,
+        ranges: [{ startTime: "09:30", endTime: "13:00" }]
+      },
+      {
+        weekday: 6,
+        isActive: false,
+        ranges: []
+      }
+    ],
+    now: new Date("2026-05-12T17:00:00.000Z")
+  });
+
+  assert.equal(payload.therapist.id, 12);
+  assert.equal(payload.schedules.length, 3);
+  assert.equal(payload.schedules[0].slotMinutes, 30);
+  assert.equal(steps.includes("begin"), true);
+  assert.equal(steps.includes("commit"), true);
+  assert.equal(steps.includes("rollback"), false);
+});
+
+test("updateAdminTherapistAvailability rechaza rangos solapados o fuera de media hora", async () => {
+  const connection = {
+    async query(sql) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      if (normalizedSql.includes("FROM centers")) {
+        return [[{ id: 1, slug: "luna", name: "Luna Mandala", timezone: "America/La_Paz" }]];
+      }
+      throw new Error(`Query no esperada: ${normalizedSql}`);
+    },
+    async beginTransaction() {
+      throw new Error("no debe abrir transaccion");
+    }
+  };
+
+  await assert.rejects(
+    () => updateAdminTherapistAvailability({
+      connection,
+      adminSession: { centerId: 1 },
+      therapistId: 12,
+      days: [{ weekday: 1, isActive: true, ranges: [{ startTime: "09:45", endTime: "11:00" }] }]
+    }),
+    (error) => error.message === "Hora debe estar en intervalos de 30 minutos"
+  );
+
+  await assert.rejects(
+    () => updateAdminTherapistAvailability({
+      connection,
+      adminSession: { centerId: 1 },
+      therapistId: 12,
+      days: [
+        {
+          weekday: 1,
+          isActive: true,
+          ranges: [
+            { startTime: "09:00", endTime: "12:00" },
+            { startTime: "11:30", endTime: "13:00" }
+          ]
+        }
+      ]
+    }),
+    (error) => error.message === "Rangos solapados en el mismo dia"
+  );
+});
+
+test("updateAdminTherapistProfile actualiza datos editables del perfil", async () => {
+  const steps = [];
+  const connection = {
+    async beginTransaction() {
+      steps.push("begin");
+    },
+    async commit() {
+      steps.push("commit");
+    },
+    async rollback() {
+      steps.push("rollback");
+    },
+    async query(sql, params = []) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      steps.push({ sql: normalizedSql, params });
+
+      if (normalizedSql.includes("FROM centers")) {
+        return [[{ id: 1, slug: "luna", name: "Luna Mandala", timezone: "America/La_Paz" }]];
+      }
+
+      if (normalizedSql.includes("FROM therapists") && normalizedSql.includes("FOR UPDATE")) {
+        assert.deepEqual(params, [1, 12]);
+        return [[{ id: 12 }]];
+      }
+
+      if (normalizedSql.startsWith("UPDATE therapists SET")) {
+        assert.deepEqual(params, [
+          "Ana Luna",
+          "Ana",
+          "59171234567",
+          "ana-luna",
+          1,
+          1,
+          12
+        ]);
+        return [{ affectedRows: 1 }];
+      }
+
+      if (normalizedSql.includes("FROM therapists") && normalizedSql.includes("WHERE center_id = ? AND id = ? LIMIT 1")) {
+        return [[{
+          id: 12,
+          slug: "ana",
+          fullName: "Ana Luna",
+          displayName: "Ana",
+          phone: "59171234567",
+          telegramChatId: "ana-luna",
+          isActive: 1,
+          createdAt: "2026-05-10T10:00:00.000Z"
+        }]];
+      }
+
+      if (normalizedSql.includes("FROM therapist_services ts")) {
+        return [[]];
+      }
+
+      if (normalizedSql.includes("FROM resource_schedules")) {
+        return [[]];
+      }
+
+      if (normalizedSql.includes("COUNT(DISTINCT r.id) AS compatibleRoomsCount")) {
+        return [[{ compatibleRoomsCount: 0 }]];
+      }
+
+      if (normalizedSql.includes("FROM services s") && normalizedSql.includes("LEFT JOIN therapist_services")) {
+        return [[]];
+      }
+
+      throw new Error(`Query no esperada: ${normalizedSql}`);
+    }
+  };
+
+  const payload = await updateAdminTherapistProfile({
+    connection,
+    adminSession: { centerId: 1 },
+    therapistId: 12,
+    fullName: "Ana Luna",
+    displayName: "Ana",
+    phone: "59171234567",
+    telegramChatId: "ana-luna",
+    isActive: true,
+    now: new Date("2026-05-12T17:00:00.000Z")
+  });
+
+  assert.equal(payload.therapist.displayName, "Ana");
+  assert.equal(payload.therapist.phone, "59171234567");
+  assert.equal(payload.therapist.telegramChatId, "ana-luna");
+  assert.equal(steps.includes("begin"), true);
+  assert.equal(steps.includes("commit"), true);
+  assert.equal(steps.includes("rollback"), false);
+});
+
+test("updateAdminTherapistService activa una relacion terapeuta-servicio", async () => {
+  const steps = [];
+  const connection = {
+    async beginTransaction() {
+      steps.push("begin");
+    },
+    async commit() {
+      steps.push("commit");
+    },
+    async rollback() {
+      steps.push("rollback");
+    },
+    async query(sql, params = []) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      steps.push({ sql: normalizedSql, params });
+
+      if (normalizedSql.includes("FROM centers")) {
+        return [[{ id: 1, slug: "luna", name: "Luna Mandala", timezone: "America/La_Paz" }]];
+      }
+
+      if (normalizedSql.includes("FROM therapists") && normalizedSql.includes("FOR UPDATE")) {
+        assert.deepEqual(params, [1, 12]);
+        return [[{ id: 12 }]];
+      }
+
+      if (normalizedSql.includes("FROM services") && normalizedSql.includes("FOR UPDATE")) {
+        assert.deepEqual(params, [1, 300]);
+        return [[{ id: 300 }]];
+      }
+
+      if (normalizedSql.startsWith("INSERT INTO therapist_services")) {
+        assert.deepEqual(params, [1, 12, 300, 1]);
+        assert.equal(normalizedSql.includes("ON DUPLICATE KEY UPDATE"), true);
+        return [{ affectedRows: 1 }];
+      }
+
+      if (normalizedSql.includes("FROM therapists") && normalizedSql.includes("WHERE center_id = ? AND id = ? LIMIT 1")) {
+        return [[{
+          id: 12,
+          slug: "ana",
+          fullName: "Ana Luna",
+          displayName: "Ana",
+          phone: null,
+          telegramChatId: null,
+          isActive: 1,
+          createdAt: "2026-05-10T10:00:00.000Z"
+        }]];
+      }
+
+      if (normalizedSql.includes("FROM therapist_services ts")) {
+        return [[{
+          id: 300,
+          slug: "masaje",
+          name: "Masaje",
+          durationMinutes: 60,
+          isActive: 1,
+          priority: 100,
+          relationIsActive: 1
+        }]];
+      }
+
+      if (normalizedSql.includes("FROM resource_schedules")) {
+        return [[]];
+      }
+
+      if (normalizedSql.includes("COUNT(DISTINCT r.id) AS compatibleRoomsCount")) {
+        return [[{ compatibleRoomsCount: 0 }]];
+      }
+
+      if (normalizedSql.includes("FROM services s") && normalizedSql.includes("LEFT JOIN therapist_services")) {
+        return [[{
+          id: 300,
+          slug: "masaje",
+          name: "Masaje",
+          durationMinutes: 60,
+          isActive: 1,
+          priority: 100,
+          relationIsActive: 1
+        }]];
+      }
+
+      throw new Error(`Query no esperada: ${normalizedSql}`);
+    }
+  };
+
+  const payload = await updateAdminTherapistService({
+    connection,
+    adminSession: { centerId: 1 },
+    therapistId: 12,
+    serviceId: 300,
+    isActive: true,
+    now: new Date("2026-05-12T17:00:00.000Z")
+  });
+
+  assert.equal(payload.therapist.id, 12);
+  assert.equal(payload.services[0].relationIsActive, true);
+  assert.equal(payload.availableServices[0].relationIsActive, true);
+  assert.equal(steps.includes("begin"), true);
+  assert.equal(steps.includes("commit"), true);
+  assert.equal(steps.includes("rollback"), false);
 });
 
 test("listAdminTherapists cuenta salas compatibles sin duplicados y excluye salas inactivas", async () => {

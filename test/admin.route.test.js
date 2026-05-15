@@ -1479,6 +1479,208 @@ test("GET /api/admin/therapists/:id with token returns therapist detail", async 
   assert.equal(res.payload.therapist.id, 2);
 });
 
+test("POST /api/admin/therapists creates therapist scoped to admin center", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    createTherapist: async (args) => {
+      receivedArgs = args;
+      return {
+        therapist: { id: 44, displayName: "Nueva terapeuta" },
+        services: [],
+        schedules: []
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/therapists", "post");
+  const req = {
+    body: {
+      fullName: "Nueva terapeuta",
+      displayName: "Nueva",
+      phone: "59171234567",
+      isActive: true
+    },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(receivedArgs.connection, connection);
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(receivedArgs.fullName, "Nueva terapeuta");
+  assert.equal(receivedArgs.phone, "59171234567");
+  assert.equal(res.payload.therapist.id, 44);
+});
+
+test("PATCH /api/admin/therapists/:id updates therapist profile", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    updateTherapistProfile: async (args) => {
+      receivedArgs = args;
+      return {
+        therapist: { id: 2, displayName: "Ana Editada" },
+        services: [],
+        availableServices: [],
+        schedules: []
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/therapists/:id", "patch");
+  const req = {
+    params: { id: "2" },
+    query: {},
+    body: {
+      fullName: "Ana Luna",
+      displayName: "Ana Editada",
+      phone: "59171234567",
+      telegramChatId: "ana-luna",
+      isActive: true
+    },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(receivedArgs.connection, connection);
+  assert.equal(receivedArgs.therapistId, "2");
+  assert.equal(receivedArgs.displayName, "Ana Editada");
+  assert.equal(receivedArgs.telegramChatId, "ana-luna");
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(res.payload.therapist.displayName, "Ana Editada");
+});
+
+test("PATCH /api/admin/therapists/:id/availability updates therapist availability", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    updateTherapistAvailability: async (args) => {
+      receivedArgs = args;
+      return {
+        generatedAt: "2026-05-12T11:00:00.000Z",
+        therapist: { id: 2, displayName: "Ana" },
+        schedules: [{ weekday: 1, startTime: "09:00:00", endTime: "17:00:00" }]
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/therapists/:id/availability", "patch");
+  const req = {
+    params: { id: "2" },
+    query: {},
+    body: {
+      days: [
+        {
+          weekday: 1,
+          isActive: true,
+          ranges: [{ startTime: "09:00", endTime: "17:00" }]
+        }
+      ]
+    },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(receivedArgs.connection, connection);
+  assert.equal(receivedArgs.therapistId, "2");
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(receivedArgs.days[0].weekday, 1);
+  assert.equal(res.payload.schedules.length, 1);
+});
+
+test("PATCH /api/admin/therapists/:id/services/:serviceId updates therapist service", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    updateTherapistService: async (args) => {
+      receivedArgs = args;
+      return {
+        generatedAt: "2026-05-12T11:00:00.000Z",
+        therapist: { id: 2, displayName: "Ana" },
+        services: [{ id: 10, relationIsActive: true }],
+        availableServices: [{ id: 10, relationIsActive: true }],
+        schedules: []
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/therapists/:id/services/:serviceId", "patch");
+  const req = {
+    params: { id: "2", serviceId: "10" },
+    query: {},
+    body: { isActive: true },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(receivedArgs.connection, connection);
+  assert.equal(receivedArgs.therapistId, "2");
+  assert.equal(receivedArgs.serviceId, "10");
+  assert.equal(receivedArgs.isActive, true);
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(res.payload.availableServices[0].relationIsActive, true);
+});
+
 test("GET /api/admin/resources with token returns read-only resources payload", async () => {
   const connection = {
     release() {}
@@ -1531,6 +1733,51 @@ test("GET /api/admin/resources with token returns read-only resources payload", 
   assert.equal(receivedArgs.now instanceof Date, true);
   assert.equal(Array.isArray(res.payload.settings.services), true);
   assert.equal(res.payload.summary.compatibilitiesTotal, 0);
+});
+
+test("POST /api/admin/resources/services creates service scoped to admin center", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    createResourceService: async (args) => {
+      receivedArgs = args;
+      return { id: 77, name: "Servicio nuevo", requiredFeatureKeys: ["camilla"] };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/resources/services", "post");
+  const req = {
+    body: {
+      name: "Servicio nuevo",
+      durationMinutes: 60,
+      priceAmount: 180,
+      isActive: true,
+      requiredFeatureKeys: ["camilla"]
+    },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(receivedArgs.connection, connection);
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(receivedArgs.name, "Servicio nuevo");
+  assert.deepEqual(receivedArgs.requiredFeatureKeys, ["camilla"]);
+  assert.equal(res.payload.id, 77);
 });
 
 test("POST /api/admin/resources/rooms creates room scoped to admin center", async () => {
@@ -1620,4 +1867,95 @@ test("PATCH /api/admin/resources/rooms/:id updates room scoped to admin center",
   assert.equal(receivedArgs.name, "Sala Fénix Editada");
   assert.deepEqual(receivedArgs.featureKeys, ["mesa"]);
   assert.equal(res.payload.name, "Sala Fénix Editada");
+});
+
+test("PATCH /api/admin/resources/services/:id updates service scoped to admin center", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    updateResourceService: async (args) => {
+      receivedArgs = args;
+      return { id: 10, name: "Carta Astral", requiredFeatureKeys: ["mesa"] };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/resources/services/:id", "patch");
+  const req = {
+    params: { id: "10" },
+    body: {
+      name: "Carta Astral",
+      durationMinutes: "90",
+      priceAmount: "240",
+      isActive: true,
+      requiredFeatureKeys: ["mesa"]
+    },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(receivedArgs.connection, connection);
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(receivedArgs.serviceId, "10");
+  assert.equal(receivedArgs.durationMinutes, "90");
+  assert.equal(receivedArgs.priceAmount, "240");
+  assert.deepEqual(receivedArgs.requiredFeatureKeys, ["mesa"]);
+  assert.equal(res.payload.name, "Carta Astral");
+});
+
+test("PATCH /api/admin/resources/compatibilities/:serviceId/:roomId updates relation scoped to admin center", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 1, centerId: 3, email: "owner@luna.com", role: "owner" }),
+    updateResourceCompatibility: async (args) => {
+      receivedArgs = args;
+      return { id: "10-20", serviceId: 10, roomId: 20, status: "INACTIVE" };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/resources/compatibilities/:serviceId/:roomId", "patch");
+  const req = {
+    params: { serviceId: "10", roomId: "20" },
+    body: {
+      isActive: false
+    },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(receivedArgs.connection, connection);
+  assert.equal(receivedArgs.adminSession.centerId, 3);
+  assert.equal(receivedArgs.serviceId, "10");
+  assert.equal(receivedArgs.roomId, "20");
+  assert.equal(receivedArgs.isActive, false);
+  assert.equal(res.payload.status, "INACTIVE");
 });
