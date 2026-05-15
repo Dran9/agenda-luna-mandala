@@ -49,6 +49,7 @@ export function ControlRoute() {
             type="date"
             value={date}
             onChange={(event) => setDate(event.target.value)}
+            onInput={(event) => setDate(event.currentTarget.value)}
           />
           <span className="refresh-state">
             {appointmentsQuery.isFetching && !appointmentsQuery.isLoading ? "Actualizando" : "Actualizado"}

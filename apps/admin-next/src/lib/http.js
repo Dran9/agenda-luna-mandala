@@ -45,9 +45,9 @@ function notifyUnauthorized() {
 
   unauthorizedInFlight = true;
   unauthorizedHandler();
-  window.setTimeout(() => {
+  window.queueMicrotask(() => {
     unauthorizedInFlight = false;
-  }, 0);
+  });
 }
 
 export async function http(path, options = {}) {

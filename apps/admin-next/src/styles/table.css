@@ -135,3 +135,20 @@
     opacity: 0.45;
   }
 }
+
+@media (max-width: 760px) {
+  .toolbar {
+    align-items: flex-end;
+    flex-wrap: wrap;
+    height: auto;
+    padding-bottom: var(--space-sm);
+  }
+
+  .toolbar .field {
+    min-width: 160px;
+  }
+
+  .table-frame {
+    min-height: 520px;
+  }
+}
