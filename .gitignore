@@ -3,8 +3,10 @@ dist/
 .env
 .env.*
 !.env.example
+!ops/env/.env.local.docker.example
+!ops/env/.env.prod-sim.example
+!ops/env/.env.vps.example
 .DS_Store
 *.log
 coverage/
 .work-*/
-

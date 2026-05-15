@@ -1,0 +1,58 @@
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: ${LOCAL_DOCKER_DB_ROOT_PASSWORD:-agenda_root_dev}
+      MARIADB_DATABASE: ${LOCAL_DB_NAME:-lunamandala_v2_docker}
+      MARIADB_USER: ${LOCAL_DB_USER:-lunav2_user}
+      MARIADB_PASSWORD: ${LOCAL_DB_PASSWORD:-lunav2_password}
+      TZ: ${LOCAL_APP_TIMEZONE:-America/La_Paz}
+    ports:
+      - "${LOCAL_DOCKER_DB_PORT:-3307}:3306"
+    volumes:
+      - agenda_luna_mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -p$${MARIADB_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    environment:
+      NODE_ENV: ${LOCAL_NODE_ENV:-development}
+      APP_ENV: ${LOCAL_APP_ENV:-lunamandala_docker}
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${LOCAL_DB_USER:-lunav2_user}
+      DB_PASSWORD: ${LOCAL_DB_PASSWORD:-lunav2_password}
+      DB_NAME: ${LOCAL_DB_NAME:-lunamandala_v2_docker}
+      DB_CONNECTION_LIMIT: ${LOCAL_DB_CONNECTION_LIMIT:-10}
+      DB_TIMEZONE: ${LOCAL_DB_TIMEZONE:--04:00}
+      APP_TIMEZONE: ${LOCAL_APP_TIMEZONE:-America/La_Paz}
+      JWT_SECRET: ${LOCAL_JWT_SECRET:-local-docker-dev-change-me}
+      MESSAGING_PROVIDER: ${LOCAL_MESSAGING_PROVIDER:-test_outbox}
+      ENABLE_MOCK_FALLBACK: ${LOCAL_ENABLE_MOCK_FALLBACK:-false}
+      ENABLE_DEMO_SCHEDULE_FALLBACK: ${LOCAL_ENABLE_DEMO_SCHEDULE_FALLBACK:-false}
+      API_CORS_ORIGINS: ${LOCAL_API_CORS_ORIGINS:-}
+    ports:
+      - "${LOCAL_API_PORT:-4000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  agenda_luna_mariadb_data:

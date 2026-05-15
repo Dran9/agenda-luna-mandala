@@ -1,0 +1,91 @@
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    environment:
+      CADDY_SITE_ADDRESS: ${VPS_CADDY_SITE_ADDRESS:-:80}
+      CADDY_API_UPSTREAM: ${VPS_CADDY_API_UPSTREAM:-api:3000}
+    ports:
+      - "${VPS_HTTP_PORT:-80}:80"
+      - "${VPS_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./ops/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: ${VPS_LOG_MAX_SIZE:-10m}
+        max-file: ${VPS_LOG_MAX_FILE:-5}
+    restart: unless-stopped
+
+  api:
+    image: ${VPS_API_IMAGE:-agendalunamandala-api:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    environment:
+      NODE_ENV: production
+      APP_ENV: ${VPS_APP_ENV:-production}
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${VPS_DB_USER:?VPS_DB_USER is required}
+      DB_PASSWORD: ${VPS_DB_PASSWORD:?VPS_DB_PASSWORD is required}
+      DB_NAME: ${VPS_DB_NAME:?VPS_DB_NAME is required}
+      DB_CONNECTION_LIMIT: ${VPS_DB_CONNECTION_LIMIT:-10}
+      DB_TIMEZONE: ${VPS_DB_TIMEZONE:--04:00}
+      APP_TIMEZONE: ${VPS_APP_TIMEZONE:-America/La_Paz}
+      JWT_SECRET: ${VPS_JWT_SECRET:?VPS_JWT_SECRET is required}
+      MESSAGING_PROVIDER: ${VPS_MESSAGING_PROVIDER:-test_outbox}
+      ENABLE_MOCK_FALLBACK: ${VPS_ENABLE_MOCK_FALLBACK:-false}
+      ENABLE_DEMO_SCHEDULE_FALLBACK: ${VPS_ENABLE_DEMO_SCHEDULE_FALLBACK:-false}
+      API_CORS_ORIGINS: ${VPS_API_CORS_ORIGINS:-}
+      PUBLIC_BASE_URL: ${VPS_PUBLIC_BASE_URL:-}
+      ADMIN_BASE_URL: ${VPS_ADMIN_BASE_URL:-}
+      SENTRY_DSN: ${VPS_SENTRY_DSN:-}
+      SENTRY_RELEASE: ${VPS_SENTRY_RELEASE:-}
+      WA_TOKEN: ${VPS_WA_TOKEN:-}
+      WA_PHONE_ID: ${VPS_WA_PHONE_ID:-}
+      WA_VERIFY_TOKEN: ${VPS_WA_VERIFY_TOKEN:-}
+      META_APP_SECRET: ${VPS_META_APP_SECRET:-}
+      GOOGLE_VISION_API_KEY: ${VPS_GOOGLE_VISION_API_KEY:-}
+      TELEGRAM_BOT_TOKEN: ${VPS_TELEGRAM_BOT_TOKEN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging: *default-logging
+    restart: unless-stopped
+
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: ${VPS_DB_ROOT_PASSWORD:?VPS_DB_ROOT_PASSWORD is required}
+      MARIADB_DATABASE: ${VPS_DB_NAME:?VPS_DB_NAME is required}
+      MARIADB_USER: ${VPS_DB_USER:?VPS_DB_USER is required}
+      MARIADB_PASSWORD: ${VPS_DB_PASSWORD:?VPS_DB_PASSWORD is required}
+      TZ: ${VPS_APP_TIMEZONE:-America/La_Paz}
+    volumes:
+      - agenda_luna_mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -p$${MARIADB_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    logging: *default-logging
+    restart: unless-stopped
+
+volumes:
+  agenda_luna_mariadb_data:
+  caddy_data:
+  caddy_config:
