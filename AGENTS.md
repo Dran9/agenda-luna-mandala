@@ -1,5 +1,16 @@
 # Instrucciones Para Agentes Codex - Agenda Luna Mandala
 
+## Trabajo Actual
+
+- **Rama activa**: `spike/admin-next-v1` (rebuild parcial del admin, primer ladrillo).
+- **Scope**: spike de 1 dia, login + control + crear cita en `apps/admin-next/`, contra backend existente sin tocarlo.
+- **Edit-zone**: `apps/admin-next/` (toda).
+- **Read-only durante el spike**: `server/`, `apps/admin/`, `apps/booking/`, `docs/00-14`, root `package.json`, migraciones aplicadas.
+- **Plan**: ver `docs/REBUILD_ANALYSIS.md` (especialmente secciones 5 y 6).
+- **3 no negociables**: cero commits a `server/`, invalidacion sin reload, ningun `.jsx` > 300 lineas.
+
+Esta seccion se actualiza cuando cambia la fase activa del proyecto. Si esta desactualizada o no coincide con la rama en la que estas, parar y reportar antes de codificar.
+
 ## Fuente De Verdad
 
 Leer siempre:
@@ -86,6 +97,35 @@ Nunca mezclar cambios en esos archivos con features de admin, booking, pagos o U
 - Si el agente cree que conviene hacer algo distinto, pausar y explicar la recomendacion con claridad antes de implementarla o lanzarla.
 - Si una entrega visual/producto no cumple la referencia o contrato pedido, no tratar `npm test` o `npm run build` como suficiente.
 - Antes de push o entrega final de UI, incluir evidencia visual cuando aplique: screenshots desktop/mobile o explicar explicitamente por que no se pudieron generar.
+
+## Contrato Visual Y UX Obligatorio
+
+Antes de cualquier tarea de UI, leer (en este orden):
+
+1. `docs/brand.md` - verdad unica de la marca Luna Mandala (paleta, fuentes, voz, logo).
+2. `docs/UX_PATTERNS.md` - patrones de interaccion concretos con ejemplos mal/bien. **Critico para evitar las monstruosidades UX del Franky (admin viejo).**
+3. El `DESIGN.md` correspondiente a la app que se toca:
+   - Booking publico: `apps/booking/DESIGN.md` (Cal estructural + Luna Mandala completa, Outfit + Comfortaa).
+   - Admin nuevo: `apps/admin-next/DESIGN.md` (Cal.com verbatim, light mode, Cal Sans + Inter, marca residual).
+
+Reglas duras visuales:
+
+- Todo color, radio, espaciado y tipografia debe venir de un token definido en `brand.md` o en el `DESIGN.md` de la app.
+- Si se necesita un valor que no existe, primero se agrega al token correspondiente, despues al componente.
+- Componentes no inventan colores ni espaciados.
+- Comfortaa nunca aparece en admin.
+- El morado primary tiene presencia alta en booking, presencia residual en admin (solo CTA primario y focus ring).
+
+Reglas duras UX (resumen de `UX_PATTERNS.md`):
+
+- Forms de crear/editar viven en modal o drawer, **nunca inline en una pagina de lectura**.
+- Filtros, busqueda, orden y agrupacion viven en toolbar compacta o popover, **nunca empujan la tabla hacia abajo**.
+- Acciones primarias son botones compactos en toolbar, **nunca cards con titulo y descripcion**.
+- Una sola accion primaria visible por pantalla.
+- No card dentro de card. Nunca.
+- No explicar lo obvio en labels, captions, tooltips o banners.
+- Antes de inventar un componente nuevo, leer `ui/` existente y reusar.
+- Si el patron correcto no esta claro, pausar y proponer 2 opciones a Daniel antes de codificar.
 
 ## UI/UX Guardrail Para Admin
 
