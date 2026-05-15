@@ -1,0 +1,74 @@
+.auth-form {
+  display: grid;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+.field {
+  color: var(--color-ink);
+  display: grid;
+  font-size: 13px;
+  font-weight: 500;
+  gap: var(--space-xs);
+  line-height: 1.4;
+}
+
+.field-control {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-size: 14px;
+  height: 40px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.field-control:focus {
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 3px var(--color-brand-primary-soft);
+  outline: none;
+}
+
+.field-control-error {
+  border-color: var(--color-error);
+}
+
+.field-error,
+.form-error {
+  color: var(--color-error);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.button {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 600;
+  height: 40px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0 16px;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.button-primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.button-secondary {
+  background: var(--color-canvas);
+  border-color: var(--color-hairline);
+  color: var(--color-ink);
+}

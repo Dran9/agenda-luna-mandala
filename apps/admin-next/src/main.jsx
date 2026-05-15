@@ -9,6 +9,9 @@ import { ControlRoute } from "./routes/ControlRoute";
 import { AuthProvider } from "./features/auth/AuthContext";
 import "./styles/tokens.css";
 import "./styles/base.css";
+import "./styles/layout.css";
+import "./styles/forms.css";
+import "./styles/table.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
