@@ -389,6 +389,37 @@ function toBoolLabel(value) {
   return value ? "Si" : "No";
 }
 
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return false;
+    }
+
+    return window.matchMedia(query).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+
+    const media = window.matchMedia(query);
+    const handleChange = () => setMatches(media.matches);
+
+    handleChange();
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, [query]);
+
+  return matches;
+}
+
 function normalizeResourceStatus(value, fallbackIsActive = false) {
   const normalized = String(value || "").trim().toUpperCase();
 
@@ -1527,6 +1558,8 @@ function ControlToolbar({
   );
 }
 
+const MemoControlToolbar = React.memo(ControlToolbar);
+
 function AppointmentTable({
   appointments,
   timezone,
@@ -1539,6 +1572,8 @@ function AppointmentTable({
   armedDeleteId,
   deleteLoading
 }) {
+  const isMobileLayout = useMediaQuery("(max-width: 760px)");
+
   if (!appointments.length) {
     return <p className="empty-state">No hay citas para este bloque.</p>;
   }
@@ -1547,94 +1582,8 @@ function AppointmentTable({
   const groups = groupAppointmentsForControl(appointments, groupBy, timezone);
   const showGroups = groupBy && groupBy !== "none";
 
-  return (
-    <>
-      <div className="table-wrap ops-grid-wrap" role="region" aria-label="Tabla de citas">
-        <table className="appointments-table ops-grid appointments-grid">
-          <thead>
-            <tr>
-              <th className="cell-check">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={(event) =>
-                    onToggleSelectAll(
-                      appointments.map((item) => item.id),
-                      event.target.checked
-                    )
-                  }
-	                  aria-label="Seleccionar citas visibles"
-	                />
-	              </th>
-		              <th>Cliente</th>
-		              <th>Fecha/Hora</th>
-		              <th>WhatsApp</th>
-		              <th>Servicio</th>
-		              <th>Terapeuta</th>
-		              <th>Sala</th>
-		              <th>Estado</th>
-		              <th>Creada</th>
-		              <th>Acción</th>
-	            </tr>
-	          </thead>
-	          <tbody>
-            {groups.map((group) => (
-              <React.Fragment key={`group-${group.key}`}>
-	                {showGroups ? (
-		                  <tr className="appointment-group-row">
-		                    <td colSpan={10}>
-                      <span>{group.label}</span>
-                      <strong>{group.appointments.length}</strong>
-                    </td>
-                  </tr>
-                ) : null}
-                {group.appointments.map((item) => (
-	                  <tr key={item.id} className={`ops-grid-row is-${getClientTone(item.status)}`}>
-	                    <td className="cell-check">
-	                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(item.id)}
-                        onChange={(event) => onToggleSelect(item.id, event.target.checked)}
-                        aria-label={`Seleccionar cita ${item.publicCode || item.id}`}
-                      />
-	                    </td>
-	                    <td>
-		                      <GridClientIdentity
-		                        name={item.client.fullName}
-		                        tone={getClientTone(item.status)}
-		                        asButton
-		                        onClick={() => onSelect(item.id)}
-	                        title="Abrir detalle"
-	                      />
-		                    </td>
-		                    <td>{formatDateTime(item.startsAt, timezone)}</td>
-		                    <td>{item.client.whatsapp || "-"}</td>
-		                    <td>{item.service.name || "-"}</td>
-		                    <td>{item.therapist.name || "-"}</td>
-		                    <td>{item.room.name || "-"}</td>
-		                    <td>
-		                      <StatusChip status={item.status} />
-		                    </td>
-		                    <td>{formatDateTime(item.createdAt, timezone)}</td>
-		                    <td>
-		                      <button
-		                        type="button"
-		                        className={`danger-button${armedDeleteId === item.id ? " is-armed" : ""}`}
-		                        onClick={() => onDeleteOne(item.id)}
-		                        disabled={deleteLoading}
-		                      >
-		                        <Trash size={14} weight="regular" aria-hidden="true" />
-		                        <span>{armedDeleteId === item.id ? "¿Borrar?" : "Borrar"}</span>
-		                      </button>
-		                    </td>
-	                  </tr>
-                ))}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
+  if (isMobileLayout) {
+    return (
       <ul className="appointments-cards" aria-label="Lista de citas mobile">
         {groups.map((group) => (
           <React.Fragment key={`mobile-group-${group.key}`}>
@@ -1678,55 +1627,109 @@ function AppointmentTable({
           </React.Fragment>
         ))}
       </ul>
-    </>
+    );
+  }
+
+  return (
+    <div className="table-wrap ops-grid-wrap" role="region" aria-label="Tabla de citas">
+      <table className="appointments-table ops-grid appointments-grid">
+        <thead>
+          <tr>
+            <th className="cell-check">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={(event) =>
+                  onToggleSelectAll(
+                    appointments.map((item) => item.id),
+                    event.target.checked
+                  )
+                }
+                aria-label="Seleccionar citas visibles"
+              />
+            </th>
+            <th>Cliente</th>
+            <th>Fecha/Hora</th>
+            <th>WhatsApp</th>
+            <th>Servicio</th>
+            <th>Terapeuta</th>
+            <th>Sala</th>
+            <th>Estado</th>
+            <th>Creada</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((group) => (
+            <React.Fragment key={`group-${group.key}`}>
+              {showGroups ? (
+                <tr className="appointment-group-row">
+                  <td colSpan={10}>
+                    <span>{group.label}</span>
+                    <strong>{group.appointments.length}</strong>
+                  </td>
+                </tr>
+              ) : null}
+              {group.appointments.map((item) => (
+                <tr key={item.id} className={`ops-grid-row is-${getClientTone(item.status)}`}>
+                  <td className="cell-check">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(item.id)}
+                      onChange={(event) => onToggleSelect(item.id, event.target.checked)}
+                      aria-label={`Seleccionar cita ${item.publicCode || item.id}`}
+                    />
+                  </td>
+                  <td>
+                    <GridClientIdentity
+                      name={item.client.fullName}
+                      tone={getClientTone(item.status)}
+                      asButton
+                      onClick={() => onSelect(item.id)}
+                      title="Abrir detalle"
+                    />
+                  </td>
+                  <td>{formatDateTime(item.startsAt, timezone)}</td>
+                  <td>{item.client.whatsapp || "-"}</td>
+                  <td>{item.service.name || "-"}</td>
+                  <td>{item.therapist.name || "-"}</td>
+                  <td>{item.room.name || "-"}</td>
+                  <td>
+                    <StatusChip status={item.status} />
+                  </td>
+                  <td>{formatDateTime(item.createdAt, timezone)}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className={`danger-button${armedDeleteId === item.id ? " is-armed" : ""}`}
+                      onClick={() => onDeleteOne(item.id)}
+                      disabled={deleteLoading}
+                    >
+                      <Trash size={14} weight="regular" aria-hidden="true" />
+                      <span>{armedDeleteId === item.id ? "¿Borrar?" : "Borrar"}</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
+const MemoAppointmentTable = React.memo(AppointmentTable);
+
 function HistoryTable({ appointments, timezone }) {
+  const isMobileLayout = useMediaQuery("(max-width: 760px)");
+
   if (!appointments.length) {
     return <p className="empty-state">No hay atenciones para este filtro.</p>;
   }
 
-  return (
-    <>
-      <div className="table-wrap ops-grid-wrap" role="region" aria-label="Tabla de historial">
-        <table className="appointments-table history-table ops-grid">
-          <thead>
-            <tr>
-		              <th className="col-client">Cliente</th>
-		              <th className="col-date">Fecha/Hora</th>
-		              <th className="col-phone">WhatsApp</th>
-		              <th className="col-service">Servicio</th>
-		              <th className="col-therapist">Terapeuta</th>
-		              <th className="col-room">Sala</th>
-		              <th className="col-status">Estado</th>
-		              <th className="col-created">Creada</th>
-            </tr>
-          </thead>
-          <tbody>
-	            {appointments.map((item) => (
-	              <tr key={`history-${item.id}`} className={`ops-grid-row is-${getClientTone(item.status)}`}>
-	                <td className="col-client">
-		                  <GridClientIdentity
-		                    name={item.client.fullName}
-		                    tone={getClientTone(item.status)}
-		                  />
-		                </td>
-		                <td className="col-date">{formatDateTime(item.startsAt, timezone)}</td>
-		                <td className="col-phone">{item.client.whatsapp || "-"}</td>
-		                <td className="col-service">{item.service.name || "-"}</td>
-		                <td className="col-therapist">{item.therapist.name || "-"}</td>
-		                <td className="col-room">{item.room.name || "-"}</td>
-		                <td className="col-status">
-		                  <StatusChip status={item.status} />
-		                </td>
-	                <td className="col-created">{formatDateTime(item.createdAt, timezone)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
+  if (isMobileLayout) {
+    return (
       <ul className="appointments-cards" aria-label="Historial mobile">
         {appointments.map((item) => (
           <li key={`history-mobile-${item.id}`} className="appointment-card">
@@ -1747,9 +1750,51 @@ function HistoryTable({ appointments, timezone }) {
           </li>
         ))}
       </ul>
-    </>
+    );
+  }
+
+  return (
+    <div className="table-wrap ops-grid-wrap" role="region" aria-label="Tabla de historial">
+      <table className="appointments-table history-table ops-grid">
+        <thead>
+          <tr>
+            <th className="col-client">Cliente</th>
+            <th className="col-date">Fecha/Hora</th>
+            <th className="col-phone">WhatsApp</th>
+            <th className="col-service">Servicio</th>
+            <th className="col-therapist">Terapeuta</th>
+            <th className="col-room">Sala</th>
+            <th className="col-status">Estado</th>
+            <th className="col-created">Creada</th>
+          </tr>
+        </thead>
+        <tbody>
+          {appointments.map((item) => (
+            <tr key={`history-${item.id}`} className={`ops-grid-row is-${getClientTone(item.status)}`}>
+              <td className="col-client">
+                <GridClientIdentity
+                  name={item.client.fullName}
+                  tone={getClientTone(item.status)}
+                />
+              </td>
+              <td className="col-date">{formatDateTime(item.startsAt, timezone)}</td>
+              <td className="col-phone">{item.client.whatsapp || "-"}</td>
+              <td className="col-service">{item.service.name || "-"}</td>
+              <td className="col-therapist">{item.therapist.name || "-"}</td>
+              <td className="col-room">{item.room.name || "-"}</td>
+              <td className="col-status">
+                <StatusChip status={item.status} />
+              </td>
+              <td className="col-created">{formatDateTime(item.createdAt, timezone)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
+
+const MemoHistoryTable = React.memo(HistoryTable);
 
 function TimelineView({ appointments, timezone, onSelect }) {
   if (!appointments.length) {
@@ -1774,6 +1819,8 @@ function TimelineView({ appointments, timezone, onSelect }) {
     </ul>
   );
 }
+
+const MemoTimelineView = React.memo(TimelineView);
 
 function appointmentDurationMinutes(appointment) {
   const start = appointment.startsAt ? new Date(appointment.startsAt) : null;
@@ -2061,6 +2108,8 @@ function ClaimSummaryList({ claims, appointment, timezone }) {
     </div>
   );
 }
+
+const MemoRoomsKanban = React.memo(RoomsKanban);
 
 function AppointmentDrawer({
   open,
@@ -2942,6 +2991,8 @@ function ManualAppointmentModal({
     </div>
   );
 }
+
+const MemoManualAppointmentModal = React.memo(ManualAppointmentModal);
 
 function StatusConfirmModal({ request, loading, onCancel, onConfirm }) {
   if (!request) return null;
@@ -7087,20 +7138,28 @@ function AdminApp() {
   const recentAppointments = payload?.recentCreated || [];
 
   const timelineAppointments = useMemo(() => {
+    if (activeSection !== "control" || activeTab !== "timeline") {
+      return [];
+    }
+
     return sortByStartsAt(mergeById(todayAppointments, upcomingAppointments));
-  }, [todayAppointments, upcomingAppointments]);
+  }, [activeSection, activeTab, todayAppointments, upcomingAppointments]);
 
   const listAppointments = useMemo(() => {
     return sortByStartsAt(mergeById(todayAppointments, upcomingAppointments, recentAppointments));
   }, [todayAppointments, upcomingAppointments, recentAppointments]);
 
   const roomsAppointments = useMemo(() => {
+    if (activeSection !== "control" || activeTab !== "rooms") {
+      return [];
+    }
+
     if (Array.isArray(payload?.roomsActive)) {
       return sortByStartsAt(payload.roomsActive);
     }
 
     return sortByStartsAt(listAppointments.filter((entry) => isActiveRoomAppointment(entry)));
-  }, [payload, listAppointments]);
+  }, [activeSection, activeTab, payload, listAppointments]);
 
   const listedClients = clientsPayload?.clients || [];
   const historyAppointments = historyPayload?.history || [];
@@ -7159,46 +7218,92 @@ function AdminApp() {
     );
   }, [listedTherapists, listAppointments]);
   const controlServiceOptions = useMemo(
-    () => buildAppointmentEntityOptions({
-      appointments: listAppointments,
-      resources: manualServices,
-      resourceType: "service"
-    }),
-    [listAppointments, manualServices]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return buildAppointmentEntityOptions({
+        appointments: listAppointments,
+        resources: manualServices,
+        resourceType: "service"
+      });
+    },
+    [activeSection, activeTab, listAppointments, manualServices]
   );
   const controlTherapistOptions = useMemo(
-    () => buildAppointmentEntityOptions({
-      appointments: listAppointments,
-      resources: manualTherapists,
-      resourceType: "therapist"
-    }),
-    [listAppointments, manualTherapists]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return buildAppointmentEntityOptions({
+        appointments: listAppointments,
+        resources: manualTherapists,
+        resourceType: "therapist"
+      });
+    },
+    [activeSection, activeTab, listAppointments, manualTherapists]
   );
   const controlRoomOptions = useMemo(
-    () => buildAppointmentEntityOptions({
-      appointments: listAppointments,
-      resources: manualRooms,
-      resourceType: "room"
-    }),
-    [listAppointments, manualRooms]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return buildAppointmentEntityOptions({
+        appointments: listAppointments,
+        resources: manualRooms,
+        resourceType: "room"
+      });
+    },
+    [activeSection, activeTab, listAppointments, manualRooms]
   );
   const filteredTodayAppointments = useMemo(
-    () => filterAppointmentsForControl(todayAppointments, controlFilters, timezone),
-    [todayAppointments, controlFilters, timezone]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return filterAppointmentsForControl(todayAppointments, controlFilters, timezone);
+    },
+    [activeSection, activeTab, todayAppointments, controlFilters, timezone]
   );
   const filteredUpcomingAppointments = useMemo(
-    () => filterAppointmentsForControl(upcomingAppointments, controlFilters, timezone),
-    [upcomingAppointments, controlFilters, timezone]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return filterAppointmentsForControl(upcomingAppointments, controlFilters, timezone);
+    },
+    [activeSection, activeTab, upcomingAppointments, controlFilters, timezone]
   );
   const filteredRecentAppointments = useMemo(
-    () => filterAppointmentsForControl(recentAppointments, controlFilters, timezone),
-    [recentAppointments, controlFilters, timezone]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return filterAppointmentsForControl(recentAppointments, controlFilters, timezone);
+    },
+    [activeSection, activeTab, recentAppointments, controlFilters, timezone]
   );
   const filteredListAppointments = useMemo(
-    () => filterAppointmentsForControl(listAppointments, controlFilters, timezone),
-    [listAppointments, controlFilters, timezone]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return filterAppointmentsForControl(listAppointments, controlFilters, timezone);
+    },
+    [activeSection, activeTab, listAppointments, controlFilters, timezone]
   );
   const filteredCasesByStatus = useMemo(() => {
+    if (activeSection !== "control" || activeTab !== "today") {
+      return [];
+    }
+
     return [
       {
         status: "pending",
@@ -7216,7 +7321,7 @@ function AdminApp() {
         appointments: filteredListAppointments.filter((item) => item.status === "cancelled")
       }
     ];
-  }, [filteredListAppointments]);
+  }, [activeSection, activeTab, filteredListAppointments]);
 
   const selectedAppointmentIdsSet = useMemo(
     () => new Set(selectedAppointmentIds),
@@ -7226,6 +7331,28 @@ function AdminApp() {
     () => new Set(selectedClientIds),
     [selectedClientIds]
   );
+  const resetControlFilters = useCallback(() => {
+    setControlFilters({
+      q: "",
+      fromDate: "",
+      toDate: "",
+      status: "all",
+      serviceId: "all",
+      therapistId: "all",
+      roomId: "all",
+      groupBy: "none"
+    });
+  }, []);
+  const openManualAppointmentModal = useCallback(() => {
+    setManualCreateError("");
+    setManualCreateSuccess("");
+    setManualDraft((value) => ({
+      ...value,
+      date: controlDate || getDateKeyForTimezone(new Date(), value.timezone),
+      startsAt: ""
+    }));
+    setManualModalOpen(true);
+  }, [controlDate]);
 
   useEffect(() => {
     const availableAppointmentIds = new Set(listAppointments.map((entry) => Number(entry.id)));
@@ -7663,7 +7790,7 @@ function AdminApp() {
     });
   }
 
-  function toggleAppointmentSelection(appointmentId, checked) {
+  const toggleAppointmentSelection = useCallback((appointmentId, checked) => {
     const normalizedId = Number(appointmentId);
     setSelectedAppointmentIds((current) => {
       const currentSet = new Set(current.map((entry) => Number(entry)));
@@ -7676,9 +7803,9 @@ function AdminApp() {
 
       return Array.from(currentSet.values());
     });
-  }
+  }, []);
 
-  function toggleAppointmentSelectionGroup(ids, checked) {
+  const toggleAppointmentSelectionGroup = useCallback((ids, checked) => {
     const normalizedIds = ids.map((entry) => Number(entry)).filter((entry) => Number.isInteger(entry) && entry > 0);
     setSelectedAppointmentIds((current) => {
       const currentSet = new Set(current.map((entry) => Number(entry)));
@@ -7693,9 +7820,9 @@ function AdminApp() {
 
       return Array.from(currentSet.values());
     });
-  }
+  }, []);
 
-  async function requestDeleteAppointments(ids) {
+  const requestDeleteAppointments = useCallback(async (ids) => {
     if (!ids.length || deleteAppointmentsLoading) {
       return;
     }
@@ -7737,9 +7864,15 @@ function AdminApp() {
     } finally {
       setDeleteAppointmentsLoading(false);
     }
-  }
+  }, [
+    authToken,
+    closeDrawer,
+    deleteAppointmentsLoading,
+    handleUnauthorized,
+    selectedAppointmentId
+  ]);
 
-  function handleDeleteAppointmentButton(appointmentId) {
+  const handleDeleteAppointmentButton = useCallback((appointmentId) => {
     if (deleteAppointmentsLoading) {
       return;
     }
@@ -7754,9 +7887,9 @@ function AdminApp() {
     setDeleteAppointmentsError("");
     setConfirmBulkAppointmentsDelete(false);
     setArmedDeleteAppointmentId(normalizedId);
-  }
+  }, [armedDeleteAppointmentId, deleteAppointmentsLoading, requestDeleteAppointments]);
 
-  function handleBulkDeleteAppointmentsButton() {
+  const handleBulkDeleteAppointmentsButton = useCallback(() => {
     if (deleteAppointmentsLoading || selectedAppointmentIds.length === 0) {
       return;
     }
@@ -7769,7 +7902,12 @@ function AdminApp() {
     setDeleteAppointmentsError("");
     setArmedDeleteAppointmentId(null);
     setConfirmBulkAppointmentsDelete(true);
-  }
+  }, [
+    confirmBulkAppointmentsDelete,
+    deleteAppointmentsLoading,
+    requestDeleteAppointments,
+    selectedAppointmentIds
+  ]);
 
   function toggleClientSelection(clientId, checked) {
     const normalizedId = Number(clientId);
@@ -8504,7 +8642,7 @@ function AdminApp() {
                           <h2>Historial</h2>
                           <p>Actualizado: {historyGeneratedAtLabel}</p>
                         </div>
-                        <HistoryTable appointments={historyAppointments} timezone={timezone} />
+                        <MemoHistoryTable appointments={historyAppointments} timezone={timezone} />
                       </section>
                     </>
                   ) : null}
@@ -8558,7 +8696,7 @@ function AdminApp() {
                             </div>
                           </section>
 
-                          <ControlToolbar
+                          <MemoControlToolbar
                             filters={controlFilters}
                             services={controlServiceOptions}
                             therapists={controlTherapistOptions}
@@ -8567,28 +8705,8 @@ function AdminApp() {
                             totalCount={listAppointments.length}
                             createDisabled={hasResourcesData && !manualServices.length}
                             onChange={setControlFilters}
-                            onReset={() =>
-                              setControlFilters({
-                                q: "",
-                                fromDate: "",
-                                toDate: "",
-                                status: "all",
-                                serviceId: "all",
-                                therapistId: "all",
-                                roomId: "all",
-                                groupBy: "none"
-                              })
-                            }
-                            onCreate={() => {
-                              setManualCreateError("");
-                              setManualCreateSuccess("");
-                              setManualDraft((value) => ({
-                                ...value,
-                                date: controlDate || getDateKeyForTimezone(new Date(), value.timezone),
-                                startsAt: ""
-                              }));
-                              setManualModalOpen(true);
-                            }}
+                            onReset={resetControlFilters}
+                            onCreate={openManualAppointmentModal}
                           />
 
                           <section className="panel" aria-label="Citas del día">
@@ -8596,7 +8714,7 @@ function AdminApp() {
                               <h2>Citas del día</h2>
                               <p>{filteredTodayAppointments.length} de {todayAppointments.length} registros</p>
                             </div>
-                            <AppointmentTable
+                            <MemoAppointmentTable
                               appointments={filteredTodayAppointments}
                               timezone={timezone}
                               groupBy={controlFilters.groupBy}
@@ -8616,7 +8734,7 @@ function AdminApp() {
                                 <h2>Próximas citas</h2>
                                 <p>{filteredUpcomingAppointments.length} de {upcomingAppointments.length} registros</p>
                               </div>
-                              <AppointmentTable
+                              <MemoAppointmentTable
                                 appointments={filteredUpcomingAppointments}
                                 timezone={timezone}
                                 groupBy={controlFilters.groupBy}
@@ -8636,7 +8754,7 @@ function AdminApp() {
                               <h2>Últimas citas creadas</h2>
                               <p>{filteredRecentAppointments.length} de {recentAppointments.length} registros</p>
                             </div>
-                            <AppointmentTable
+                            <MemoAppointmentTable
                               appointments={filteredRecentAppointments}
                               timezone={timezone}
                               groupBy={controlFilters.groupBy}
@@ -8658,7 +8776,7 @@ function AdminApp() {
                             <h2>Timeline</h2>
                             <p>{timelineAppointments.length} citas</p>
                           </div>
-                          <TimelineView
+                          <MemoTimelineView
                             appointments={timelineAppointments}
                             timezone={timezone}
                             onSelect={openDrawer}
@@ -8675,7 +8793,7 @@ function AdminApp() {
                           {kanbanError ? (
                             <p className="feedback error compact-feedback">{kanbanError}</p>
                           ) : null}
-                          <RoomsKanban
+                          <MemoRoomsKanban
                             appointments={roomsAppointments}
                             rooms={payload?.rooms || []}
                             timezone={timezone}
@@ -8898,7 +9016,7 @@ function AdminApp() {
         }}
       />
 
-      <ManualAppointmentModal
+      <MemoManualAppointmentModal
         open={manualModalOpen}
         draft={manualDraft}
         services={manualServices}
