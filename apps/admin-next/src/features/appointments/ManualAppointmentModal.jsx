@@ -11,7 +11,7 @@ import { Select } from "../../ui/Select";
 const formSchema = z.object({
   serviceId: z.string().min(1, "Servicio obligatorio"),
   clientFullName: z.string().min(2, "Nombre obligatorio"),
-  phoneE164: z.string().min(7, "WhatsApp obligatorio"),
+  phoneE164: z.string().min(1, "WhatsApp obligatorio"),
   therapistId: z.string().optional(),
   roomId: z.string().optional(),
   startsAt: z.string().min(1, "Fecha y hora obligatoria")
@@ -23,6 +23,20 @@ function toIsoDateTime(value) {
 
 function emptyToNull(value) {
   return value ? value : null;
+}
+
+function defaultStartsAt(date) {
+  return date ? `${date}T09:00` : "";
+}
+
+function normalizePhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+
+  if (digits.length < 7 || digits.length > 15) {
+    throw new Error("WhatsApp debe tener entre 7 y 15 digitos.");
+  }
+
+  return digits;
 }
 
 export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
@@ -49,9 +63,10 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
     setFieldErrors({});
 
     try {
+      const phoneE164 = normalizePhone(parsed.data.phoneE164);
       await createMutation.mutateAsync({
         tenantSlug: centerSlug,
-        phoneE164: parsed.data.phoneE164.replace(/\s+/g, ""),
+        phoneE164,
         clientFullName: parsed.data.clientFullName.trim(),
         serviceId: parsed.data.serviceId,
         therapistId: emptyToNull(parsed.data.therapistId),
@@ -60,6 +75,11 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
       });
       onClose();
     } catch (error) {
+      if (error.message?.startsWith("WhatsApp")) {
+        setFieldErrors({ phoneE164: [error.message] });
+        return;
+      }
+
       if (error.status === 409 || error.code === "SLOT_OCCUPIED") {
         setFieldErrors({ startsAt: [error.message] });
         return;
@@ -92,7 +112,13 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
             <option key={room.id} value={room.id}>{room.name}</option>
           ))}
         </Select>
-        <Input label="Fecha y hora" name="startsAt" type="datetime-local" error={fieldErrors.startsAt?.[0]} />
+        <Input
+          label="Fecha y hora"
+          name="startsAt"
+          type="datetime-local"
+          defaultValue={defaultStartsAt(date)}
+          error={fieldErrors.startsAt?.[0]}
+        />
         {fieldErrors.form?.[0] ? <p className="form-error">{fieldErrors.form[0]}</p> : null}
         <div className="modal-actions">
           <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>

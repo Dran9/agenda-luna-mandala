@@ -1,6 +1,6 @@
 # Admin Next Spike Followups
 
 - Add a thin UI test for the login -> control -> create appointment path once the admin-next test runner is chosen.
-- Decide whether the manual appointment modal should prefill `Fecha y hora` from the selected Control date.
-- Add phone formatting/validation polish without changing the backend payload contract.
+- Replace the temporary `09:00` modal prefill with a smarter next-available-slot suggestion when availability UX is in scope.
+- Add display formatting for WhatsApp while preserving the backend payload as digits-only E.164-style input.
 - Extend responsive behavior for dense tables beyond the spike; current mobile behavior keeps the table scrollable instead of redesigning rows.
