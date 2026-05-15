@@ -26,9 +26,10 @@ Lee en este orden:
 12. docs/07_ROADMAP_MICROPHASES.md
 13. docs/08_ACCEPTANCE_GATES.md
 14. docs/10_PUBLIC_BOOKING_SPEC.md
+15. docs/15_VPS_DOCKER_MIGRATION_PLAN.md
 
 Objetivo de esta primera tarea:
-Implementar SOLO Fase 0 - Tuberia Hostinger.
+Implementar SOLO Fase 0/D1 minimo - tuberia local VPS Docker.
 
 No implementes DB.
 No implementes auth.
@@ -58,15 +59,18 @@ Entregables Fase 0:
 - CSS plano con variables basicas Twilight tomadas de `design.md`.
 - .env.example sin secretos.
 - .gitignore.
+- .dockerignore.
+- Dockerfile minimo para la app Node.
+- compose.local.yaml con API y DB local, sin ejecutar migraciones remotas.
 - test minimo para health/app creation si aplica.
-- Express debe servir builds estaticos.
+- Express debe servir builds estaticos como fallback local/prod-sim.
 
 Reglas criticas:
 - `server/index.js` debe ser simple y estable.
 - No usar `HOST` en `app.listen`.
 - Usar `app.listen(env.PORT, callback)`.
 - No condicionar el arranque por NODE_ENV si el archivo se ejecuta directamente.
-- No tocar deploy automatico de Hostinger mas alla de lo documentado.
+- No crear deploy automatico ni tocar VPS real.
 - No crear features fuera de Fase 0.
 - Aunque sean placeholders, `/` y `/admin/` no deben verse genericos ni amateur: respetar `DESIGN_BRIEF_AGENDA_LUNA.md` y `design.md`.
 
@@ -78,6 +82,8 @@ npm start
 curl -s http://127.0.0.1:3000/api/health
 curl -s -I http://127.0.0.1:3000/
 curl -s -I http://127.0.0.1:3000/admin/
+docker compose -f compose.local.yaml up -d db api
+curl -s http://127.0.0.1:4000/api/health
 
 Entrega:
 - archivos creados;
@@ -88,4 +94,3 @@ Entrega:
 
 No hagas push sin autorizacion explicita.
 ```
-
