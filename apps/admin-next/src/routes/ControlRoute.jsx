@@ -2,6 +2,7 @@ import { Navigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 
 import { AppointmentTable } from "../features/appointments/AppointmentTable";
+import { ManualAppointmentModal } from "../features/appointments/ManualAppointmentModal";
 import { useAppointmentsQuery } from "../features/appointments/queries";
 import { useAuth } from "../features/auth/AuthContext";
 import { lunaMandalaLogoUrl } from "../lib/brand";
@@ -16,8 +17,10 @@ function todayKey() {
 export function ControlRoute() {
   const { isAuthenticated, admin, logout } = useAuth();
   const [date, setDate] = useState(() => todayKey());
+  const [manualOpen, setManualOpen] = useState(false);
   const appointmentsQuery = useAppointmentsQuery(date, isAuthenticated);
   const appointments = useMemo(() => appointmentsQuery.data?.today || [], [appointmentsQuery.data]);
+  const centerSlug = appointmentsQuery.data?.center?.slug || "";
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -54,12 +57,21 @@ export function ControlRoute() {
           <Button type="button" variant="secondary" onClick={() => appointmentsQuery.refetch()}>
             Actualizar
           </Button>
+          <Button type="button" onClick={() => setManualOpen(true)}>
+            Nueva cita
+          </Button>
         </Toolbar>
         {appointmentsQuery.error ? <p className="form-error">{appointmentsQuery.error.message}</p> : null}
         <AppointmentTable
           appointments={appointments}
           isInitialLoading={appointmentsQuery.isLoading}
           isRefreshing={appointmentsQuery.isFetching && !appointmentsQuery.isLoading}
+        />
+        <ManualAppointmentModal
+          centerSlug={centerSlug}
+          date={date}
+          open={manualOpen}
+          onClose={() => setManualOpen(false)}
         />
       </section>
     </main>
