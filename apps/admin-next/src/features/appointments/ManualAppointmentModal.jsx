@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useCreateAppointmentMutation } from "./mutations";
 import { appointmentErrorToFieldErrors } from "./errorUtils";
@@ -25,6 +25,12 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
   const services = useMemo(() => serviceOptions(resourcesQuery.data), [resourcesQuery.data]);
   const rooms = useMemo(() => roomOptions(resourcesQuery.data), [resourcesQuery.data]);
   const therapists = useMemo(() => therapistOptions(therapistsQuery.data), [therapistsQuery.data]);
+
+  useEffect(() => {
+    if (!open) {
+      setFieldErrors({});
+    }
+  }, [open]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -53,17 +59,23 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
   return (
     <Modal open={open} title="Nueva cita" onClose={onClose}>
       <form className="modal-form" onSubmit={handleSubmit}>
-        <Select label="Servicio" name="serviceId" error={firstFieldError(fieldErrors, "serviceId")} required>
+        <Select label="Servicio" name="serviceId" error={firstFieldError(fieldErrors, "serviceId")}>
           <option value="">Seleccionar</option>
           {services.map((service) => (
             <option key={service.id} value={service.id}>{service.name}</option>
           ))}
         </Select>
         <Input
-          label="Cliente"
-          name="clientFullName"
-          error={firstFieldError(fieldErrors, "clientFullName")}
-          placeholder="Ej. Maria Gonzalez"
+          label="Nombre"
+          name="clientFirstName"
+          error={firstFieldError(fieldErrors, "clientFirstName")}
+          placeholder="Ej. Maria"
+        />
+        <Input
+          label="Apellido"
+          name="clientLastName"
+          error={firstFieldError(fieldErrors, "clientLastName")}
+          placeholder="Ej. Gonzalez"
         />
         <Input
           label="WhatsApp"

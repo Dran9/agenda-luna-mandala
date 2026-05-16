@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildManualAppointmentPayload,
+  clientFullNameFromParts,
   defaultStartsAt,
   emptyToNull,
   formatPhoneDisplay,
@@ -32,6 +33,13 @@ test("formatPhoneDisplay groups Bolivian numbers without changing digits", () =>
   assert.equal(formatPhoneDisplay("+591 7123-4567"), "591 7123 4567");
 });
 
+test("clientFullNameFromParts combines first and last names for the backend", () => {
+  assert.equal(
+    clientFullNameFromParts({ clientFirstName: "  Maria", clientLastName: "Gonzalez  " }),
+    "Maria Gonzalez"
+  );
+});
+
 test("emptyToNull preserves optional appointment fields", () => {
   assert.equal(emptyToNull("14"), "14");
   assert.equal(emptyToNull(""), null);
@@ -46,7 +54,8 @@ test("buildManualAppointmentPayload maps form values to the backend contract", (
     centerSlug: "daniel",
     values: {
       phoneE164: "+591 7123-4567",
-      clientFullName: "  Maria Gonzalez  ",
+      clientFirstName: "Maria",
+      clientLastName: "Gonzalez",
       serviceId: "service-1",
       therapistId: "",
       roomId: "room-2",

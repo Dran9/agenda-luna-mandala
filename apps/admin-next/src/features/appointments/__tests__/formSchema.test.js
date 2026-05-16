@@ -5,7 +5,8 @@ import { parseManualAppointmentForm } from "../formSchema.js";
 
 const validForm = {
   serviceId: "service-1",
-  clientFullName: "Maria Gonzalez",
+  clientFirstName: "Maria",
+  clientLastName: "Gonzalez",
   phoneE164: "59171234567",
   therapistId: "",
   roomId: "",
@@ -26,15 +27,17 @@ test("parseManualAppointmentForm requires a service", () => {
   assert.equal(parsed.error.flatten().fieldErrors.serviceId[0], "Servicio obligatorio");
 });
 
-test("parseManualAppointmentForm requires the client name and WhatsApp", () => {
+test("parseManualAppointmentForm requires the client name, last name and WhatsApp", () => {
   const parsed = parseManualAppointmentForm({
     ...validForm,
-    clientFullName: "",
+    clientFirstName: "",
+    clientLastName: "",
     phoneE164: ""
   });
 
   assert.equal(parsed.success, false);
-  assert.equal(parsed.error.flatten().fieldErrors.clientFullName[0], "Nombre obligatorio");
+  assert.equal(parsed.error.flatten().fieldErrors.clientFirstName[0], "Nombre obligatorio");
+  assert.equal(parsed.error.flatten().fieldErrors.clientLastName[0], "Apellido obligatorio");
   assert.equal(parsed.error.flatten().fieldErrors.phoneE164[0], "WhatsApp obligatorio");
 });
 

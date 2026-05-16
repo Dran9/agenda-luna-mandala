@@ -1,4 +1,14 @@
 export function appointmentErrorToFieldErrors(error) {
+  const field = error?.details?.field;
+
+  if (field === "clientFullName") {
+    return { clientFirstName: [error.message] };
+  }
+
+  if (field) {
+    return { [field]: [error.message] };
+  }
+
   if (error.message?.startsWith("WhatsApp")) {
     return { phoneE164: [error.message] };
   }

@@ -35,11 +35,15 @@ export function formatPhoneDisplay(value) {
   return digits.replace(/(\d{3})(?=\d)/g, "$1 ").trim();
 }
 
+export function clientFullNameFromParts({ clientFirstName, clientLastName }) {
+  return `${clientFirstName || ""} ${clientLastName || ""}`.trim();
+}
+
 export function buildManualAppointmentPayload({ centerSlug, values }) {
   return {
     tenantSlug: centerSlug,
     phoneE164: normalizePhone(values.phoneE164),
-    clientFullName: values.clientFullName.trim(),
+    clientFullName: clientFullNameFromParts(values),
     serviceId: values.serviceId,
     therapistId: emptyToNull(values.therapistId),
     roomId: emptyToNull(values.roomId),
