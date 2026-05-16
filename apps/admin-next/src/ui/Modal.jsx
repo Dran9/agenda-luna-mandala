@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 
+import { shouldCloseModalOnKey } from "./modalUtils";
+
 export function Modal({ children, onClose, open, title }) {
   useEffect(() => {
     if (!open) {
@@ -7,7 +9,7 @@ export function Modal({ children, onClose, open, title }) {
     }
 
     function handleKeyDown(event) {
-      if (event.key === "Escape") {
+      if (shouldCloseModalOnKey(event)) {
         onClose();
       }
     }
