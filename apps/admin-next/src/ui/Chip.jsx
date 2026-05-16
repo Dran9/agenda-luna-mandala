@@ -1,3 +1,5 @@
+import { chipClassName } from "./chipUtils";
+
 export function Chip({ children, tone = "default" }) {
-  return <span className={`chip chip-${tone}`}>{children}</span>;
+  return <span className={chipClassName(tone)}>{children}</span>;
 }
