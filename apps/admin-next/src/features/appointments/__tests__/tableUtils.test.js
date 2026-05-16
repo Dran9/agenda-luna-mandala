@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  appointmentClientName,
+  appointmentClientWhatsapp,
+  appointmentRoomName,
+  appointmentServiceName,
   appointmentStatusLabel,
+  appointmentTherapistName,
   formatAppointmentTime
 } from "../tableUtils.js";
 
@@ -28,4 +33,29 @@ test("formatAppointmentTime returns a compact local time", () => {
 
 test("formatAppointmentTime returns placeholder for empty values", () => {
   assert.equal(formatAppointmentTime(""), "--:--");
+});
+
+test("appointment table accessors read nested backend fields", () => {
+  const appointment = {
+    client: { fullName: "Maria Gonzalez", whatsapp: "59171234567" },
+    service: { name: "Masaje" },
+    therapist: { name: "Ana" },
+    room: { name: "Sala 1" }
+  };
+
+  assert.equal(appointmentClientName(appointment), "Maria Gonzalez");
+  assert.equal(appointmentClientWhatsapp(appointment), "59171234567");
+  assert.equal(appointmentServiceName(appointment), "Masaje");
+  assert.equal(appointmentTherapistName(appointment), "Ana");
+  assert.equal(appointmentRoomName(appointment), "Sala 1");
+});
+
+test("appointment table accessors return compact placeholders for missing fields", () => {
+  const appointment = {};
+
+  assert.equal(appointmentClientName(appointment), "-");
+  assert.equal(appointmentClientWhatsapp(appointment), "-");
+  assert.equal(appointmentServiceName(appointment), "-");
+  assert.equal(appointmentTherapistName(appointment), "-");
+  assert.equal(appointmentRoomName(appointment), "-");
 });

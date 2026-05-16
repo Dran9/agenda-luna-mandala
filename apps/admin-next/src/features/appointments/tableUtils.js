@@ -20,3 +20,23 @@ export function formatAppointmentTime(value) {
 export function appointmentStatusLabel(status) {
   return STATUS_LABELS[status] || status || "-";
 }
+
+export function appointmentClientName(appointment) {
+  return appointment.client?.fullName || "-";
+}
+
+export function appointmentClientWhatsapp(appointment) {
+  return appointment.client?.whatsapp || "-";
+}
+
+export function appointmentServiceName(appointment) {
+  return appointment.service?.name || "-";
+}
+
+export function appointmentTherapistName(appointment) {
+  return appointment.therapist?.name || "-";
+}
+
+export function appointmentRoomName(appointment) {
+  return appointment.room?.name || "-";
+}

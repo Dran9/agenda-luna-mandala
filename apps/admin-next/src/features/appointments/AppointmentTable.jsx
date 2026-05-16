@@ -1,5 +1,13 @@
 import { Chip } from "../../ui/Chip";
-import { appointmentStatusLabel, formatAppointmentTime } from "./tableUtils";
+import {
+  appointmentClientName,
+  appointmentClientWhatsapp,
+  appointmentRoomName,
+  appointmentServiceName,
+  appointmentStatusLabel,
+  appointmentTherapistName,
+  formatAppointmentTime
+} from "./tableUtils";
 
 function SkeletonRows() {
   return Array.from({ length: 8 }, (_, index) => (
@@ -39,12 +47,12 @@ export function AppointmentTable({ appointments, isInitialLoading, isRefreshing 
             <tr key={appointment.id}>
               <td className="cell-time">{formatAppointmentTime(appointment.startsAt)}</td>
               <td>
-                <strong>{appointment.client?.fullName || "-"}</strong>
-                <span>{appointment.client?.whatsapp || "-"}</span>
+                <strong>{appointmentClientName(appointment)}</strong>
+                <span>{appointmentClientWhatsapp(appointment)}</span>
               </td>
-              <td>{appointment.service?.name || "-"}</td>
-              <td>{appointment.therapist?.name || "-"}</td>
-              <td>{appointment.room?.name || "-"}</td>
+              <td>{appointmentServiceName(appointment)}</td>
+              <td>{appointmentTherapistName(appointment)}</td>
+              <td>{appointmentRoomName(appointment)}</td>
               <td>
                 <Chip tone={appointment.status}>{appointmentStatusLabel(appointment.status)}</Chip>
               </td>
