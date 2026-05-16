@@ -7,6 +7,13 @@ import { Button } from "../../ui/Button";
 import { Input } from "../../ui/Input";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
+import {
+  defaultStartsAt,
+  emptyToNull,
+  formatPhoneDisplay,
+  normalizePhone,
+  toIsoDateTime
+} from "./formUtils";
 
 const formSchema = z.object({
   serviceId: z.string().min(1, "Servicio obligatorio"),
@@ -16,43 +23,6 @@ const formSchema = z.object({
   roomId: z.string().optional(),
   startsAt: z.string().min(1, "Fecha y hora obligatoria")
 });
-
-function toIsoDateTime(value) {
-  return new Date(value).toISOString();
-}
-
-function emptyToNull(value) {
-  return value ? value : null;
-}
-
-function defaultStartsAt(date) {
-  return date ? `${date}T09:00` : "";
-}
-
-function normalizePhone(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-
-  if (digits.length < 7 || digits.length > 15) {
-    throw new Error("WhatsApp debe tener entre 7 y 15 digitos.");
-  }
-
-  return digits;
-}
-
-function formatPhoneDisplay(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-
-  if (digits.startsWith("591") && digits.length > 3) {
-    const local = digits.slice(3);
-    const localGroups = local.length > 4
-      ? [local.slice(0, 4), local.slice(4)]
-      : [local];
-
-    return ["591", ...localGroups].filter(Boolean).join(" ");
-  }
-
-  return digits.replace(/(\d{3})(?=\d)/g, "$1 ").trim();
-}
 
 export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
   const resourcesQuery = useResourcesQuery(open);
