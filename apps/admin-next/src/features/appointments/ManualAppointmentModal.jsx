@@ -9,6 +9,7 @@ import { Button } from "../../ui/Button";
 import { Input } from "../../ui/Input";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
+import { firstFieldError } from "./formErrors";
 import {
   buildManualAppointmentPayload,
   defaultStartsAt,
@@ -52,18 +53,23 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
   return (
     <Modal open={open} title="Nueva cita" onClose={onClose}>
       <form className="modal-form" onSubmit={handleSubmit}>
-        <Select label="Servicio" name="serviceId" error={fieldErrors.serviceId?.[0]} required>
+        <Select label="Servicio" name="serviceId" error={firstFieldError(fieldErrors, "serviceId")} required>
           <option value="">Seleccionar</option>
           {services.map((service) => (
             <option key={service.id} value={service.id}>{service.name}</option>
           ))}
         </Select>
-        <Input label="Cliente" name="clientFullName" error={fieldErrors.clientFullName?.[0]} placeholder="Ej. Maria Gonzalez" />
+        <Input
+          label="Cliente"
+          name="clientFullName"
+          error={firstFieldError(fieldErrors, "clientFullName")}
+          placeholder="Ej. Maria Gonzalez"
+        />
         <Input
           label="WhatsApp"
           name="phoneE164"
           inputMode="tel"
-          error={fieldErrors.phoneE164?.[0]}
+          error={firstFieldError(fieldErrors, "phoneE164")}
           placeholder="591 7123 4567"
           onInput={(event) => {
             event.currentTarget.value = formatPhoneDisplay(event.currentTarget.value);
@@ -72,13 +78,13 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
             event.currentTarget.value = formatPhoneDisplay(event.currentTarget.value);
           }}
         />
-        <Select label="Terapeuta" name="therapistId" error={fieldErrors.therapistId?.[0]}>
+        <Select label="Terapeuta" name="therapistId" error={firstFieldError(fieldErrors, "therapistId")}>
           <option value="">Opcional</option>
           {therapists.map((therapist) => (
             <option key={therapist.id} value={therapist.id}>{therapist.displayName}</option>
           ))}
         </Select>
-        <Select label="Sala" name="roomId" error={fieldErrors.roomId?.[0]}>
+        <Select label="Sala" name="roomId" error={firstFieldError(fieldErrors, "roomId")}>
           <option value="">Opcional</option>
           {rooms.map((room) => (
             <option key={room.id} value={room.id}>{room.name}</option>
@@ -89,9 +95,11 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
           name="startsAt"
           type="datetime-local"
           defaultValue={defaultStartsAt(date)}
-          error={fieldErrors.startsAt?.[0]}
+          error={firstFieldError(fieldErrors, "startsAt")}
         />
-        {fieldErrors.form?.[0] ? <p className="form-error">{fieldErrors.form[0]}</p> : null}
+        {firstFieldError(fieldErrors, "form") ? (
+          <p className="form-error">{firstFieldError(fieldErrors, "form")}</p>
+        ) : null}
         <div className="modal-actions">
           <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button type="submit" disabled={createMutation.isPending}>
