@@ -14,6 +14,18 @@ export function appointmentsPath({ date }) {
   return `/api/admin/appointments?${toQuery({ date, upcoming: 0, limit: 80 })}`;
 }
 
+export function appointmentDetailPath(appointmentId) {
+  return `/api/admin/appointments/${appointmentId}`;
+}
+
+export function appointmentStatusPath(appointmentId) {
+  return `/api/admin/appointments/${appointmentId}/status`;
+}
+
+export function appointmentRoomPath(appointmentId) {
+  return `/api/admin/appointments/${appointmentId}/room`;
+}
+
 export function resourcesPath() {
   return "/api/admin/resources";
 }

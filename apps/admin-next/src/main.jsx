@@ -12,7 +12,9 @@ import "./styles/base.css";
 import "./styles/layout.css";
 import "./styles/forms.css";
 import "./styles/table.css";
+import "./styles/table-interactions.css";
 import "./styles/modal.css";
+import "./styles/drawer.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

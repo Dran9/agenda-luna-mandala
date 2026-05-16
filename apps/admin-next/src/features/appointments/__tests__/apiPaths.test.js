@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  appointmentDetailPath,
+  appointmentRoomPath,
   appointmentsPath,
+  appointmentStatusPath,
   resourcesPath,
   therapistsPath
 } from "../apiPaths.js";
@@ -26,6 +29,12 @@ test("appointmentsPath omits empty date filters without changing table defaults"
 
 test("resourcesPath targets service and room options", () => {
   assert.equal(resourcesPath(), "/api/admin/resources");
+});
+
+test("appointment detail paths target the selected appointment", () => {
+  assert.equal(appointmentDetailPath(42), "/api/admin/appointments/42");
+  assert.equal(appointmentStatusPath(42), "/api/admin/appointments/42/status");
+  assert.equal(appointmentRoomPath(42), "/api/admin/appointments/42/room");
 });
 
 test("therapistsPath targets active therapist options", () => {

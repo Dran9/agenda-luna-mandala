@@ -1,13 +1,18 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
-import { getAppointments, getResources, getTherapists } from "./api";
-import { appointmentsKey, resourcesKey, therapistsKey } from "./queryKeys";
+import { getAppointmentDetail, getAppointments, getResources, getTherapists } from "./api";
+import {
+  appointmentDetailKey,
+  appointmentsKey,
+  resourcesKey,
+  therapistsKey
+} from "./queryKeys";
 import {
   APPOINTMENT_OPTIONS_STALE_TIME_MS,
   APPOINTMENTS_REFETCH_INTERVAL_MS
 } from "./querySettings";
 
-export { appointmentsKey, resourcesKey, therapistsKey };
+export { appointmentDetailKey, appointmentsKey, resourcesKey, therapistsKey };
 
 export function useAppointmentsQuery(date, enabled = true) {
   return useQuery({
@@ -16,6 +21,14 @@ export function useAppointmentsQuery(date, enabled = true) {
     enabled,
     placeholderData: keepPreviousData,
     refetchInterval: APPOINTMENTS_REFETCH_INTERVAL_MS
+  });
+}
+
+export function useAppointmentDetailQuery(appointmentId) {
+  return useQuery({
+    queryKey: appointmentDetailKey(appointmentId),
+    queryFn: () => getAppointmentDetail(appointmentId),
+    enabled: Boolean(appointmentId)
   });
 }
 

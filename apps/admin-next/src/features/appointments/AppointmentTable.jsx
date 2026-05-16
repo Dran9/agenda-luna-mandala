@@ -23,7 +23,13 @@ function SkeletonRows() {
   ));
 }
 
-export function AppointmentTable({ appointments, isInitialLoading, isRefreshing }) {
+export function AppointmentTable({
+  appointments,
+  isInitialLoading,
+  isRefreshing,
+  onSelectAppointment,
+  selectedAppointmentId
+}) {
   return (
     <div className="table-frame" data-refreshing={isRefreshing ? "true" : "false"}>
       <table className="appointments-table">
@@ -45,7 +51,18 @@ export function AppointmentTable({ appointments, isInitialLoading, isRefreshing 
             </tr>
           ) : null}
           {!isInitialLoading ? appointments.map((appointment) => (
-            <tr key={appointment.id}>
+            <tr
+              key={appointment.id}
+              className={selectedAppointmentId === appointment.id ? "table-row-active" : ""}
+              role="button"
+              tabIndex="0"
+              onClick={() => onSelectAppointment?.(appointment.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  onSelectAppointment?.(appointment.id);
+                }
+              }}
+            >
               <td className="cell-time">{formatAppointmentTime(appointment.startsAt)}</td>
               <td>
                 <strong>{appointmentClientName(appointment)}</strong>

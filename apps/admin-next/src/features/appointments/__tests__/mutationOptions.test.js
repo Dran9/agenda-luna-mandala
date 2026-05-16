@@ -25,3 +25,51 @@ test("createAppointmentMutationOptions invalidates appointments for the selected
     { queryKey: ["appointments", "2026-05-18"] }
   ]);
 });
+
+test("updateAppointmentStatusMutationOptions invalidates table and drawer detail", async () => {
+  const invalidations = [];
+  const queryClient = {
+    async invalidateQueries(payload) {
+      invalidations.push(payload);
+    }
+  };
+  const mutationFn = async () => ({ appointment: { id: 42 } });
+
+  const { updateAppointmentStatusMutationOptions } = await import("../mutationOptions.js");
+  const options = updateAppointmentStatusMutationOptions({
+    date: "2026-05-18",
+    mutationFn,
+    queryClient
+  });
+
+  await options.onSuccess({ appointment: { id: 42 } });
+
+  assert.deepEqual(invalidations, [
+    { queryKey: ["appointments", "2026-05-18"] },
+    { queryKey: ["appointments", "detail", 42] }
+  ]);
+});
+
+test("updateAppointmentRoomMutationOptions invalidates table and drawer detail", async () => {
+  const invalidations = [];
+  const queryClient = {
+    async invalidateQueries(payload) {
+      invalidations.push(payload);
+    }
+  };
+  const mutationFn = async () => ({ appointment: { id: 42 } });
+
+  const { updateAppointmentRoomMutationOptions } = await import("../mutationOptions.js");
+  const options = updateAppointmentRoomMutationOptions({
+    date: "2026-05-18",
+    mutationFn,
+    queryClient
+  });
+
+  await options.onSuccess({ appointment: { id: 42 } });
+
+  assert.deepEqual(invalidations, [
+    { queryKey: ["appointments", "2026-05-18"] },
+    { queryKey: ["appointments", "detail", 42] }
+  ]);
+});
