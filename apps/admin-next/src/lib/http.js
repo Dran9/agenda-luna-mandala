@@ -1,41 +1,10 @@
+import { createHttpError, parseResponseBody, readAuthToken } from "./httpUtils.js";
+
 let unauthorizedHandler = null;
 let unauthorizedInFlight = false;
 
 export function setUnauthorizedHandler(handler) {
   unauthorizedHandler = handler;
-}
-
-function readAuthToken() {
-  try {
-    return window.localStorage.getItem("adminNextToken");
-  } catch {
-    return null;
-  }
-}
-
-async function parseJson(response) {
-  const text = await response.text();
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
-
-function getErrorMessage(payload, fallback) {
-  if (payload?.error?.message) {
-    return payload.error.message;
-  }
-
-  if (typeof payload === "string" && payload.trim()) {
-    return payload;
-  }
-
-  return fallback;
 }
 
 function notifyUnauthorized() {
@@ -66,19 +35,18 @@ export async function http(path, options = {}) {
     ...options,
     headers
   });
-  const payload = await parseJson(response);
+  const payload = await parseResponseBody(response);
 
   if (response.status === 401) {
     notifyUnauthorized();
   }
 
   if (!response.ok) {
-    const error = new Error(getErrorMessage(payload, "No se pudo procesar la solicitud."));
-    error.status = response.status;
-    error.code = payload?.error?.code || "HTTP_ERROR";
-    error.details = payload?.error?.details || {};
-    error.payload = payload;
-    throw error;
+    throw createHttpError({
+      payload,
+      status: response.status,
+      fallback: "No se pudo procesar la solicitud."
+    });
   }
 
   return payload;
