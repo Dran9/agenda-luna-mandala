@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildManualAppointmentPayload,
   defaultStartsAt,
   emptyToNull,
   formatPhoneDisplay,
@@ -38,4 +39,26 @@ test("emptyToNull preserves optional appointment fields", () => {
 
 test("toIsoDateTime maps datetime-local values to ISO startsAt", () => {
   assert.match(toIsoDateTime("2026-05-18T09:00"), /^2026-05-18T/);
+});
+
+test("buildManualAppointmentPayload maps form values to the backend contract", () => {
+  const payload = buildManualAppointmentPayload({
+    centerSlug: "daniel",
+    values: {
+      phoneE164: "+591 7123-4567",
+      clientFullName: "  Maria Gonzalez  ",
+      serviceId: "service-1",
+      therapistId: "",
+      roomId: "room-2",
+      startsAt: "2026-05-18T09:00"
+    }
+  });
+
+  assert.equal(payload.tenantSlug, "daniel");
+  assert.equal(payload.phoneE164, "59171234567");
+  assert.equal(payload.clientFullName, "Maria Gonzalez");
+  assert.equal(payload.serviceId, "service-1");
+  assert.equal(payload.therapistId, null);
+  assert.equal(payload.roomId, "room-2");
+  assert.match(payload.startsAt, /^2026-05-18T/);
 });

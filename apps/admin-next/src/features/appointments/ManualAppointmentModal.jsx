@@ -8,11 +8,9 @@ import { Input } from "../../ui/Input";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
 import {
+  buildManualAppointmentPayload,
   defaultStartsAt,
-  emptyToNull,
-  formatPhoneDisplay,
-  normalizePhone,
-  toIsoDateTime
+  formatPhoneDisplay
 } from "./formUtils";
 
 const formSchema = z.object({
@@ -48,16 +46,10 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
     setFieldErrors({});
 
     try {
-      const phoneE164 = normalizePhone(parsed.data.phoneE164);
-      await createMutation.mutateAsync({
-        tenantSlug: centerSlug,
-        phoneE164,
-        clientFullName: parsed.data.clientFullName.trim(),
-        serviceId: parsed.data.serviceId,
-        therapistId: emptyToNull(parsed.data.therapistId),
-        roomId: emptyToNull(parsed.data.roomId),
-        startsAt: toIsoDateTime(parsed.data.startsAt)
-      });
+      await createMutation.mutateAsync(buildManualAppointmentPayload({
+        centerSlug,
+        values: parsed.data
+      }));
       onClose();
     } catch (error) {
       if (error.message?.startsWith("WhatsApp")) {
