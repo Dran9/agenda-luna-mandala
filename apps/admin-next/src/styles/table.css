@@ -32,7 +32,7 @@
   border-collapse: separate;
   border-spacing: 0;
   font-size: 14px;
-  min-width: 880px;
+  min-width: 840px;
   width: 100%;
 }
 
@@ -150,5 +150,41 @@
 
   .table-frame {
     min-height: 520px;
+  }
+
+  .appointments-table {
+    min-width: 760px;
+  }
+
+  .appointments-table th:first-child,
+  .appointments-table td:first-child,
+  .appointments-table th:nth-child(2),
+  .appointments-table td:nth-child(2) {
+    background: var(--color-canvas);
+    position: sticky;
+    z-index: 2;
+  }
+
+  .appointments-table th:first-child,
+  .appointments-table td:first-child {
+    left: 0;
+    width: 94px;
+  }
+
+  .appointments-table th:nth-child(2),
+  .appointments-table td:nth-child(2) {
+    box-shadow: 8px 0 12px rgb(255 255 255 / 86%);
+    left: 94px;
+    min-width: 176px;
+  }
+
+  .appointments-table th:first-child,
+  .appointments-table th:nth-child(2) {
+    z-index: 3;
+  }
+
+  .appointments-table tbody tr:hover td:first-child,
+  .appointments-table tbody tr:hover td:nth-child(2) {
+    background: var(--color-surface-soft);
   }
 }
