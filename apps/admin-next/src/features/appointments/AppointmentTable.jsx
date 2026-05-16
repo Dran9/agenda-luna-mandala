@@ -5,6 +5,7 @@ import {
   appointmentRoomName,
   appointmentServiceName,
   appointmentStatusLabel,
+  appointmentStatusTone,
   appointmentTherapistName,
   formatAppointmentTime
 } from "./tableUtils";
@@ -54,7 +55,9 @@ export function AppointmentTable({ appointments, isInitialLoading, isRefreshing 
               <td>{appointmentTherapistName(appointment)}</td>
               <td>{appointmentRoomName(appointment)}</td>
               <td>
-                <Chip tone={appointment.status}>{appointmentStatusLabel(appointment.status)}</Chip>
+                <Chip tone={appointmentStatusTone(appointment.status)}>
+                  {appointmentStatusLabel(appointment.status)}
+                </Chip>
               </td>
             </tr>
           )) : null}

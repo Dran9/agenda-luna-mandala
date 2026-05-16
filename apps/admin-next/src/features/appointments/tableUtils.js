@@ -6,6 +6,8 @@ const STATUS_LABELS = {
   no_show: "No asistio"
 };
 
+const STATUS_TONES = new Set(Object.keys(STATUS_LABELS));
+
 export function formatAppointmentTime(value) {
   if (!value) {
     return "--:--";
@@ -19,6 +21,10 @@ export function formatAppointmentTime(value) {
 
 export function appointmentStatusLabel(status) {
   return STATUS_LABELS[status] || status || "-";
+}
+
+export function appointmentStatusTone(status) {
+  return STATUS_TONES.has(status) ? status : "default";
 }
 
 export function appointmentClientName(appointment) {

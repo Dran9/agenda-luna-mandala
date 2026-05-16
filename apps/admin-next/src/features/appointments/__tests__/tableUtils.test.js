@@ -7,6 +7,7 @@ import {
   appointmentRoomName,
   appointmentServiceName,
   appointmentStatusLabel,
+  appointmentStatusTone,
   appointmentTherapistName,
   formatAppointmentTime
 } from "../tableUtils.js";
@@ -25,6 +26,16 @@ test("appointmentStatusLabel preserves unknown non-empty statuses", () => {
 test("appointmentStatusLabel returns dash for empty statuses", () => {
   assert.equal(appointmentStatusLabel(""), "-");
   assert.equal(appointmentStatusLabel(null), "-");
+});
+
+test("appointmentStatusTone keeps known status chip classes", () => {
+  assert.equal(appointmentStatusTone("confirmed"), "confirmed");
+  assert.equal(appointmentStatusTone("no_show"), "no_show");
+});
+
+test("appointmentStatusTone falls back for unknown status values", () => {
+  assert.equal(appointmentStatusTone("rescheduled"), "default");
+  assert.equal(appointmentStatusTone(""), "default");
 });
 
 test("formatAppointmentTime returns a compact local time", () => {
