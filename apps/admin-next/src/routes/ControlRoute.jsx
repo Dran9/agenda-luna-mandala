@@ -14,6 +14,19 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatUpdatedAt(timestamp) {
+  if (!timestamp) {
+    return "Sin actualizar";
+  }
+
+  const time = new Intl.DateTimeFormat("es-BO", {
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(timestamp));
+
+  return `Datos actualizados ${time}`;
+}
+
 export function ControlRoute() {
   const { isAuthenticated, admin, logout } = useAuth();
   const [date, setDate] = useState(() => todayKey());
@@ -21,6 +34,9 @@ export function ControlRoute() {
   const appointmentsQuery = useAppointmentsQuery(date, isAuthenticated);
   const appointments = useMemo(() => appointmentsQuery.data?.today || [], [appointmentsQuery.data]);
   const centerSlug = appointmentsQuery.data?.center?.slug || "";
+  const refreshLabel = appointmentsQuery.isFetching && !appointmentsQuery.isLoading
+    ? "Actualizando"
+    : formatUpdatedAt(appointmentsQuery.dataUpdatedAt);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -52,7 +68,7 @@ export function ControlRoute() {
             onInput={(event) => setDate(event.currentTarget.value)}
           />
           <span className="refresh-state">
-            {appointmentsQuery.isFetching && !appointmentsQuery.isLoading ? "Actualizando" : "Actualizado"}
+            {refreshLabel}
           </span>
           <span className="toolbar-spacer" />
           <Button type="button" variant="secondary" onClick={() => appointmentsQuery.refetch()}>
