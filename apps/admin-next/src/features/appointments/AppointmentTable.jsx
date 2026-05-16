@@ -1,27 +1,5 @@
 import { Chip } from "../../ui/Chip";
-
-const STATUS_LABELS = {
-  pending: "Pendiente",
-  confirmed: "Confirmada",
-  cancelled: "Cancelada",
-  completed: "Completada",
-  no_show: "No asistio"
-};
-
-function formatTime(value) {
-  if (!value) {
-    return "--:--";
-  }
-
-  return new Intl.DateTimeFormat("es-BO", {
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date(value));
-}
-
-function statusLabel(status) {
-  return STATUS_LABELS[status] || status || "-";
-}
+import { appointmentStatusLabel, formatAppointmentTime } from "./tableUtils";
 
 function SkeletonRows() {
   return Array.from({ length: 8 }, (_, index) => (
@@ -59,7 +37,7 @@ export function AppointmentTable({ appointments, isInitialLoading, isRefreshing 
           ) : null}
           {!isInitialLoading ? appointments.map((appointment) => (
             <tr key={appointment.id}>
-              <td className="cell-time">{formatTime(appointment.startsAt)}</td>
+              <td className="cell-time">{formatAppointmentTime(appointment.startsAt)}</td>
               <td>
                 <strong>{appointment.client?.fullName || "-"}</strong>
                 <span>{appointment.client?.whatsapp || "-"}</span>
@@ -68,7 +46,7 @@ export function AppointmentTable({ appointments, isInitialLoading, isRefreshing 
               <td>{appointment.therapist?.name || "-"}</td>
               <td>{appointment.room?.name || "-"}</td>
               <td>
-                <Chip tone={appointment.status}>{statusLabel(appointment.status)}</Chip>
+                <Chip tone={appointment.status}>{appointmentStatusLabel(appointment.status)}</Chip>
               </td>
             </tr>
           )) : null}
