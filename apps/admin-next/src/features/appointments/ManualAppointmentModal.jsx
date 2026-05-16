@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { useCreateAppointmentMutation } from "./mutations";
+import { appointmentErrorToFieldErrors } from "./errorUtils";
 import { roomOptions, serviceOptions, therapistOptions } from "./options";
 import { parseManualAppointmentForm } from "./formSchema";
 import { useResourcesQuery, useTherapistsQuery } from "./queries";
@@ -44,17 +45,7 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
       }));
       onClose();
     } catch (error) {
-      if (error.message?.startsWith("WhatsApp")) {
-        setFieldErrors({ phoneE164: [error.message] });
-        return;
-      }
-
-      if (error.status === 409 || error.code === "SLOT_OCCUPIED") {
-        setFieldErrors({ startsAt: [error.message] });
-        return;
-      }
-
-      setFieldErrors({ form: [error.message || "No se pudo crear la cita."] });
+      setFieldErrors(appointmentErrorToFieldErrors(error));
     }
   }
 
