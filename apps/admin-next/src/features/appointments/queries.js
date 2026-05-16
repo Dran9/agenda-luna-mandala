@@ -1,8 +1,9 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { getAppointments, getResources, getTherapists } from "./api";
+import { appointmentsKey, resourcesKey, therapistsKey } from "./queryKeys";
 
-export const appointmentsKey = (date) => ["appointments", date];
+export { appointmentsKey, resourcesKey, therapistsKey };
 
 export function useAppointmentsQuery(date, enabled = true) {
   return useQuery({
@@ -16,7 +17,7 @@ export function useAppointmentsQuery(date, enabled = true) {
 
 export function useResourcesQuery(enabled) {
   return useQuery({
-    queryKey: ["resources"],
+    queryKey: resourcesKey(),
     queryFn: getResources,
     enabled,
     staleTime: 60_000
@@ -25,7 +26,7 @@ export function useResourcesQuery(enabled) {
 
 export function useTherapistsQuery(enabled) {
   return useQuery({
-    queryKey: ["therapists", "active"],
+    queryKey: therapistsKey(),
     queryFn: getTherapists,
     enabled,
     staleTime: 60_000
