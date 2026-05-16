@@ -1,27 +1,16 @@
 import { http } from "../../lib/http";
-
-function toQuery(params) {
-  const query = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== "") {
-      query.set(key, String(value));
-    }
-  }
-
-  return query.toString();
-}
+import { appointmentsPath, resourcesPath, therapistsPath } from "./apiPaths";
 
 export async function getAppointments({ date }) {
-  return http(`/api/admin/appointments?${toQuery({ date, upcoming: 0, limit: 80 })}`);
+  return http(appointmentsPath({ date }));
 }
 
 export async function getResources() {
-  return http("/api/admin/resources");
+  return http(resourcesPath());
 }
 
 export async function getTherapists() {
-  return http(`/api/admin/therapists?${toQuery({ status: "active", limit: 100 })}`);
+  return http(therapistsPath());
 }
 
 export async function createAppointment(payload) {
