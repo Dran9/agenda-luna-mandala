@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { z } from "zod";
 
 import { useCreateAppointmentMutation } from "./mutations";
 import { roomOptions, serviceOptions, therapistOptions } from "./options";
+import { parseManualAppointmentForm } from "./formSchema";
 import { useResourcesQuery, useTherapistsQuery } from "./queries";
 import { Button } from "../../ui/Button";
 import { Input } from "../../ui/Input";
@@ -13,15 +13,6 @@ import {
   defaultStartsAt,
   formatPhoneDisplay
 } from "./formUtils";
-
-const formSchema = z.object({
-  serviceId: z.string().min(1, "Servicio obligatorio"),
-  clientFullName: z.string().min(2, "Nombre obligatorio"),
-  phoneE164: z.string().min(1, "WhatsApp obligatorio"),
-  therapistId: z.string().optional(),
-  roomId: z.string().optional(),
-  startsAt: z.string().min(1, "Fecha y hora obligatoria")
-});
 
 export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
   const resourcesQuery = useResourcesQuery(open);
@@ -37,7 +28,7 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const values = Object.fromEntries(form.entries());
-    const parsed = formSchema.safeParse(values);
+    const parsed = parseManualAppointmentForm(values);
 
     if (!parsed.success) {
       setFieldErrors(parsed.error.flatten().fieldErrors);
