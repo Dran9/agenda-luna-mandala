@@ -78,7 +78,7 @@ Mantener lo que ya está y agregar SOLO lo que resuelve dolor real.
 - ❌ SSE/WebSockets. Polling selectivo de TanStack Query + invalidación post-mutación cubre el 95% de "se siente vivo". SSE solo si después medimos latencia perceptible.
 - ❌ Redis/BullMQ (los docs ya lo prohíben para v1).
 - ❌ Prisma/Drizzle. mysql2 directo es suficiente.
-- ❌ Storybook, design system framework. Vanilla CSS con tokens Twilight de `design.md`.
+- ❌ Storybook, design system framework. Vanilla CSS con tokens de `docs/brand.md` y `apps/admin-next/DESIGN.md`.
 - ❌ Monorepo tooling pesado (Turbo/Nx). `npm workspaces` si hace falta `shared/`.
 
 ---
@@ -101,7 +101,7 @@ Regla nueva: ningún `*.service.js` puede superar ~600 líneas. Si crece, se par
 **Frontend admin (rebuild):**
 
 ```
-apps/admin/src/
+apps/admin-next/src/
   main.jsx                 # ~30 líneas: QueryClient + Router + Theme
   routes/
     LoginRoute.jsx
@@ -123,7 +123,7 @@ apps/admin/src/
     auth/
   ui/                      # primitives: Button, Chip, Drawer, Modal
   styles/
-    tokens.css             # variables del design.md
+    tokens.css             # variables de docs/brand.md + apps/admin-next/DESIGN.md
     base.css
     components/
   lib/
@@ -131,7 +131,7 @@ apps/admin/src/
     queryClient.js
 ```
 
-**Regla dura: ningún archivo en `apps/admin/src/` > 300 líneas.** Eso solo evita el regreso del monstruo. Si una vista pasa de 300 líneas, se descompone en `*Header`, `*Table`, `*Toolbar`, `*Drawer` antes de continuar.
+**Regla dura: ningún archivo en `apps/admin-next/src/` > 300 líneas.** Eso solo evita el regreso del monstruo. Si una vista pasa de 300 líneas, se descompone en `*Header`, `*Table`, `*Toolbar`, `*Drawer` antes de continuar.
 
 **Estado:**
 - Servidor → TanStack Query (queries con `staleTime` por endpoint, `invalidateQueries(['appointments', date])` tras cada mutación).
@@ -153,8 +153,8 @@ El spike propuesto originalmente (Docker + backend modular + auth + control + cr
 Spike honesto de 1 día, redirigido contra el dolor real (admin), reutilizando el backend que ya funciona:
 
 **Setup (máx 90 min):**
-1. `infra/docker-compose.yml`: `mariadb:11` + `node:20-alpine`. Volumen para MariaDB. `.env.local`.
-2. Levantar `server/` actual sin modificar. Correr `npm run db:migrate` + `db:seed` contra MariaDB del compose. Verificar `/api/health`.
+1. Reutilizar el Docker local existente (`compose.local.yaml`). No crear runtime nuevo en este spike.
+2. Levantar `server/` actual sin modificar. Correr migracion/seed solo contra MariaDB local. Verificar `/api/health`.
 
 **Spike frontend (resto del día), en `apps/admin-next/`:**
 
@@ -165,7 +165,7 @@ Spike honesto de 1 día, redirigido contra el dolor real (admin), reutilizando e
    - `useAppointmentsQuery(date)` contra `/api/admin/appointments`.
    - Tabla de citas del día (componente < 300 ln).
    - Crear cita manual → mutación que invalida la query y refresca la tabla sin reload.
-7. Aplicar 8-10 tokens reales del `design.md` (Twilight) en una hoja CSS de < 200 líneas. Nada más.
+7. Aplicar tokens reales de `docs/brand.md` y `apps/admin-next/DESIGN.md` en CSS plano. Nada de tokens Twilight.
 
 **Lo que NO entra al spike de 1 día:**
 - Booking público (otra app; spike 2).
@@ -224,7 +224,7 @@ Cinco reglas duras, escritas en `AGENTS.md`, con consecuencias claras:
 1. **Límite de tamaño por archivo, verificado en CI.** Lint check: `find apps -name '*.jsx' -exec wc -l {} \; | awk '$1>300'` debe ser vacío. Si falla, el commit no pasa.
 2. **Boundary obligatorio entre estado de servidor y estado de UI.** Todo dato que viene de la API se accede solo vía `features/*/queries.js`. PRs que metan `fetch()` fuera de esa capa, rechazadas.
 3. **Una feature = una carpeta.** `features/appointments/` es autocontenida. Si un componente de `appointments` necesita algo de `therapists`, lo importa explícito desde `features/therapists/api.js`. Nada de utilidades globales que se llenan de basura.
-4. **CSS sólo con tokens del `design.md`.** Nada de hex sueltos en componentes. Si un componente necesita un color nuevo, primero entra al archivo de tokens.
+4. **CSS sólo con tokens de `docs/brand.md` y el `DESIGN.md` de la app.** Nada de hex sueltos en componentes. Si un componente necesita un color nuevo, primero entra al archivo de tokens.
 5. **"Refactor track" separado de "feature track" desde el día 1.** Cuando un service del backend pase de 600 líneas, abre ticket de partición. No se acepta "lo divido la próxima vez". Misma regla que para los `.jsx`.
 
 Y una decisión cultural, no técnica: **el admin no es la primera pantalla que se pinta bonita; es la última que se complica.** La densidad operativa que pide `AGENTS.md` (toolbar compacta, chips, popovers, drawer) solo se sostiene si nadie agrega "una cardita más" por simpatía. Eso requiere que el revisor diga "no" a cambios visuales que parecen inofensivos pero rompen la jerarquía. Es lo más difícil y lo que más impacto tiene a 6 meses.
@@ -234,7 +234,7 @@ Y una decisión cultural, no técnica: **el admin no es la primera pantalla que 
 ## TL;DR
 
 - **Backend**: salvar y refactorizar dos archivos gordos in-place. ~3-4 días.
-- **Admin frontend**: rebuild completo en `apps/admin-next/` con TanStack Query + Router + tokens del `design.md` + boundary 300 ln/archivo. ~2-3 semanas.
+- **Admin frontend**: rebuild completo en `apps/admin-next/` con TanStack Query + Router + tokens de `docs/brand.md` / `apps/admin-next/DESIGN.md` + boundary 300 ln/archivo. ~2-3 semanas.
 - **Booking público**: rebuild después del admin. ~1 semana.
 - **Docker local desde día 1**, pero deploy a VPS es un track aparte y posterior.
 - **Spike de 1 día**: SOLO frontend, una vertical (Control + crear cita), contra el backend actual. 6/8 criterios = luz verde para rebuild completo.

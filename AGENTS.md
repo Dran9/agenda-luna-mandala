@@ -2,10 +2,10 @@
 
 ## Trabajo Actual
 
-- **Rama activa**: `spike/admin-next-v1` (rebuild parcial del admin, primer ladrillo).
-- **Scope**: spike de 1 dia, login + control + crear cita en `apps/admin-next/`, contra backend existente sin tocarlo.
-- **Edit-zone**: `apps/admin-next/` (toda).
-- **Read-only durante el spike**: `server/`, `apps/admin/`, `apps/booking/`, `docs/00-14`, root `package.json`, migraciones aplicadas.
+- **Rama activa**: `Mandala3.0` (rebuild parcial del admin).
+- **Scope actual**: Admin nuevo en `apps/admin-next/`, construido por verticales pequenas contra backend existente.
+- **Edit-zone principal**: `apps/admin-next/` y docs de contrato visual/UX cuando Daniel lo pida explicitamente.
+- **Read-only durante el rebuild admin salvo autorizacion explicita**: `server/`, migraciones aplicadas, runtime/deploy, root `package.json`, root lockfile.
 - **Plan**: ver `docs/REBUILD_ANALYSIS.md` (especialmente secciones 5 y 6).
 - **3 no negociables**: cero commits a `server/`, invalidacion sin reload, ningun `.jsx` > 300 lineas.
 
@@ -22,14 +22,18 @@ Leer siempre:
 5. `docs/03_DATABASE_PLAN.md`
 6. `docs/04_HOSTINGER_DEPLOY_CONTRACT.md`
 7. `docs/05_UI_UX_BRIEF.md`
-8. `DESIGN_BRIEF_AGENDA_LUNA.md`
-9. `design.md`
-10. `docs/06_ENGINEERING_GUARDRAILS.md`
-11. `docs/07_ROADMAP_MICROPHASES.md`
-12. `docs/08_ACCEPTANCE_GATES.md`
-13. `docs/10_PUBLIC_BOOKING_SPEC.md`
-14. `docs/15_VPS_DOCKER_MIGRATION_PLAN.md`
-15. `docs/19_LOCAL_PRODUCT_CLOSURE_BACKLOG.md`
+8. `docs/REBUILD_ANALYSIS.md`
+9. `docs/brand.md`
+10. `docs/UX_PATTERNS.md`
+11. El `DESIGN.md` de la app que se toca:
+    - Admin nuevo: `apps/admin-next/DESIGN.md`
+    - Booking publico: `apps/booking/DESIGN.md`
+12. `docs/06_ENGINEERING_GUARDRAILS.md`
+13. `docs/07_ROADMAP_MICROPHASES.md`
+14. `docs/08_ACCEPTANCE_GATES.md`
+15. `docs/10_PUBLIC_BOOKING_SPEC.md`
+16. `docs/15_VPS_DOCKER_MIGRATION_PLAN.md`
+17. `docs/19_LOCAL_PRODUCT_CLOSURE_BACKLOG.md`
 
 Si la tarea es arrancar implementacion desde cero, leer tambien:
 
@@ -57,7 +61,8 @@ No copiar archivos sin una decision explicita.
 - Cloudflare Pages puede servir Reserva publica y Admin estaticos en produccion.
 - MySQL/MariaDB es la fuente de verdad.
 - Claims por minuto evitan doble reserva.
-- `DESIGN_BRIEF_AGENDA_LUNA.md` y `design.md` son contrato visual activo.
+- `docs/brand.md`, `docs/UX_PATTERNS.md` y el `DESIGN.md` de la app son contrato visual/UX activo.
+- `docs/archive/design-twilight-v0.md` y `docs/archive/design-brief-twilight-v0.md` son legado Twilight archivado. No consumir para el rebuild.
 - Redis/BullMQ no existen en v1.
 - Google Calendar no decide disponibilidad.
 - No tocar runtime/deploy junto con features.
@@ -103,10 +108,12 @@ Nunca mezclar cambios en esos archivos con features de admin, booking, pagos o U
 Antes de cualquier tarea de UI, leer (en este orden):
 
 1. `docs/brand.md` - verdad unica de la marca Luna Mandala (paleta, fuentes, voz, logo).
-2. `docs/UX_PATTERNS.md` - patrones de interaccion concretos con ejemplos mal/bien. **Critico para evitar las monstruosidades UX del Franky (admin viejo).**
-3. El `DESIGN.md` correspondiente a la app que se toca:
+2. El `DESIGN.md` correspondiente a la app que se toca:
    - Booking publico: `apps/booking/DESIGN.md` (Cal estructural + Luna Mandala completa, Outfit + Comfortaa).
    - Admin nuevo: `apps/admin-next/DESIGN.md` (Cal.com verbatim, light mode, Cal Sans + Inter, marca residual).
+3. `docs/UX_PATTERNS.md` - patrones de interaccion concretos con ejemplos mal/bien. **Critico para evitar las monstruosidades UX del Franky (admin viejo).**
+
+`docs/archive/design-twilight-v0.md` reemplaza al antiguo `design.md` raiz. `docs/archive/design-brief-twilight-v0.md` conserva el brief visual anterior. Twilight queda archivado como referencia historica y no se usa en el rebuild.
 
 Reglas duras visuales:
 

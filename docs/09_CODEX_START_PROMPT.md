@@ -20,13 +20,16 @@ Lee en este orden:
 6. docs/03_DATABASE_PLAN.md
 7. docs/04_HOSTINGER_DEPLOY_CONTRACT.md
 8. docs/05_UI_UX_BRIEF.md
-9. DESIGN_BRIEF_AGENDA_LUNA.md
-10. design.md
-11. docs/06_ENGINEERING_GUARDRAILS.md
-12. docs/07_ROADMAP_MICROPHASES.md
-13. docs/08_ACCEPTANCE_GATES.md
-14. docs/10_PUBLIC_BOOKING_SPEC.md
-15. docs/15_VPS_DOCKER_MIGRATION_PLAN.md
+9. docs/brand.md
+10. docs/UX_PATTERNS.md
+11. El DESIGN.md de la app que se toca:
+    - apps/admin-next/DESIGN.md para Admin nuevo
+    - apps/booking/DESIGN.md para Reserva publica
+12. docs/06_ENGINEERING_GUARDRAILS.md
+13. docs/07_ROADMAP_MICROPHASES.md
+14. docs/08_ACCEPTANCE_GATES.md
+15. docs/10_PUBLIC_BOOKING_SPEC.md
+16. docs/15_VPS_DOCKER_MIGRATION_PLAN.md
 
 Objetivo de esta primera tarea:
 Implementar SOLO Fase 0/D1 minimo - tuberia local VPS Docker.
@@ -56,7 +59,7 @@ Entregables Fase 0:
 - server/routes/health.route.js.
 - apps/booking React/Vite placeholder real en `/`.
 - apps/admin React/Vite placeholder real en `/admin`.
-- CSS plano con variables basicas Twilight tomadas de `design.md`.
+- CSS plano con variables tomadas de `docs/brand.md` y del `DESIGN.md` de la app.
 - .env.example sin secretos.
 - .gitignore.
 - .dockerignore.
@@ -72,7 +75,7 @@ Reglas criticas:
 - No condicionar el arranque por NODE_ENV si el archivo se ejecuta directamente.
 - No crear deploy automatico ni tocar VPS real.
 - No crear features fuera de Fase 0.
-- Aunque sean placeholders, `/` y `/admin/` no deben verse genericos ni amateur: respetar `DESIGN_BRIEF_AGENDA_LUNA.md` y `design.md`.
+- Aunque sean placeholders, `/` y `/admin/` no deben verse genericos ni amateur: respetar `docs/brand.md`, `docs/UX_PATTERNS.md` y el `DESIGN.md` de la app.
 
 Validacion obligatoria:
 npm install
