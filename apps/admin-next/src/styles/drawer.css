@@ -82,6 +82,13 @@
   margin: 0;
 }
 
+.drawer-muted,
+.drawer-section-title {
+  color: var(--color-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
 .detail-list {
   gap: 0;
 }
