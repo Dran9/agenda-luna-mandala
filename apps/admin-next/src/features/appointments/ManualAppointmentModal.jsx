@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { z } from "zod";
 
 import { useCreateAppointmentMutation } from "./mutations";
+import { roomOptions, serviceOptions, therapistOptions } from "./options";
 import { useResourcesQuery, useTherapistsQuery } from "./queries";
 import { Button } from "../../ui/Button";
 import { Input } from "../../ui/Input";
@@ -28,9 +29,9 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
   const createMutation = useCreateAppointmentMutation(date);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  const services = useMemo(() => resourcesQuery.data?.settings?.services || [], [resourcesQuery.data]);
-  const rooms = useMemo(() => resourcesQuery.data?.settings?.rooms || [], [resourcesQuery.data]);
-  const therapists = useMemo(() => therapistsQuery.data?.therapists || [], [therapistsQuery.data]);
+  const services = useMemo(() => serviceOptions(resourcesQuery.data), [resourcesQuery.data]);
+  const rooms = useMemo(() => roomOptions(resourcesQuery.data), [resourcesQuery.data]);
+  const therapists = useMemo(() => therapistOptions(therapistsQuery.data), [therapistsQuery.data]);
 
   async function handleSubmit(event) {
     event.preventDefault();
