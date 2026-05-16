@@ -39,6 +39,21 @@ function normalizePhone(value) {
   return digits;
 }
 
+function formatPhoneDisplay(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+
+  if (digits.startsWith("591") && digits.length > 3) {
+    const local = digits.slice(3);
+    const localGroups = local.length > 4
+      ? [local.slice(0, 4), local.slice(4)]
+      : [local];
+
+    return ["591", ...localGroups].filter(Boolean).join(" ");
+  }
+
+  return digits.replace(/(\d{3})(?=\d)/g, "$1 ").trim();
+}
+
 export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
   const resourcesQuery = useResourcesQuery(open);
   const therapistsQuery = useTherapistsQuery(open);
@@ -99,7 +114,19 @@ export function ManualAppointmentModal({ centerSlug, date, open, onClose }) {
           ))}
         </Select>
         <Input label="Cliente" name="clientFullName" error={fieldErrors.clientFullName?.[0]} placeholder="Ej. Maria Gonzalez" />
-        <Input label="WhatsApp" name="phoneE164" error={fieldErrors.phoneE164?.[0]} placeholder="59171234567" />
+        <Input
+          label="WhatsApp"
+          name="phoneE164"
+          inputMode="tel"
+          error={fieldErrors.phoneE164?.[0]}
+          placeholder="591 7123 4567"
+          onInput={(event) => {
+            event.currentTarget.value = formatPhoneDisplay(event.currentTarget.value);
+          }}
+          onBlur={(event) => {
+            event.currentTarget.value = formatPhoneDisplay(event.currentTarget.value);
+          }}
+        />
         <Select label="Terapeuta" name="therapistId" error={fieldErrors.therapistId?.[0]}>
           <option value="">Opcional</option>
           {therapists.map((therapist) => (
