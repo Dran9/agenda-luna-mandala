@@ -1,15 +1,10 @@
 import { Navigate } from "react-router-dom";
-import { z } from "zod";
 
 import { useAuth } from "../features/auth/AuthContext";
+import { parseLoginForm } from "../features/auth/loginForm";
 import { lunaMandalaLogoUrl } from "../lib/brand";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
-
-const loginSchema = z.object({
-  email: z.string().email("Email invalido"),
-  password: z.string().min(1, "Password obligatorio")
-});
 
 export function LoginRoute() {
   const { isAuthenticated, login, loginError, loginLoading } = useAuth();
@@ -25,7 +20,7 @@ export function LoginRoute() {
       email: String(form.get("email") || ""),
       password: String(form.get("password") || "")
     };
-    const parsed = loginSchema.safeParse(values);
+    const parsed = parseLoginForm(values);
 
     if (!parsed.success) {
       return;
