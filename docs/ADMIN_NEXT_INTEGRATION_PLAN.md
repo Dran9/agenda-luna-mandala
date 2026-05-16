@@ -3,35 +3,42 @@
 ## Estado
 
 - Rama actual: `Mandala3.0`.
-- Base estable previa: `codex/stabilize-docker-admin`.
-- Spike: `Mandala3.0` agrega docs visuales vigentes y `apps/admin-next/` sobre esa base.
-- Ultimo commit relevante: `17b57de docs: archive twilight visual contract`.
-- Documentos visuales vigentes confirmados:
+- Base previa: `codex/stabilize-docker-admin`.
+- Spike: `apps/admin-next/` sobre la base previa, con login, Control, crear cita manual, TanStack Query, invalidacion sin reload, boundaries de archivos y contratos visuales activos.
+- Commits clave recientes:
+  - `17b57de docs: archive twilight visual contract`
+  - `21b4363 docs: lock public reschedule contract`
+- Visual activo:
   - `docs/brand.md`
   - `docs/UX_PATTERNS.md`
   - `apps/admin-next/DESIGN.md`
   - `apps/booking/DESIGN.md`
+- Visual archivado:
   - `docs/archive/design-twilight-v0.md`
   - `docs/archive/design-brief-twilight-v0.md`
-- `design.md` y `DESIGN_BRIEF_AGENDA_LUNA.md` ya no existen en root; quedaron archivados.
 
 ## Hallazgo Principal
 
-Comparado contra `main`, `Mandala3.0` trae cambios de backend/runtime porque hereda `codex/stabilize-docker-admin`. Esa rama base contiene Docker/local runtime, workflows, ajustes de API/backend, cambios en admin viejo, booking, docs y tests.
+Contra `main`, `Mandala3.0` trae backend/runtime porque hereda todos los cambios previos de `codex/stabilize-docker-admin`. Por eso no debe evaluarse como si fuera una rama de solo spike Admin.
 
-Comparado contra su base real, `codex/stabilize-docker-admin`, el spike `Mandala3.0` no toca backend/runtime. La verificacion:
+Contra `codex/stabilize-docker-admin`, el spike `Mandala3.0` no toca backend/runtime. El gate de paths sensibles:
 
 ```txt
 git diff --name-only codex/stabilize-docker-admin..Mandala3.0 -- server Dockerfile compose.local.yaml compose.yaml package.json package-lock.json .env.example ops
 ```
 
-salio vacia.
+salio vacio.
 
-Por eso el hard gate "backend intocable" esta cumplido para el spike si se mide contra su base real. La integracion a `main` debe ser en dos pasos para no mezclar aprobacion de runtime/backend con aprobacion del nuevo Admin.
+Por lo tanto, el hard gate "backend intocable" esta cumplido para el spike puro, pero la integracion a `main` debe hacerse en dos pasos: primero aprobar la base `codex/stabilize-docker-admin`, despues revisar `Mandala3.0` encima de esa base.
 
 ## Diff 1: main -> codex/stabilize-docker-admin
 
-Fuente: `git diff --name-status main..codex/stabilize-docker-admin`.
+Fuente:
+
+```bash
+git diff --name-status main..codex/stabilize-docker-admin
+git log --oneline main..codex/stabilize-docker-admin
+```
 
 ### Runtime/Docker
 
@@ -39,17 +46,15 @@ Fuente: `git diff --name-status main..codex/stabilize-docker-admin`.
 - Agrega `Dockerfile`.
 - Agrega `compose.local.yaml`.
 - Agrega `compose.yaml`.
-- Modifica `.env.example`.
-- Modifica `.gitignore`.
 - Agrega workflows:
   - `.github/workflows/ci.yml`
   - `.github/workflows/publish-api-image.yml`
-- Agrega configuracion ops:
+- Agrega configuracion `ops/`:
   - `ops/caddy/Caddyfile`
   - `ops/env/.env.local.docker.example`
   - `ops/env/.env.prod-sim.example`
   - `ops/env/.env.vps.example`
-- Modifica `package.json`.
+- Modifica `.env.example`, `.gitignore` y root `package.json`.
 
 ### Backend/API
 
@@ -73,8 +78,7 @@ Fuente: `git diff --name-status main..codex/stabilize-docker-admin`.
 
 ### Docs/tests
 
-- Modifica `AGENTS.md`.
-- Modifica `README.md`.
+- Modifica `AGENTS.md` y `README.md`.
 - Modifica docs `00`, `02`, `04`, `06`, `07`, `08`, `09`.
 - Agrega:
   - `docs/15_VPS_DOCKER_MIGRATION_PLAN.md`
@@ -89,9 +93,7 @@ Fuente: `git diff --name-status main..codex/stabilize-docker-admin`.
   - `test/health.test.js`
   - `test/publicBooking.core.test.js`
 
-### Commits base
-
-Fuente: `git log --oneline main..codex/stabilize-docker-admin`.
+### Commits en la base
 
 ```txt
 4d59632 fix(admin): memoize appointment surfaces
@@ -108,69 +110,64 @@ b79a36c chore(seed): update luna mandala catalog data
 
 ## Diff 2: codex/stabilize-docker-admin -> Mandala3.0
 
-Fuente: `git diff --name-status codex/stabilize-docker-admin..Mandala3.0`.
+Fuente:
+
+```bash
+git diff --name-status codex/stabilize-docker-admin..Mandala3.0
+git log --oneline codex/stabilize-docker-admin..Mandala3.0
+```
 
 ### Docs visuales
 
-- Modifica `AGENTS.md`.
-- Modifica `README.md`.
-- Agrega `docs/REBUILD_ANALYSIS.md`.
-- Agrega `docs/UX_PATTERNS.md`.
 - Agrega `docs/brand.md`.
+- Agrega `docs/UX_PATTERNS.md`.
+- Agrega `docs/REBUILD_ANALYSIS.md`.
 - Agrega `docs/brand/luna-mandala-logo.svg`.
-- Agrega referencias:
+- Agrega referencias de diseno:
   - `docs/design-references/cal.DESIGN.md`
   - `docs/design-references/linear.DESIGN.md`
-- Agrega `apps/booking/DESIGN.md`.
-- Agrega `apps/admin-next/DESIGN.md`.
-- Modifica docs `05`, `07`, `08`, `09`.
+- Modifica `AGENTS.md`, `README.md` y docs `05`, `07`, `08`, `09`.
 
-### Archivo archivado Twilight
+### `apps/admin-next`
 
-- Renombra `design.md` a `docs/archive/design-twilight-v0.md`.
-- Renombra `DESIGN_BRIEF_AGENDA_LUNA.md` a `docs/archive/design-brief-twilight-v0.md`.
-
-### Admin Next
-
-- Agrega `apps/admin-next/package.json` y `apps/admin-next/package-lock.json`.
-- Agrega `apps/admin-next/vite.config.js`.
-- Agrega `apps/admin-next/index.html`.
-- Agrega `apps/admin-next/SPIKE_FOLLOWUPS.md`.
-- Agrega rutas:
-  - `apps/admin-next/src/routes/LoginRoute.jsx`
-  - `apps/admin-next/src/routes/ControlRoute.jsx`
-  - helpers/tests de `controlUtils`.
-- Agrega auth:
-  - `AuthContext.jsx`
-  - `api.js`
-  - `authState.js`
-  - `loginForm.js`
-  - `schema.js`
-  - `storage.js`
-  - tests correspondientes.
-- Agrega appointments:
-  - API paths, queries, query settings, mutation options.
-  - tabla densa.
-  - modal de cita manual.
-  - payload, schema, errores, opciones, status/table helpers.
-  - tests correspondientes.
-- Agrega lib:
-  - `http.js`
-  - `httpUtils.js`
-  - `queryClient.js`
-  - `queryDefaults.js`
-  - `brand.js`
-  - tests correspondientes.
+- Agrega app nueva `apps/admin-next/` con Vite, React, React Router y TanStack Query.
+- Agrega `LoginRoute`, `ControlRoute`, auth context, HTTP client, query client y defaults.
+- Agrega feature vertical de citas:
+  - API paths, queries, mutation options y query keys.
+  - tabla densa de Control.
+  - modal `Nueva cita`.
+  - drawer de detalle de cita.
+  - schemas, helpers, errores, opciones y tests.
 - Agrega UI base:
-  - `Button`, `Chip`, `Input`, `Select`, `Modal`, `Toolbar`.
-  - helpers/tests de clases y modal.
-- Agrega CSS plano:
+  - `Button`, `Chip`, `Drawer`, `Input`, `Modal`, `Select`, `Toolbar`.
+- Agrega CSS plano por boundaries:
   - `tokens.css`
   - `base.css`
   - `layout.css`
   - `forms.css`
   - `table.css`
-  - `modal.css`.
+  - `table-interactions.css`
+  - `modal.css`
+  - `drawer.css`
+
+### Booking/admin design docs
+
+- Agrega `apps/admin-next/DESIGN.md`.
+- Agrega `apps/booking/DESIGN.md`.
+- Admin nuevo queda bajo contrato Cal.com verbatim, light mode, Cal Sans + Inter, marca Luna Mandala residual.
+- Booking futuro queda bajo contrato Luna Mandala completo, mobile-first, Outfit + Comfortaa restringida.
+
+### Archivo Twilight archivado
+
+- Renombra `design.md` a `docs/archive/design-twilight-v0.md`.
+- Renombra `DESIGN_BRIEF_AGENDA_LUNA.md` a `docs/archive/design-brief-twilight-v0.md`.
+- Root `design.md` y `DESIGN_BRIEF_AGENDA_LUNA.md` ya no son fuente activa.
+
+### Reagendamiento publico documentado
+
+- Modifica `docs/10_PUBLIC_BOOKING_SPEC.md`.
+- Fija `Reagendar/Cancelar` como requisito P0 futuro de Reserva publica.
+- No implementa el flujo en esta rama.
 
 ### Confirmacion explicita del spike puro
 
@@ -178,42 +175,24 @@ Fuente: `git diff --name-status codex/stabilize-docker-admin..Mandala3.0`.
 - Cero runtime/deploy.
 - Cero root `package.json`.
 - Cero root `package-lock.json`.
-- Cero `Dockerfile`, `compose*.yaml`, `.env.example`, `ops/`.
+- Cero `Dockerfile`.
+- Cero `compose*.yaml`.
+- Cero `.env.example`.
+- Cero `ops/`.
 
-La unica excepcion de lockfile es local a la app nueva: `apps/admin-next/package-lock.json`, esperado por el stack del spike.
-
-### Commits spike puro
-
-Fuente: `git log --oneline codex/stabilize-docker-admin..Mandala3.0`.
-
-El rango incluye:
-
-- `3dc48e3 docs(design): add brand, DESIGN.md per app, UX patterns, rebuild analysis`
-- `c18b400 merge design docs for admin rebuild spike`
-- Bootstrap de Vite/React Query/Router/tokens.
-- Login, auth context, HTTP client y logout global 401.
-- Control del dia con tabla densa via TanStack Query.
-- Modal de crear cita e invalidacion sin reload.
-- QA visual/hard gates/followups.
-- Refinamientos de formulario, telefono, timestamp de refresh y sticky columns.
-- Cobertura de tests para forms, HTTP, tabla, control, storage, payloads, query keys, API paths, schemas, opciones, errores, defaults, UI helpers, invalidacion y modal Escape.
-- `17b57de docs: archive twilight visual contract`.
+La unica lockfile nueva en el spike puro es local a la app nueva: `apps/admin-next/package-lock.json`.
 
 ## Orden Recomendado
 
-1. Revisar y aprobar `codex/stabilize-docker-admin` contra `main`.
-2. Mergear o fijar `codex/stabilize-docker-admin` como base aprobada.
-3. Revisar `Mandala3.0` encima de esa base aprobada.
+1. Revisar/aprobar `codex/stabilize-docker-admin` contra `main`.
+2. Mergear o fijar esa rama como base aprobada.
+3. Revisar `Mandala3.0` encima de esa base.
 4. Solo despues arrancar fase 2 del Admin rebuild.
 
-No recomendamos mergear `Mandala3.0` directo a `main` como si fuera solo spike, porque eso mezclaria runtime/backend/base Docker con el nuevo Admin.
+## Gates Para codex/stabilize-docker-admin
 
-## Gates Para Base `codex/stabilize-docker-admin`
-
-Antes de aprobar la base contra `main`:
-
-- `npm test`
-- `npm run build`
+- Root `npm test`.
+- Root `npm run build`.
 - Docker local:
 
 ```bash
@@ -222,95 +201,62 @@ curl -fsS http://127.0.0.1:4000/api/health
 ```
 
 - `db:migrate`, `db:seed` y `db:verify` solo contra DB local.
-- QA minima de endpoints nuevos o ajustados:
-  - admin resources
-  - admin therapists
-  - public booking compatible rooms
-  - health
-- Confirmar CORS/static deployment behavior.
-- No tocar ni escribir contra DB remota.
+- QA minima de endpoints admin resources/therapists.
+- QA minima de public booking compatible rooms si se revisa todo el rango.
+- Confirmar CORS/static deployments.
+- No DB remota.
 
-## Gates Para `Mandala3.0`
+## Gates Para Mandala3.0
 
-Antes de aprobar el spike encima de la base:
-
-- `npm --prefix apps/admin-next test`
-- `npm --prefix apps/admin-next run build`
-- Boundaries:
-  - ningun `.jsx` > 300 lineas.
-  - ningun `.css` > 200 lineas.
-  - `main.jsx` < 40 lineas.
-- Evidencia actual:
-  - mayor `.jsx`: `ManualAppointmentModal.jsx` con 112 lineas.
-  - mayor `.css`: `table.css` con 190 lineas.
-  - `main.jsx`: 31 lineas.
-  - tests admin-next: 82 passing.
-  - build admin-next: OK.
-- QA visual obligatoria:
-  - screenshot Control con tabla cargada.
-  - screenshot modal Nueva cita.
-  - screenshot tabla post-creacion sin reload.
-- Confirmar que no hay `location.reload`, `setRefreshTick`, `Math.random` ni `key={Math.random()}` en `apps/admin-next/src`.
-- Confirmar `design.md` y `DESIGN_BRIEF_AGENDA_LUNA.md` archivados.
+- `npm --prefix apps/admin-next test`.
+- `npm --prefix apps/admin-next run build`.
+- Boundary `.jsx`: ningun archivo > 300 lineas.
+- Boundary `.css`: ningun archivo > 200 lineas.
+- Confirmar cero patrones prohibidos:
+  - `location.reload`
+  - `setRefreshTick`
+  - `Math.random`
+  - `key={Math.random()}`
+- Screenshot Control.
+- Screenshot modal Nueva cita.
+- Screenshot post-creacion sin reload.
 - Confirmar jerarquia visual vigente:
   - `docs/brand.md`
-  - `apps/admin-next/DESIGN.md`
   - `docs/UX_PATTERNS.md`
-  - `docs/design-references/cal.DESIGN.md`
-  - `docs/design-references/linear.DESIGN.md`.
+  - `apps/admin-next/DESIGN.md`
+  - `apps/booking/DESIGN.md`
+- Confirmar contrato de reagendamiento en `docs/10_PUBLIC_BOOKING_SPEC.md`.
 
-## Por Que El Spike Sigue Cumpliendo Backend Intocable
+## Reagendamiento Publico
 
-El gate "backend intocable" no debe medirse contra `main` para evaluar el spike, porque `Mandala3.0` fue construido sobre `codex/stabilize-docker-admin`. Esa base ya contenia cambios backend/runtime antes del spike.
+Queda como P0 futuro, documentado pero no implementado en esta tarea.
 
-La medicion correcta para el spike es:
+Contrato fijado:
 
-```txt
-codex/stabilize-docker-admin..Mandala3.0
-```
-
-En ese rango, la verificacion de paths sensibles salio vacia:
-
-```txt
-server
-Dockerfile
-compose.local.yaml
-compose.yaml
-package.json
-package-lock.json
-.env.example
-ops
-```
-
-Por lo tanto:
-
-- Si se evalua `Mandala3.0` contra `main`, se ven cambios backend/runtime heredados.
-- Si se evalua el spike puro contra su base real, el backend/runtime queda intocable.
-- La conclusion tecnica es que el spike cumple su hard gate, pero la integracion debe separarse por capas.
-
-## Bloqueado Hasta Aprobacion De Daniel
-
-Hasta que Daniel apruebe la integracion base:
-
-- No arrancar fase 2 del Admin rebuild.
-- No mergear `Mandala3.0` directo a `main`.
-- No asumir que los cambios backend/runtime heredados ya estan aprobados.
-- No ampliar features de `apps/admin-next`.
-- No modificar endpoints para acomodar el Admin nuevo.
-- No actualizar docs north-star fuera del plan aprobado.
-- No ejecutar migraciones/seeds contra DB remota.
+- Booking debe tener accion `Reagendar/Cancelar`.
+- El flujo pide WhatsApp.
+- Busca citas futuras activas.
+- Muestra la cita encontrada y pide confirmacion explicita antes de mostrar horarios.
+- Mantiene el mismo servicio.
+- Intenta mantener el mismo terapeuta.
+- Permite otros terapeutas si no hay disponibilidad del terapeuta original.
+- No borra fisicamente la cita vieja de DB.
+- Al confirmar reagenda, libera claims y conserva auditoria en la misma transaccion.
+- Si falla la reagenda, la cita original sigue vigente.
+- Google Calendar futuro es espejo outbound, no fuente de disponibilidad.
 
 ## Riesgos
 
-- Si se mergea `Mandala3.0` directo a `main`, se mezclan runtime/backend/spike en una sola revision.
-- Si se intenta rebasear sin cuidado, se pueden romper dependencias del Admin Next contra endpoints y ajustes existentes en `codex/stabilize-docker-admin`.
-- Si se ignora la jerarquia visual nueva, otro agente puede volver a Twilight o a tokens deprecados.
-- Si se aprueba el spike sin aprobar primero la base, el informe de cambios contra `main` puede parecer que el spike rompio el hard gate aunque esos cambios son heredados.
+- Merge directo de `Mandala3.0` a `main` mezcla runtime/backend/spike en una sola revision.
+- Rebase descuidado puede romper la dependencia de `apps/admin-next` con endpoints y ajustes que vienen de `codex/stabilize-docker-admin`.
+- Ignorar los docs visuales vigentes puede reintroducir Twilight o Comfortaa/admin fuera de contrato.
+- Implementar reagendamiento publico sin backend transaccional puede romper claims, auditoria o la garantia de que la cita original sigue vigente si el cambio falla.
 
 ## Recomendacion
 
-- NO mergear `Mandala3.0` directo a `main` como si fuera solo spike.
-- SI tratar `Mandala3.0` como rama de integracion apilada.
+- NO mergear `Mandala3.0` directo a `main`.
+- SI tratar `Mandala3.0` como rama apilada.
 - Primero aprobar `codex/stabilize-docker-admin`.
 - Despues aprobar `Mandala3.0`.
-- Solo despues iniciar fase 2 del Admin rebuild.
+- Reagendamiento publico queda P0 futuro, no tarea actual.
+- Solo despues de esas dos aprobaciones conviene arrancar fase 2 del Admin rebuild.
