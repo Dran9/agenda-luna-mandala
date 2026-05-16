@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { loginAdmin } from "./api";
+import { authStateFromSession } from "./authState";
 import { clearSession, persistSession, readStoredSession } from "./storage";
 import { setUnauthorizedHandler } from "../../lib/http";
 
@@ -39,9 +40,7 @@ export function AuthProvider({ children }) {
   });
 
   const value = useMemo(() => ({
-    admin: session?.admin || null,
-    token: session?.token || null,
-    isAuthenticated: Boolean(session?.token),
+    ...authStateFromSession(session),
     login: loginMutation.mutateAsync,
     loginError: loginMutation.error,
     loginLoading: loginMutation.isPending,
