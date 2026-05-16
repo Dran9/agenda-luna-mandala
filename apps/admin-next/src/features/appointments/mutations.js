@@ -1,15 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { createAppointment } from "./api";
-import { appointmentsKey } from "./queries";
+import { createAppointmentMutationOptions } from "./mutationOptions";
 
 export function useCreateAppointmentMutation(date) {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation(createAppointmentMutationOptions({
+    date,
     mutationFn: createAppointment,
-    async onSuccess() {
-      await queryClient.invalidateQueries({ queryKey: appointmentsKey(date) });
-    }
-  });
+    queryClient
+  }));
 }
