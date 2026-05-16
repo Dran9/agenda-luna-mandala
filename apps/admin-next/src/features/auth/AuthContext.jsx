@@ -3,30 +3,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { loginAdmin } from "./api";
+import { clearSession, persistSession, readStoredSession } from "./storage";
 import { setUnauthorizedHandler } from "../../lib/http";
 
-const STORAGE_KEY = "adminNextSession";
-const TOKEN_KEY = "adminNextToken";
 const AuthContext = createContext(null);
-
-function readStoredSession() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function persistSession(session) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  window.localStorage.setItem(TOKEN_KEY, session.token);
-}
-
-function clearSession() {
-  window.localStorage.removeItem(STORAGE_KEY);
-  window.localStorage.removeItem(TOKEN_KEY);
-}
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(() => readStoredSession());
