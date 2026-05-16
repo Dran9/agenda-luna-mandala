@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  adminSessionLabel,
+  appointmentsForControl,
+  centerSlugForControl,
   formatUpdatedAt,
   refreshLabel,
   todayKey
@@ -31,4 +34,22 @@ test("refreshLabel shows last updated time outside background refresh", () => {
     refreshLabel({ isFetching: false, isLoading: false, dataUpdatedAt: Date.now() }),
     /^Datos actualizados /
   );
+});
+
+test("appointmentsForControl reads the dense table rows from the backend payload", () => {
+  const today = [{ id: "appointment-1" }];
+
+  assert.deepEqual(appointmentsForControl({ today }), today);
+  assert.deepEqual(appointmentsForControl(null), []);
+});
+
+test("centerSlugForControl reads tenant slug from the backend payload", () => {
+  assert.equal(centerSlugForControl({ center: { slug: "daniel" } }), "daniel");
+  assert.equal(centerSlugForControl({}), "");
+});
+
+test("adminSessionLabel prefers full name and falls back to email", () => {
+  assert.equal(adminSessionLabel({ fullName: "Daniel", email: "daniel@example.com" }), "Daniel");
+  assert.equal(adminSessionLabel({ fullName: "", email: "daniel@example.com" }), "daniel@example.com");
+  assert.equal(adminSessionLabel(null), "");
 });

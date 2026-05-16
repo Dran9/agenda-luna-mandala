@@ -20,3 +20,15 @@ export function refreshLabel({ isFetching, isLoading, dataUpdatedAt }) {
     ? "Actualizando"
     : formatUpdatedAt(dataUpdatedAt);
 }
+
+export function appointmentsForControl(payload) {
+  return payload?.today || [];
+}
+
+export function centerSlugForControl(payload) {
+  return payload?.center?.slug || "";
+}
+
+export function adminSessionLabel(admin) {
+  return admin?.fullName || admin?.email || "";
+}

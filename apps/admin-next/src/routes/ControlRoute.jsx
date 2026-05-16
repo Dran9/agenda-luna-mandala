@@ -9,15 +9,21 @@ import { lunaMandalaLogoUrl } from "../lib/brand";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Toolbar } from "../ui/Toolbar";
-import { refreshLabel, todayKey } from "./controlUtils";
+import {
+  adminSessionLabel,
+  appointmentsForControl,
+  centerSlugForControl,
+  refreshLabel,
+  todayKey
+} from "./controlUtils";
 
 export function ControlRoute() {
   const { isAuthenticated, admin, logout } = useAuth();
   const [date, setDate] = useState(() => todayKey());
   const [manualOpen, setManualOpen] = useState(false);
   const appointmentsQuery = useAppointmentsQuery(date, isAuthenticated);
-  const appointments = useMemo(() => appointmentsQuery.data?.today || [], [appointmentsQuery.data]);
-  const centerSlug = appointmentsQuery.data?.center?.slug || "";
+  const appointments = useMemo(() => appointmentsForControl(appointmentsQuery.data), [appointmentsQuery.data]);
+  const centerSlug = centerSlugForControl(appointmentsQuery.data);
   const refreshStateLabel = refreshLabel({
     isFetching: appointmentsQuery.isFetching,
     isLoading: appointmentsQuery.isLoading,
@@ -40,7 +46,7 @@ export function ControlRoute() {
         <header className="page-header">
           <h1>Control</h1>
           <div className="admin-session">
-            <span>{admin?.fullName || admin?.email}</span>
+            <span>{adminSessionLabel(admin)}</span>
             <button type="button" onClick={logout}>Salir</button>
           </div>
         </header>
