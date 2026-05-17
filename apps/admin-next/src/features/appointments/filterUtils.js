@@ -6,7 +6,7 @@ export const STATUS_FILTER_OPTIONS = [
   { value: "confirmed", label: "Confirmada" },
   { value: "completed", label: "Completada" },
   { value: "cancelled", label: "Cancelada" },
-  { value: "no_show", label: "No asistio" }
+  { value: "no_show", label: "No asistió" }
 ];
 
 function optionKey(value) {

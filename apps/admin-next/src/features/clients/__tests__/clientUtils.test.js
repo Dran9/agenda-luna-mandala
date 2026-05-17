@@ -84,7 +84,7 @@ test("clientStatsRows keeps appointment breakdown compact", () => {
       ["Confirmadas", 0],
       ["Completadas", 2],
       ["Canceladas", 0],
-      ["No asistio", 0]
+      ["No asistió", 0]
     ]
   );
 });

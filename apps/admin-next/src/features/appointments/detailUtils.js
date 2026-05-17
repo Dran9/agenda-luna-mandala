@@ -3,12 +3,12 @@ export const STATUS_ACTIONS = {
     { status: "confirmed", label: "Confirmar" },
     { status: "completed", label: "Completar" },
     { status: "cancelled", label: "Cancelar" },
-    { status: "no_show", label: "No asistio" }
+    { status: "no_show", label: "No asistió" }
   ],
   confirmed: [
     { status: "completed", label: "Completar" },
     { status: "cancelled", label: "Cancelar" },
-    { status: "no_show", label: "No asistio" }
+    { status: "no_show", label: "No asistió" }
   ]
 };
 

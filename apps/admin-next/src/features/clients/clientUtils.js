@@ -75,7 +75,7 @@ export function clientStatsRows(stats = {}) {
     ["Confirmadas", stats.confirmedCount || 0],
     ["Completadas", stats.completedCount || 0],
     ["Canceladas", stats.cancelledCount || 0],
-    ["No asistio", stats.noShowCount || 0]
+    ["No asistió", stats.noShowCount || 0]
   ];
 }
 

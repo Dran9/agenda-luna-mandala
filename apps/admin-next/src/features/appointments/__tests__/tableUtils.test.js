@@ -16,7 +16,7 @@ test("appointmentStatusLabel maps known backend statuses", () => {
   assert.equal(appointmentStatusLabel("pending"), "Pendiente");
   assert.equal(appointmentStatusLabel("confirmed"), "Confirmada");
   assert.equal(appointmentStatusLabel("completed"), "Completada");
-  assert.equal(appointmentStatusLabel("no_show"), "No asistio");
+  assert.equal(appointmentStatusLabel("no_show"), "No asistió");
 });
 
 test("appointmentStatusLabel preserves unknown non-empty statuses", () => {

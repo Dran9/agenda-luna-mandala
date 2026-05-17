@@ -3,7 +3,7 @@ const STATUS_LABELS = {
   confirmed: "Confirmada",
   cancelled: "Cancelada",
   completed: "Completada",
-  no_show: "No asistio"
+  no_show: "No asistió"
 };
 
 const STATUS_TONES = new Set(Object.keys(STATUS_LABELS));
