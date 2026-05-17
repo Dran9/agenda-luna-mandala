@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildCreateTherapistPayload,
   buildUpdateTherapistPayload,
+  serviceAssignmentRows,
   therapistSummary,
   therapistsForSettings,
   therapistsRefreshLabel
@@ -62,6 +63,48 @@ test("buildUpdateTherapistPayload maps active status to boolean", () => {
       telegramChatId: null,
       isActive: false
     }
+  );
+});
+
+test("serviceAssignmentRows maps drawer services to checkbox rows", () => {
+  assert.deepEqual(
+    serviceAssignmentRows({
+      availableServices: [
+        {
+          id: 4,
+          name: "Masaje",
+          durationMinutes: 60,
+          relationIsActive: 1,
+          serviceStatus: "ACTIVE",
+          serviceStatusLabel: "Activo"
+        },
+        {
+          id: 5,
+          name: "Reiki",
+          durationMinutes: 45,
+          relationIsActive: 0,
+          isActive: false
+        }
+      ]
+    }),
+    [
+      {
+        id: 4,
+        name: "Masaje",
+        durationLabel: "60 min",
+        isAssigned: true,
+        isServiceActive: true,
+        statusLabel: "Activo"
+      },
+      {
+        id: 5,
+        name: "Reiki",
+        durationLabel: "45 min",
+        isAssigned: false,
+        isServiceActive: false,
+        statusLabel: "Servicio inactivo"
+      }
+    ]
   );
 });
 

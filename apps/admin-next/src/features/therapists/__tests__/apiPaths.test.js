@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { therapistPath, therapistsPath } from "../apiPaths.js";
+import { therapistPath, therapistsPath, therapistServicePath } from "../apiPaths.js";
 
 test("therapistsPath targets the admin therapist list", () => {
   const url = new URL(therapistsPath(), "http://local.test");
@@ -20,4 +20,11 @@ test("therapistsPath applies compact toolbar filters", () => {
 
 test("therapistPath targets profile updates", () => {
   assert.equal(therapistPath(8), "/api/admin/therapists/8");
+});
+
+test("therapistServicePath targets assigned service updates", () => {
+  assert.equal(
+    therapistServicePath({ therapistId: 8, serviceId: 12 }),
+    "/api/admin/therapists/8/services/12"
+  );
 });

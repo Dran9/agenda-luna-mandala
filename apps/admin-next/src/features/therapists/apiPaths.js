@@ -17,3 +17,7 @@ export function therapistsPath({ q = "", status = "all" } = {}) {
 export function therapistPath(therapistId) {
   return `/api/admin/therapists/${therapistId}`;
 }
+
+export function therapistServicePath({ therapistId, serviceId }) {
+  return `/api/admin/therapists/${therapistId}/services/${serviceId}`;
+}

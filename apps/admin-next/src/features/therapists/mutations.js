@@ -1,9 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { createTherapist, updateTherapist } from "./api";
+import { createTherapist, updateTherapist, updateTherapistService } from "./api";
 import {
   createTherapistMutationOptions,
-  updateTherapistMutationOptions
+  updateTherapistMutationOptions,
+  updateTherapistServiceMutationOptions
 } from "./mutationOptions";
 
 export function useCreateTherapistMutation() {
@@ -20,6 +21,15 @@ export function useUpdateTherapistMutation() {
 
   return useMutation(updateTherapistMutationOptions({
     mutationFn: updateTherapist,
+    queryClient
+  }));
+}
+
+export function useUpdateTherapistServiceMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation(updateTherapistServiceMutationOptions({
+    mutationFn: updateTherapistService,
     queryClient
   }));
 }

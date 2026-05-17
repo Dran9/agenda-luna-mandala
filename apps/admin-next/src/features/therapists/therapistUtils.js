@@ -38,6 +38,19 @@ export function buildUpdateTherapistPayload(values) {
   };
 }
 
+export function serviceAssignmentRows(payload) {
+  return (payload?.availableServices || []).map((service) => ({
+    id: service.id,
+    name: service.name,
+    durationLabel: `${service.durationMinutes || 0} min`,
+    isAssigned: Boolean(service.relationIsActive),
+    isServiceActive: service.serviceStatus
+      ? service.serviceStatus === "ACTIVE"
+      : service.isActive !== false,
+    statusLabel: service.serviceStatusLabel || (service.isActive === false ? "Servicio inactivo" : "Servicio activo")
+  }));
+}
+
 export function therapistsRefreshLabel({ isFetching, isLoading, dataUpdatedAt }) {
   if (isFetching && !isLoading) {
     return "Actualizando";
