@@ -8,9 +8,12 @@ import {
   clientDisplayName,
   clientOnboardingLabel,
   clientOnboardingTone,
+  clientProfileRows,
   clientSummary,
+  clientStatsRows,
   clientsForAdmin,
-  clientsRefreshLabel
+  clientsRefreshLabel,
+  paymentSummaryLabel
 } from "../clientUtils.js";
 
 const clients = [
@@ -49,6 +52,53 @@ test("appointmentSummaryLabel returns a readable next appointment", () => {
     /Masaje/
   );
   assert.equal(appointmentSummaryLabel(null), "-");
+});
+
+test("clientProfileRows exposes read-only drawer profile fields", () => {
+  const rows = clientProfileRows({
+    fullName: "Ana Solar",
+    whatsapp: "59177777777",
+    age: 34,
+    city: "La Paz",
+    source: "Instagram",
+    createdAt: "2026-05-16T15:00:00.000Z",
+    onboardingCompletedAt: null
+  });
+
+  assert.deepEqual(rows.slice(0, 5), [
+    ["Nombre", "Ana Solar"],
+    ["WhatsApp", "59177777777"],
+    ["Edad", 34],
+    ["Ciudad", "La Paz"],
+    ["Origen", "Instagram"]
+  ]);
+  assert.deepEqual(rows[6], ["Ficha completa", "-"]);
+});
+
+test("clientStatsRows keeps appointment breakdown compact", () => {
+  assert.deepEqual(
+    clientStatsRows({ totalAppointments: 4, pendingCount: 1, completedCount: 2 }),
+    [
+      ["Total", 4],
+      ["Pendientes", 1],
+      ["Confirmadas", 0],
+      ["Completadas", 2],
+      ["Canceladas", 0],
+      ["No asistio", 0]
+    ]
+  );
+});
+
+test("paymentSummaryLabel summarizes read-only payment rows", () => {
+  assert.match(
+    paymentSummaryLabel({
+      amount: 120,
+      status: "reviewed",
+      appointment: { startsAt: "2026-05-16T15:00:00.000Z" }
+    }),
+    /reviewed/
+  );
+  assert.equal(paymentSummaryLabel(null), "-");
 });
 
 test("clientsRefreshLabel separates initial and background states", () => {

@@ -7,7 +7,10 @@ import {
   clientDisplayName,
   clientOnboardingLabel,
   clientOnboardingTone,
-  formatClientDateTime
+  clientProfileRows,
+  clientStatsRows,
+  formatClientDateTime,
+  paymentSummaryLabel
 } from "./clientUtils";
 import { useClientDetailQuery } from "./queries";
 
@@ -30,6 +33,20 @@ function HistoryRows({ appointments }) {
       key={appointment.id}
       label={formatClientDateTime(appointment.startsAt)}
       value={`${appointment.serviceName || "-"} · ${appointment.status || "-"}`}
+    />
+  ));
+}
+
+function PaymentRows({ payments }) {
+  if (!payments.length) {
+    return <p className="drawer-muted">Sin pagos.</p>;
+  }
+
+  return payments.slice(0, 5).map((payment) => (
+    <DetailRow
+      key={payment.id}
+      label={formatClientDateTime(payment.createdAt)}
+      value={paymentSummaryLabel(payment)}
     />
   ));
 }
@@ -75,8 +92,31 @@ export function ClientDetailDrawer({ clientId, onClose, open }) {
           </dl>
 
           <section className="drawer-section detail-list">
+            <h3 className="drawer-section-title">Ficha</h3>
+            <dl>
+              {clientProfileRows(client).map(([label, value]) => (
+                <DetailRow key={label} label={label} value={value} />
+              ))}
+            </dl>
+          </section>
+
+          <section className="drawer-section detail-list">
+            <h3 className="drawer-section-title">Citas</h3>
+            <dl>
+              {clientStatsRows(client.stats).map(([label, value]) => (
+                <DetailRow key={label} label={label} value={value} />
+              ))}
+            </dl>
+          </section>
+
+          <section className="drawer-section detail-list">
             <h3 className="drawer-section-title">Historial</h3>
             <HistoryRows appointments={history} />
+          </section>
+
+          <section className="drawer-section detail-list">
+            <h3 className="drawer-section-title">Pagos</h3>
+            <PaymentRows payments={payments} />
           </section>
         </>
       ) : null}

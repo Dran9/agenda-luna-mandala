@@ -10,6 +10,11 @@ const refreshTimeFormatter = new Intl.DateTimeFormat("es-BO", {
   minute: "2-digit"
 });
 
+const currencyFormatter = new Intl.NumberFormat("es-BO", {
+  currency: "BOB",
+  style: "currency"
+});
+
 export function clientsForAdmin(payload) {
   return payload?.clients || [];
 }
@@ -49,6 +54,43 @@ export function appointmentSummaryLabel(appointment) {
   }
 
   return `${formatClientDateTime(appointment.startsAt)} · ${appointment.serviceName || "-"}`;
+}
+
+export function clientProfileRows(client) {
+  return [
+    ["Nombre", clientDisplayName(client)],
+    ["WhatsApp", clientContact(client)],
+    ["Edad", client?.age || "-"],
+    ["Ciudad", client?.city || "-"],
+    ["Origen", client?.source || "-"],
+    ["Creado", formatClientDateTime(client?.createdAt)],
+    ["Ficha completa", formatClientDateTime(client?.onboardingCompletedAt)]
+  ];
+}
+
+export function clientStatsRows(stats = {}) {
+  return [
+    ["Total", stats.totalAppointments || 0],
+    ["Pendientes", stats.pendingCount || 0],
+    ["Confirmadas", stats.confirmedCount || 0],
+    ["Completadas", stats.completedCount || 0],
+    ["Canceladas", stats.cancelledCount || 0],
+    ["No asistio", stats.noShowCount || 0]
+  ];
+}
+
+export function paymentSummaryLabel(payment) {
+  if (!payment) {
+    return "-";
+  }
+
+  const amount = currencyFormatter.format(payment.amount || 0);
+  const status = payment.status || "-";
+  const appointment = payment.appointment?.startsAt
+    ? formatClientDateTime(payment.appointment.startsAt)
+    : "-";
+
+  return `${amount} · ${status} · ${appointment}`;
 }
 
 export function formatClientDateTime(value) {
