@@ -27,11 +27,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Admin Next dependencies
+        if: hashFiles('apps/admin-next/package-lock.json') != ''
+        run: npm ci --prefix apps/admin-next
+
       - name: Run tests
         run: npm test
 
+      - name: Run Admin Next tests
+        if: hashFiles('apps/admin-next/package-lock.json') != ''
+        run: npm --prefix apps/admin-next test
+
       - name: Build web apps
         run: npm run build
+
+      - name: Build Admin Next
+        if: hashFiles('apps/admin-next/package-lock.json') != ''
+        run: npm --prefix apps/admin-next run build
 
       - name: Build API Docker image
         run: docker build --target runtime -t agenda-luna-mandala-api:ci .
