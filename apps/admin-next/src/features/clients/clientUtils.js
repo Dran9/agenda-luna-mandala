@@ -1,3 +1,5 @@
+import { appointmentStatusLabel } from "../appointments/tableUtils.js";
+
 const dateTimeFormatter = new Intl.DateTimeFormat("es-BO", {
   day: "2-digit",
   hour: "2-digit",
@@ -54,6 +56,14 @@ export function appointmentSummaryLabel(appointment) {
   }
 
   return `${formatClientDateTime(appointment.startsAt)} · ${appointment.serviceName || "-"}`;
+}
+
+export function appointmentHistoryLabel(appointment) {
+  if (!appointment) {
+    return "-";
+  }
+
+  return `${appointment.serviceName || "-"} · ${appointmentStatusLabel(appointment.status)}`;
 }
 
 export function clientProfileRows(client) {

@@ -2,6 +2,7 @@ import { Chip } from "../../ui/Chip";
 import { Drawer } from "../../ui/Drawer";
 import {
   appointmentSummaryLabel,
+  appointmentHistoryLabel,
   clientContact,
   clientDetailFromPayload,
   clientDisplayName,
@@ -32,7 +33,7 @@ function HistoryRows({ appointments }) {
     <DetailRow
       key={appointment.id}
       label={formatClientDateTime(appointment.startsAt)}
-      value={`${appointment.serviceName || "-"} · ${appointment.status || "-"}`}
+      value={appointmentHistoryLabel(appointment)}
     />
   ));
 }

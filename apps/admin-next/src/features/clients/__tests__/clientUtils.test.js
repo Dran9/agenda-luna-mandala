@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   appointmentSummaryLabel,
+  appointmentHistoryLabel,
   clientContact,
   clientDetailFromPayload,
   clientDisplayName,
@@ -52,6 +53,14 @@ test("appointmentSummaryLabel returns a readable next appointment", () => {
     /Masaje/
   );
   assert.equal(appointmentSummaryLabel(null), "-");
+});
+
+test("appointmentHistoryLabel renders appointment status labels", () => {
+  assert.equal(
+    appointmentHistoryLabel({ serviceName: "Masaje", status: "no_show" }),
+    "Masaje · No asistió"
+  );
+  assert.equal(appointmentHistoryLabel(null), "-");
 });
 
 test("clientProfileRows exposes read-only drawer profile fields", () => {
