@@ -102,10 +102,10 @@ test("paymentSummaryLabel summarizes read-only payment rows", () => {
   assert.match(
     paymentSummaryLabel({
       amount: 120,
-      status: "reviewed",
+      status: "approved",
       appointment: { startsAt: "2026-05-16T15:00:00.000Z" }
     }),
-    /reviewed/
+    /Aprobado/
   );
   assert.equal(paymentSummaryLabel(null), "-");
 });

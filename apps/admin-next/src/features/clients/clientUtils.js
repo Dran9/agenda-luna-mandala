@@ -17,6 +17,14 @@ const currencyFormatter = new Intl.NumberFormat("es-BO", {
   style: "currency"
 });
 
+const PAYMENT_STATUS_LABELS = {
+  pending: "Pendiente",
+  submitted: "En revisión",
+  approved: "Aprobado",
+  rejected: "Rechazado",
+  cancelled: "Cancelado"
+};
+
 export function clientsForAdmin(payload) {
   return payload?.clients || [];
 }
@@ -95,7 +103,7 @@ export function paymentSummaryLabel(payment) {
   }
 
   const amount = currencyFormatter.format(payment.amount || 0);
-  const status = payment.status || "-";
+  const status = PAYMENT_STATUS_LABELS[payment.status] || payment.status || "-";
   const appointment = payment.appointment?.startsAt
     ? formatClientDateTime(payment.appointment.startsAt)
     : "-";
