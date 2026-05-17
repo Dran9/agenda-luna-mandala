@@ -31,6 +31,15 @@
   outline: none;
 }
 
+.toolbar .field {
+  gap: 2px;
+}
+
+.toolbar .field-control {
+  height: 34px;
+  padding: 7px 10px;
+}
+
 .field-control-error {
   border-color: var(--color-error);
 }

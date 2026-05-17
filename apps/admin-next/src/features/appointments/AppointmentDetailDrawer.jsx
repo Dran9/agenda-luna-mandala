@@ -107,9 +107,9 @@ export function AppointmentDetailDrawer({ appointmentId, date, open, onClose }) 
             <DetailRow label="Servicio" value={appointmentServiceName(appointment)} />
             <DetailRow label="Terapeuta" value={appointmentTherapistName(appointment)} />
             <DetailRow label="Sala" value={appointmentRoomName(appointment)} />
-            <DetailRow label="Codigo" value={detailValue(appointment.publicCode)} />
+            <DetailRow label="Código" value={detailValue(appointment.publicCode)} />
             <DetailRow label="Termina" value={formatAppointmentTime(appointment.endsAt)} />
-            <DetailRow label="Cliente completo" value={appointment.client?.onboardingComplete ? "Si" : "No"} />
+            <DetailRow label="Cliente completo" value={appointment.client?.onboardingComplete ? "Sí" : "No"} />
           </dl>
 
           {roomChangeAllowed(appointment) && roomOptions.length ? (

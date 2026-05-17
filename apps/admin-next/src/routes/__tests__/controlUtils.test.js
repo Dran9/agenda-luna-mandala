@@ -15,7 +15,7 @@ test("todayKey returns an ISO date key", () => {
 });
 
 test("formatUpdatedAt renders the last successful query time", () => {
-  assert.match(formatUpdatedAt(Date.parse("2026-05-18T18:30:00.000Z")), /^Datos actualizados /);
+  assert.match(formatUpdatedAt(Date.parse("2026-05-18T18:30:00.000Z")), /^Actualizado /);
 });
 
 test("formatUpdatedAt handles missing query data", () => {
@@ -32,7 +32,7 @@ test("refreshLabel shows background refresh without hiding cached data", () => {
 test("refreshLabel shows last updated time outside background refresh", () => {
   assert.match(
     refreshLabel({ isFetching: false, isLoading: false, dataUpdatedAt: Date.now() }),
-    /^Datos actualizados /
+    /^Actualizado /
   );
 });
 

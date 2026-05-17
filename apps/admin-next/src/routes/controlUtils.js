@@ -12,7 +12,7 @@ export function formatUpdatedAt(timestamp) {
     minute: "2-digit"
   }).format(new Date(timestamp));
 
-  return `Datos actualizados ${time}`;
+  return `Actualizado ${time}`;
 }
 
 export function refreshLabel({ isFetching, isLoading, dataUpdatedAt }) {

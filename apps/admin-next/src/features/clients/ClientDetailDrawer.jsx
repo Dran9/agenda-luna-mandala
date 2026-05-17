@@ -86,8 +86,8 @@ export function ClientDetailDrawer({ clientId, onClose, open }) {
           </section>
 
           <dl className="drawer-section detail-list">
-            <DetailRow label="Proxima" value={appointmentSummaryLabel(client.nextAppointment)} />
-            <DetailRow label="Ultima" value={appointmentSummaryLabel(client.lastAppointment)} />
+            <DetailRow label="Próxima" value={appointmentSummaryLabel(client.nextAppointment)} />
+            <DetailRow label="Última" value={appointmentSummaryLabel(client.lastAppointment)} />
             <DetailRow label="Citas" value={client.stats?.totalAppointments || 0} />
             <DetailRow label="Pagos" value={payments.length} />
           </dl>

@@ -30,9 +30,9 @@ export function ClientTable({ clients, isInitialLoading, isRefreshing, onOpenCli
             <th>Cliente</th>
             <th>WhatsApp</th>
             <th>Ficha</th>
-            <th>Proxima cita</th>
+            <th>Próxima cita</th>
             <th>Citas</th>
-            <th>Accion</th>
+            <th>Acción</th>
           </tr>
         </thead>
         <tbody>
