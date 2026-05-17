@@ -26,6 +26,31 @@ test("createAppointmentMutationOptions invalidates appointments for the selected
   ]);
 });
 
+test("createAppointmentMutationOptions also invalidates the created appointment date", async () => {
+  const invalidations = [];
+  const queryClient = {
+    async invalidateQueries(payload) {
+      invalidations.push(payload);
+    }
+  };
+
+  const options = createAppointmentMutationOptions({
+    date: "2026-05-18",
+    mutationFn: async () => ({ id: "appointment-1" }),
+    queryClient
+  });
+
+  await options.onSuccess(
+    { appointment: { startsAt: "2026-05-19T20:00:00.000Z" } },
+    { startsAt: "2026-05-19T20:00:00.000Z" }
+  );
+
+  assert.deepEqual(invalidations, [
+    { queryKey: ["appointments", "2026-05-18"] },
+    { queryKey: ["appointments", "2026-05-19"] }
+  ]);
+});
+
 test("updateAppointmentStatusMutationOptions invalidates table and drawer detail", async () => {
   const invalidations = [];
   const queryClient = {
