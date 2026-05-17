@@ -44,7 +44,7 @@ export function CreateTherapistModal({ open, onClose }) {
       <form className="modal-form" onSubmit={handleSubmit}>
         <Input label="Nombre" name="fullName" error={firstFieldError(fieldErrors, "fullName")} />
         <Input label="Nombre visible" name="displayName" error={firstFieldError(fieldErrors, "displayName")} />
-        <Input label="Telefono" name="phone" error={firstFieldError(fieldErrors, "phone")} />
+        <Input label="Teléfono" name="phone" error={firstFieldError(fieldErrors, "phone")} />
         <Input label="Telegram" name="telegramChatId" error={firstFieldError(fieldErrors, "telegramChatId")} />
         {firstFieldError(fieldErrors, "form") ? (
           <p className="form-error">{firstFieldError(fieldErrors, "form")}</p>

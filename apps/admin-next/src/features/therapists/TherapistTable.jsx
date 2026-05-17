@@ -25,7 +25,7 @@ export function TherapistTable({ isInitialLoading, isRefreshing, onEditTherapist
             <th>Servicios</th>
             <th>Salas</th>
             <th>Estado</th>
-            <th>Accion</th>
+            <th>Acción</th>
           </tr>
         </thead>
         <tbody>

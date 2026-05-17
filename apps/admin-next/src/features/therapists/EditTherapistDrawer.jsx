@@ -85,7 +85,7 @@ export function EditTherapistDrawer({ onClose, open, therapist }) {
           error={firstFieldError(fieldErrors, "displayName")}
         />
         <Input
-          label="Telefono"
+          label="Teléfono"
           name="phone"
           defaultValue={displayTherapist?.phone || ""}
           error={firstFieldError(fieldErrors, "phone")}
