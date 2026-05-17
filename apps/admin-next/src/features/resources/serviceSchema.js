@@ -4,12 +4,12 @@ const serviceBaseSchema = z.object({
   name: z.string().trim().min(2, "Nombre obligatorio").max(160, "Nombre demasiado largo"),
   durationMinutes: z.coerce
     .number()
-    .int("Duracion invalida")
-    .min(15, "Duracion minima 15")
-    .max(480, "Duracion maxima 480"),
+    .int("Duración inválida")
+    .min(15, "Duración mínima 15")
+    .max(480, "Duración máxima 480"),
   priceAmount: z.preprocess(
     (value) => (value === "" || value === undefined || value === null ? 0 : value),
-    z.coerce.number().min(0, "Precio minimo 0").max(999999, "Precio maximo 999999")
+    z.coerce.number().min(0, "Precio mínimo 0").max(999999, "Precio máximo 999999")
   ),
   camilla: z.string().optional(),
   mesa: z.string().optional()

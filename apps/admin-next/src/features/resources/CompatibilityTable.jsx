@@ -70,7 +70,7 @@ export function CompatibilityTable({ isInitialLoading, isRefreshing, rows, servi
                     disabled={pendingId === row.id || updateMutation.isPending}
                     onChange={() => handleToggle(row)}
                   />
-                  <span>{row.isActive ? "Si" : "No"}</span>
+                  <span>{row.isActive ? "Sí" : "No"}</span>
                 </label>
               </td>
             </tr>

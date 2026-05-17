@@ -31,7 +31,7 @@ test("parseCreateServiceForm requires name and bounded duration", () => {
 
   assert.equal(parsed.success, false);
   assert.equal(parsed.error.flatten().fieldErrors.name[0], "Nombre obligatorio");
-  assert.equal(parsed.error.flatten().fieldErrors.durationMinutes[0], "Duracion minima 15");
+  assert.equal(parsed.error.flatten().fieldErrors.durationMinutes[0], "Duración mínima 15");
 });
 
 test("parseUpdateServiceForm requires an active flag", () => {

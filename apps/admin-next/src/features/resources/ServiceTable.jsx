@@ -23,13 +23,13 @@ export function ServiceTable({ isInitialLoading, isRefreshing, onEditService, se
         <thead>
           <tr>
             <th>Servicio</th>
-            <th>Duracion</th>
+            <th>Duración</th>
             <th>Precio</th>
             <th>Requisitos</th>
             <th>Salas</th>
             <th>Terapeutas</th>
             <th>Estado</th>
-            <th>Accion</th>
+            <th>Acción</th>
           </tr>
         </thead>
         <tbody>

@@ -23,7 +23,7 @@ export function RoomTable({ isInitialLoading, isRefreshing, onEditRoom, rooms })
             <th>Capacidad</th>
             <th>Recursos</th>
             <th>Estado</th>
-            <th>Accion</th>
+            <th>Acción</th>
           </tr>
         </thead>
         <tbody>

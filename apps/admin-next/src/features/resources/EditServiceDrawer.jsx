@@ -49,7 +49,7 @@ export function EditServiceDrawer({ onClose, open, service }) {
           error={firstFieldError(fieldErrors, "name")}
         />
         <Input
-          label="Duracion"
+          label="Duración"
           name="durationMinutes"
           type="number"
           min="15"

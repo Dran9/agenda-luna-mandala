@@ -50,7 +50,7 @@ export function CreateServiceModal({ open, onClose }) {
           placeholder="Ej. Masaje relajante"
         />
         <Input
-          label="Duracion"
+          label="Duración"
           name="durationMinutes"
           type="number"
           min="15"

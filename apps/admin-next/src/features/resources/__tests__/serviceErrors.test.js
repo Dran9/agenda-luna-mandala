@@ -6,10 +6,10 @@ import { serviceErrorToFieldErrors } from "../serviceErrors.js";
 test("serviceErrorToFieldErrors maps backend field errors", () => {
   assert.deepEqual(
     serviceErrorToFieldErrors({
-      message: "Duracion invalida",
+      message: "Duración inválida",
       details: { field: "durationMinutes" }
     }),
-    { durationMinutes: ["Duracion invalida"] }
+    { durationMinutes: ["Duración inválida"] }
   );
 });
 
