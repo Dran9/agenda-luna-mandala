@@ -98,9 +98,6 @@
 }
 
 .settings-filter-form + .refresh-state {
-  max-width: 72px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
