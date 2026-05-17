@@ -50,6 +50,29 @@ test("updateAppointmentStatusMutationOptions invalidates table and drawer detail
   ]);
 });
 
+test("updateAppointmentStatusMutationOptions falls back to variables for detail invalidation", async () => {
+  const invalidations = [];
+  const queryClient = {
+    async invalidateQueries(payload) {
+      invalidations.push(payload);
+    }
+  };
+
+  const { updateAppointmentStatusMutationOptions } = await import("../mutationOptions.js");
+  const options = updateAppointmentStatusMutationOptions({
+    date: "2026-05-18",
+    mutationFn: async () => ({ appointment: {} }),
+    queryClient
+  });
+
+  await options.onSuccess({ appointment: {} }, { appointmentId: 42 });
+
+  assert.deepEqual(invalidations, [
+    { queryKey: ["appointments", "2026-05-18"] },
+    { queryKey: ["appointments", "detail", 42] }
+  ]);
+});
+
 test("updateAppointmentRoomMutationOptions invalidates table and drawer detail", async () => {
   const invalidations = [];
   const queryClient = {
@@ -67,6 +90,29 @@ test("updateAppointmentRoomMutationOptions invalidates table and drawer detail",
   });
 
   await options.onSuccess({ appointment: { id: 42 } });
+
+  assert.deepEqual(invalidations, [
+    { queryKey: ["appointments", "2026-05-18"] },
+    { queryKey: ["appointments", "detail", 42] }
+  ]);
+});
+
+test("updateAppointmentRoomMutationOptions falls back to variables for detail invalidation", async () => {
+  const invalidations = [];
+  const queryClient = {
+    async invalidateQueries(payload) {
+      invalidations.push(payload);
+    }
+  };
+
+  const { updateAppointmentRoomMutationOptions } = await import("../mutationOptions.js");
+  const options = updateAppointmentRoomMutationOptions({
+    date: "2026-05-18",
+    mutationFn: async () => ({ appointment: {} }),
+    queryClient
+  });
+
+  await options.onSuccess({ appointment: {} }, { appointmentId: 42 });
 
   assert.deepEqual(invalidations, [
     { queryKey: ["appointments", "2026-05-18"] },

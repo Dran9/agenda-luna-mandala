@@ -44,19 +44,36 @@ export function AppointmentDetailDrawer({ appointmentId, date, open, onClose }) 
   const actions = statusActionsForAppointment(appointment);
   const roomOptions = roomOptionsForAppointment(appointment);
   const [selectedRoomId, setSelectedRoomId] = useState("");
+  const { reset: resetStatusMutation } = statusMutation;
+  const { reset: resetRoomMutation } = roomMutation;
   const mutationError = statusMutation.error || roomMutation.error;
 
   useEffect(() => {
     setSelectedRoomId(appointment?.room?.id ? String(appointment.room.id) : "");
   }, [appointment?.room?.id]);
 
+  useEffect(() => {
+    if (!open) {
+      resetStatusMutation();
+      resetRoomMutation();
+    }
+  }, [open, resetRoomMutation, resetStatusMutation]);
+
   async function handleStatus(status) {
-    await statusMutation.mutateAsync({ appointmentId, status });
+    try {
+      await statusMutation.mutateAsync({ appointmentId, status });
+    } catch {
+      // The drawer renders mutation errors inline.
+    }
   }
 
   async function handleRoomSubmit(event) {
     event.preventDefault();
-    await roomMutation.mutateAsync({ appointmentId, roomId: selectedRoomId });
+    try {
+      await roomMutation.mutateAsync({ appointmentId, roomId: selectedRoomId });
+    } catch {
+      // The drawer renders mutation errors inline.
+    }
   }
 
   return (

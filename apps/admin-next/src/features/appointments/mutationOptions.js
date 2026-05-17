@@ -12,8 +12,8 @@ export function createAppointmentMutationOptions({ date, mutationFn, queryClient
 export function updateAppointmentStatusMutationOptions({ date, mutationFn, queryClient }) {
   return {
     mutationFn,
-    async onSuccess(payload) {
-      const appointmentId = payload?.appointment?.id;
+    async onSuccess(payload, variables) {
+      const appointmentId = payload?.appointment?.id || variables?.appointmentId;
 
       await queryClient.invalidateQueries({ queryKey: appointmentsKey(date) });
 
@@ -27,8 +27,8 @@ export function updateAppointmentStatusMutationOptions({ date, mutationFn, query
 export function updateAppointmentRoomMutationOptions({ date, mutationFn, queryClient }) {
   return {
     mutationFn,
-    async onSuccess(payload) {
-      const appointmentId = payload?.appointment?.id;
+    async onSuccess(payload, variables) {
+      const appointmentId = payload?.appointment?.id || variables?.appointmentId;
 
       await queryClient.invalidateQueries({ queryKey: appointmentsKey(date) });
 
