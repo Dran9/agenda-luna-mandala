@@ -1,0 +1,157 @@
+.settings-summary {
+  align-items: baseline;
+  display: inline-flex;
+  gap: var(--space-xs);
+}
+
+.settings-summary strong {
+  color: var(--color-ink);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.settings-summary span {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.settings-segment {
+  align-items: center;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  padding: 2px;
+}
+
+.settings-segment button {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--color-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  height: 30px;
+  padding: 0 var(--space-sm);
+}
+
+.settings-segment button[aria-pressed="true"] {
+  background: var(--color-canvas);
+  box-shadow: var(--shadow-subtle);
+  color: var(--color-ink);
+}
+
+.settings-compact-select {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-xs);
+}
+
+.settings-filter-form {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-sm);
+}
+
+.settings-compact-input {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-xs);
+}
+
+.settings-compact-select span {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.settings-compact-input span {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.settings-compact-select select {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font: inherit;
+  height: 34px;
+  max-width: 160px;
+  padding: 0 var(--space-sm);
+}
+
+.settings-compact-input input {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font: inherit;
+  height: 34px;
+  max-width: 120px;
+  padding: 0 var(--space-sm);
+}
+
+.settings-filter-form .button,
+.toolbar > .button {
+  padding: 0 12px;
+}
+
+.settings-filter-form + .refresh-state {
+  white-space: nowrap;
+}
+
+.settings-table {
+  min-width: 680px;
+}
+
+.settings-service-table {
+  min-width: 980px;
+}
+
+.settings-table-frame {
+  min-height: 320px;
+}
+
+.checkbox-group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.checkbox-group legend {
+  margin-bottom: var(--space-xs);
+  padding: 0;
+}
+
+.checkbox-option {
+  align-items: center;
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 400;
+  gap: var(--space-xs);
+  margin-right: var(--space-md);
+}
+
+.checkbox-option input {
+  accent-color: var(--color-brand-primary);
+  height: 16px;
+  width: 16px;
+}
+
+.switch-control {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-xs);
+}
+
+.switch-control input {
+  accent-color: var(--color-brand-primary);
+  height: 16px;
+  width: 16px;
+}
+
+.switch-control span {
+  color: var(--color-body);
+  font-size: 13px;
+}

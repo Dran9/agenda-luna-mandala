@@ -114,11 +114,11 @@ Fijar la cara minima premium antes de construir DB y pantallas reales encima.
 
 Entregables:
 
-- tokens CSS base desde `design.md`;
+- tokens CSS base desde `docs/brand.md` y el `DESIGN.md` de cada app;
 - placeholders de Reserva publica y Admin visualmente dignos;
 - logo/brand mark placeholder visible;
 - layout mobile de Reserva publica sin sensacion de landing generica;
-- shell admin Twilight minimo;
+- shell admin alineado al contrato visual vigente;
 - ninguna funcionalidad falsa.
 
 Prohibido:
@@ -135,7 +135,7 @@ Gate:
 - `/` y `/admin/` siguen cargando;
 - `/api/health` sigue respondiendo;
 - build/test pasan;
-- la UI respeta `DESIGN_BRIEF_AGENDA_LUNA.md` y `design.md`;
+- la UI respeta `docs/brand.md`, `docs/UX_PATTERNS.md` y el `DESIGN.md` de la app;
 - no hay overflow evidente en mobile.
 
 ## Fase 1 - DB Core

@@ -1,5 +1,16 @@
 # Instrucciones Para Agentes Codex - Agenda Luna Mandala
 
+## Trabajo Actual
+
+- **Rama activa**: `Mandala3.0` (rebuild parcial del admin).
+- **Scope actual**: Admin nuevo en `apps/admin-next/`, construido por verticales pequenas contra backend existente.
+- **Edit-zone principal**: `apps/admin-next/` y docs de contrato visual/UX cuando Daniel lo pida explicitamente.
+- **Read-only durante el rebuild admin salvo autorizacion explicita**: `server/`, migraciones aplicadas, runtime/deploy, root `package.json`, root lockfile.
+- **Plan**: ver `docs/REBUILD_ANALYSIS.md` (especialmente secciones 5 y 6).
+- **3 no negociables**: cero commits a `server/`, invalidacion sin reload, ningun `.jsx` > 300 lineas.
+
+Esta seccion se actualiza cuando cambia la fase activa del proyecto. Si esta desactualizada o no coincide con la rama en la que estas, parar y reportar antes de codificar.
+
 ## Fuente De Verdad
 
 Leer siempre:
@@ -11,14 +22,18 @@ Leer siempre:
 5. `docs/03_DATABASE_PLAN.md`
 6. `docs/04_HOSTINGER_DEPLOY_CONTRACT.md`
 7. `docs/05_UI_UX_BRIEF.md`
-8. `DESIGN_BRIEF_AGENDA_LUNA.md`
-9. `design.md`
-10. `docs/06_ENGINEERING_GUARDRAILS.md`
-11. `docs/07_ROADMAP_MICROPHASES.md`
-12. `docs/08_ACCEPTANCE_GATES.md`
-13. `docs/10_PUBLIC_BOOKING_SPEC.md`
-14. `docs/15_VPS_DOCKER_MIGRATION_PLAN.md`
-15. `docs/19_LOCAL_PRODUCT_CLOSURE_BACKLOG.md`
+8. `docs/REBUILD_ANALYSIS.md`
+9. `docs/brand.md`
+10. `docs/UX_PATTERNS.md`
+11. El `DESIGN.md` de la app que se toca:
+    - Admin nuevo: `apps/admin-next/DESIGN.md`
+    - Booking publico: `apps/booking/DESIGN.md`
+12. `docs/06_ENGINEERING_GUARDRAILS.md`
+13. `docs/07_ROADMAP_MICROPHASES.md`
+14. `docs/08_ACCEPTANCE_GATES.md`
+15. `docs/10_PUBLIC_BOOKING_SPEC.md`
+16. `docs/15_VPS_DOCKER_MIGRATION_PLAN.md`
+17. `docs/19_LOCAL_PRODUCT_CLOSURE_BACKLOG.md`
 
 Si la tarea es arrancar implementacion desde cero, leer tambien:
 
@@ -46,7 +61,8 @@ No copiar archivos sin una decision explicita.
 - Cloudflare Pages puede servir Reserva publica y Admin estaticos en produccion.
 - MySQL/MariaDB es la fuente de verdad.
 - Claims por minuto evitan doble reserva.
-- `DESIGN_BRIEF_AGENDA_LUNA.md` y `design.md` son contrato visual activo.
+- `docs/brand.md`, `docs/UX_PATTERNS.md` y el `DESIGN.md` de la app son contrato visual/UX activo.
+- `docs/archive/design-twilight-v0.md` y `docs/archive/design-brief-twilight-v0.md` son legado Twilight archivado. No consumir para el rebuild.
 - Redis/BullMQ no existen en v1.
 - Google Calendar no decide disponibilidad.
 - No tocar runtime/deploy junto con features.
@@ -86,6 +102,37 @@ Nunca mezclar cambios en esos archivos con features de admin, booking, pagos o U
 - Si el agente cree que conviene hacer algo distinto, pausar y explicar la recomendacion con claridad antes de implementarla o lanzarla.
 - Si una entrega visual/producto no cumple la referencia o contrato pedido, no tratar `npm test` o `npm run build` como suficiente.
 - Antes de push o entrega final de UI, incluir evidencia visual cuando aplique: screenshots desktop/mobile o explicar explicitamente por que no se pudieron generar.
+
+## Contrato Visual Y UX Obligatorio
+
+Antes de cualquier tarea de UI, leer (en este orden):
+
+1. `docs/brand.md` - verdad unica de la marca Luna Mandala (paleta, fuentes, voz, logo).
+2. El `DESIGN.md` correspondiente a la app que se toca:
+   - Booking publico: `apps/booking/DESIGN.md` (Cal estructural + Luna Mandala completa, Outfit + Comfortaa).
+   - Admin nuevo: `apps/admin-next/DESIGN.md` (Cal.com verbatim, light mode, Cal Sans + Inter, marca residual).
+3. `docs/UX_PATTERNS.md` - patrones de interaccion concretos con ejemplos mal/bien. **Critico para evitar las monstruosidades UX del Franky (admin viejo).**
+
+`docs/archive/design-twilight-v0.md` reemplaza al antiguo `design.md` raiz. `docs/archive/design-brief-twilight-v0.md` conserva el brief visual anterior. Twilight queda archivado como referencia historica y no se usa en el rebuild.
+
+Reglas duras visuales:
+
+- Todo color, radio, espaciado y tipografia debe venir de un token definido en `brand.md` o en el `DESIGN.md` de la app.
+- Si se necesita un valor que no existe, primero se agrega al token correspondiente, despues al componente.
+- Componentes no inventan colores ni espaciados.
+- Comfortaa nunca aparece en admin.
+- El morado primary tiene presencia alta en booking, presencia residual en admin (solo CTA primario y focus ring).
+
+Reglas duras UX (resumen de `UX_PATTERNS.md`):
+
+- Forms de crear/editar viven en modal o drawer, **nunca inline en una pagina de lectura**.
+- Filtros, busqueda, orden y agrupacion viven en toolbar compacta o popover, **nunca empujan la tabla hacia abajo**.
+- Acciones primarias son botones compactos en toolbar, **nunca cards con titulo y descripcion**.
+- Una sola accion primaria visible por pantalla.
+- No card dentro de card. Nunca.
+- No explicar lo obvio en labels, captions, tooltips o banners.
+- Antes de inventar un componente nuevo, leer `ui/` existente y reusar.
+- Si el patron correcto no esta claro, pausar y proponer 2 opciones a Daniel antes de codificar.
 
 ## UI/UX Guardrail Para Admin
 

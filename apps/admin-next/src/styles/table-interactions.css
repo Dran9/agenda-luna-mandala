@@ -1,0 +1,13 @@
+.appointments-table tbody tr[role="button"] {
+  cursor: pointer;
+}
+
+.appointments-table tbody tr[role="button"]:focus {
+  background: var(--color-surface-soft);
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: -2px;
+}
+
+.appointments-table tbody tr.table-row-active {
+  background: var(--color-brand-primary-soft);
+}

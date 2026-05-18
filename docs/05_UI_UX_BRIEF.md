@@ -2,14 +2,21 @@
 
 ## Fuente Visual Activa
 
-- `DESIGN_BRIEF_AGENDA_LUNA.md`: intencion visual, marca blanca, booking, admin y proceso UI.
-- `design.md`: tokens, paleta Twilight, tipografia, layout shell, componentes y reglas concretas.
+- `docs/brand.md`: marca Luna Mandala, paleta, fuentes, voz y logo.
+- `apps/admin-next/DESIGN.md`: sistema visual del Admin nuevo, Cal.com verbatim, light mode, Cal Sans + Inter.
+- `apps/booking/DESIGN.md`: sistema visual de Reserva publica, Cal estructural + Luna Mandala completa, Outfit + Comfortaa.
+- `docs/UX_PATTERNS.md`: patrones de interaccion concretos.
 
-Este archivo resume los gates de UX. No reemplaza esos dos documentos.
+Este archivo resume gates historicos de UX. No reemplaza los documentos anteriores.
+
+`docs/archive/design-twilight-v0.md` y `docs/archive/design-brief-twilight-v0.md` conservan el antiguo lenguaje Twilight. Son referencia historica y no se consumen en el rebuild.
 
 ## Lenguaje Visual
 
-Base: Twilight.
+Base vigente:
+
+- Admin nuevo: Cal.com operativo, sobrio, denso y en light mode.
+- Reserva publica: Cal estructural con expresion completa de marca Luna Mandala.
 
 Sensacion:
 
@@ -27,9 +34,11 @@ Sensacion:
 - Phosphor Icons.
 - Sin Tailwind.
 - Sin shadcn.
-- Sin webfonts.
+- Webfonts autorizadas segun app:
+  - Admin nuevo: Cal Sans + Inter.
+  - Reserva publica: Outfit + Comfortaa.
 - Logo/brand mark visible desde el dia 1.
-- Dark/light mode si no retrasa Fase 0; si retrasa, dejar tokens listos.
+- Admin nuevo: light mode por defecto en v1.
 - No cards dentro de cards.
 - No botones falsos.
 - No texto que se corte.

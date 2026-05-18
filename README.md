@@ -47,7 +47,12 @@ Se mantiene la logica aprendida:
 - React/Vite + Express + MySQL.
 - CSS plano con variables.
 - Phosphor Icons.
-- Direccion visual activa: `DESIGN_BRIEF_AGENDA_LUNA.md` + `design.md`.
+- Direccion visual activa:
+  - marca: `docs/brand.md`;
+  - Admin nuevo: `apps/admin-next/DESIGN.md`;
+  - Reserva publica: `apps/booking/DESIGN.md`;
+  - patrones UX: `docs/UX_PATTERNS.md`.
+- Twilight queda archivado en `docs/archive/design-twilight-v0.md` y `docs/archive/design-brief-twilight-v0.md`; no se consume en el rebuild.
 
 Se descarta:
 
@@ -68,14 +73,18 @@ Leer en este orden:
 5. `docs/03_DATABASE_PLAN.md`
 6. `docs/04_HOSTINGER_DEPLOY_CONTRACT.md`
 7. `docs/05_UI_UX_BRIEF.md`
-8. `DESIGN_BRIEF_AGENDA_LUNA.md`
-9. `design.md`
-10. `docs/06_ENGINEERING_GUARDRAILS.md`
-11. `docs/07_ROADMAP_MICROPHASES.md`
-12. `docs/08_ACCEPTANCE_GATES.md`
-13. `docs/10_PUBLIC_BOOKING_SPEC.md`
-14. `docs/15_VPS_DOCKER_MIGRATION_PLAN.md`
-15. `docs/09_CODEX_START_PROMPT.md`
+8. `docs/REBUILD_ANALYSIS.md`
+9. `docs/brand.md`
+10. `docs/UX_PATTERNS.md`
+11. El `DESIGN.md` de la app que se toca:
+   - Admin nuevo: `apps/admin-next/DESIGN.md`
+   - Reserva publica: `apps/booking/DESIGN.md`
+12. `docs/06_ENGINEERING_GUARDRAILS.md`
+13. `docs/07_ROADMAP_MICROPHASES.md`
+14. `docs/08_ACCEPTANCE_GATES.md`
+15. `docs/10_PUBLIC_BOOKING_SPEC.md`
+16. `docs/15_VPS_DOCKER_MIGRATION_PLAN.md`
+17. `docs/09_CODEX_START_PROMPT.md`
 
 ## Nuevo Repo Y Nueva DB
 
@@ -100,7 +109,7 @@ La DB anterior queda congelada como referencia. No migrar datos del prototipo a 
 - React + Vite.
 - CSS plano con variables.
 - Phosphor Icons.
-- Direccion visual activa: `DESIGN_BRIEF_AGENDA_LUNA.md` + `design.md`.
+- Direccion visual activa: `docs/brand.md` + `docs/UX_PATTERNS.md` + `apps/admin-next/DESIGN.md` / `apps/booking/DESIGN.md`.
 - Zod.
 - JWT.
 - Node test runner.

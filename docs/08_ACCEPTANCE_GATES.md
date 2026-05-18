@@ -87,9 +87,10 @@ docker compose ps
 
 ## Gate Visual
 
-- `DESIGN_BRIEF_AGENDA_LUNA.md` fue leido.
-- `design.md` fue leido.
-- Tokens Twilight aplicados desde el inicio.
+- `docs/brand.md` fue leido.
+- `docs/UX_PATTERNS.md` fue leido.
+- El `DESIGN.md` de la app tocada fue leido.
+- Tokens visuales vigentes aplicados desde el inicio.
 - Logo/brand mark visible.
 - Sin overflow.
 - Sin textos cortados.

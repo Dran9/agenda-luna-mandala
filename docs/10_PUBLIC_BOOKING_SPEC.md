@@ -308,8 +308,18 @@ El subflujo usa telefono + `identify`.
 ### Seleccion De Cita
 
 1. Buscar por WhatsApp.
-2. Si hay multiples citas futuras, mostrar lista para elegir.
-3. Si no hay citas futuras, mostrar error explicativo y ofrecer soporte.
+2. Si hay una cita futura activa, mostrarla antes de buscar horarios.
+3. Si hay multiples citas futuras, mostrar lista para elegir.
+4. Antes de cargar nuevos horarios, pedir confirmacion explicita de que esa es la cita que se quiere cambiar.
+5. Si no hay citas futuras, mostrar error explicativo y ofrecer soporte.
+
+La tarjeta/lista de cita debe mostrar como minimo:
+
+- servicio;
+- fecha y hora;
+- terapeuta;
+- sala o modalidad cuando aplique;
+- estado de politica de cambio cuando aplique.
 
 ### Politica De Cambios
 
@@ -337,15 +347,40 @@ El backend calcula `availableActions` por cita. Si una accion tiene `minimum_not
 
 ### Reagendamiento
 
-1. Boton `Reagendar` inicia busqueda de slots del mismo servicio.
-2. Cliente elige nuevo slot.
-3. Backend crea hold del nuevo slot.
-4. Confirmacion llama `POST /api/public/booking/reschedule` con:
+Decision de producto v1:
+
+- Reagendar mantiene el mismo servicio.
+- Reagendar intenta mantener el mismo terapeuta.
+- Si ese terapeuta no tiene disponibilidad, la UI puede ofrecer `Ver otros terapeutas disponibles`.
+- Cambiar de servicio no es reagendar en v1; debe tratarse como reserva nueva o soporte humano.
+
+Flujo:
+
+1. Boton `Reagendar` confirma la cita original y luego inicia busqueda de slots del mismo servicio.
+2. Si se mantiene terapeuta, los slots se calculan para ese terapeuta.
+3. Si el cliente elige otros terapeutas disponibles, la disponibilidad usa las mismas reglas de terapeuta+sala y round-robin cuando aplique.
+4. Cliente elige nuevo slot.
+5. Backend crea hold del nuevo slot.
+6. Confirmacion llama `POST /api/public/booking/reschedule` con:
    - `holdToken`;
    - `managementToken` o fallback;
    - `idempotencyKey`;
    - `policyAcknowledged` cuando aplique.
-5. Si falla la reagenda, el horario original sigue vigente y la UI debe decirlo con claridad.
+7. Si falla la reagenda, el horario original sigue vigente y la UI debe decirlo con claridad.
+
+Regla de datos:
+
+- La cita original no se borra fisicamente de la DB.
+- Al confirmar reagenda, la cita original queda marcada como cancelada/reagendada, libera claims en la misma transaccion y conserva auditoria.
+- La nueva cita queda confirmada con sus claims validos.
+- Si la confirmacion falla, la cita original queda intacta.
+
+Google Calendar:
+
+- Google Calendar nunca decide disponibilidad.
+- Mientras no exista integracion live, registrar el cambio en `test_outbox`/logs segun provider.
+- Cuando Google Calendar live exista como espejo, confirmar primero en DB; despues cancelar/eliminar el evento viejo y crear o actualizar el evento nuevo.
+- Si falla el espejo de Google Calendar despues de confirmar DB, no revertir la DB a ciegas; registrar incidencia de sincronizacion para reintento/manual.
 
 ### Soporte Humano
 
@@ -516,17 +551,21 @@ Usar estos textos como baseline del flujo:
 7. Mientras hay hold activo, no se puede seleccionar otro slot de forma ambigua.
 8. Confirmacion de cliente nuevo exige onboarding valido.
 9. Confirmacion de cliente existente no pide onboarding.
-10. Reagendar conserva cita original si el cambio falla.
-11. Politica de 6h/50% bloquea acciones hasta aceptacion.
-12. `Hablar con alguien` abre WhatsApp aunque falle el POST interno.
-13. Todas las operaciones mutables usan `idempotencyKey`.
-14. Conflicto de slot responde `409` y la UI permite elegir otro horario.
-15. Hold expirado responde `410` y la UI permite crear un nuevo hold.
-16. El selector pais/zona horaria muestra bandera, pais y hora local actual.
-17. El helper de WhatsApp cambia segun pais/zona horaria.
-18. La disponibilidad muestra primero tira corta de fechas y calendario extendido solo bajo demanda.
-19. Los slots se muestran como botones/tarjetas grandes agrupados por `Manana` y `Tarde`.
-20. Los horarios visibles usan la zona horaria elegida por el cliente.
+10. Reagendar muestra la cita futura encontrada y pide confirmar que esa es la cita a cambiar antes de mostrar slots.
+11. Reagendar mantiene el mismo servicio.
+12. Reagendar intenta mantener el mismo terapeuta y permite ver otros terapeutas disponibles cuando no haya disponibilidad.
+13. Reagendar conserva cita original si el cambio falla.
+14. Al confirmar reagenda, la cita original no se borra fisicamente; queda cancelada/reagendada, libera claims y conserva auditoria.
+15. Politica de 6h/50% bloquea acciones hasta aceptacion.
+16. `Hablar con alguien` abre WhatsApp aunque falle el POST interno.
+17. Todas las operaciones mutables usan `idempotencyKey`.
+18. Conflicto de slot responde `409` y la UI permite elegir otro horario.
+19. Hold expirado responde `410` y la UI permite crear un nuevo hold.
+20. El selector pais/zona horaria muestra bandera, pais y hora local actual.
+21. El helper de WhatsApp cambia segun pais/zona horaria.
+22. La disponibilidad muestra primero tira corta de fechas y calendario extendido solo bajo demanda.
+23. Los slots se muestran como botones/tarjetas grandes agrupados por `Manana` y `Tarde`.
+24. Los horarios visibles usan la zona horaria elegida por el cliente.
 
 ## Payloads De Referencia
 

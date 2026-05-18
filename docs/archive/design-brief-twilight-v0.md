@@ -1,5 +1,11 @@
 # Agenda Luna - brief de diseno
 
+> **Archivado / legado.** Este brief pertenece al lenguaje Twilight anterior.
+> Para el rebuild actual no consumir este archivo como contrato visual.
+> La jerarquia vigente es: `docs/brand.md`, el `DESIGN.md` de la app
+> (`apps/admin-next/DESIGN.md` o `apps/booking/DESIGN.md`) y
+> `docs/UX_PATTERNS.md`.
+
 ## 1. Fuente Visual
 
 `design.md` es la guia visual activa. Describe el lenguaje Twilight: indigo profundo, violeta suave, slates frios, dark mode real, layout estable y una sensacion de calma trabajando.
