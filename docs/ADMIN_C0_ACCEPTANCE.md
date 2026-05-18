@@ -2,10 +2,19 @@
 
 ## Estado
 
-- Rama: `Mandala3.0`.
-- HEAD: `0280a7b fix(admin-next): avoid refresh label truncation`.
-- Relacion con `codex/stabilize-docker-admin`: la rama `codex/stabilize-docker-admin` esta en `4d59632` y es base de `Mandala3.0`; `Mandala3.0` esta 55 commits encima (`git rev-list --left-right --count codex/stabilize-docker-admin...Mandala3.0` = `0 55`).
-- `Mandala3.0` sigue siendo rama apilada y NO debe mergearse directo a `main`.
+Este es un documento historico de cierre Admin C0.
+
+- Admin C0 esta cerrado.
+- Foundation C1 esta mergeado.
+- `Mandala3.0` ya no es la rama activa.
+- Las siguientes fases parten desde `main`.
+- La fase activa posterior al cierre de Foundation C1 es documentacion de contrato para Payment C0 Manual Contract; no es implementacion de pagos.
+
+Referencia historica del cierre:
+
+- Rama original: `Mandala3.0`.
+- HEAD historico: `0280a7b fix(admin-next): avoid refresh label truncation`.
+- Relacion historica con `codex/stabilize-docker-admin`: la rama `codex/stabilize-docker-admin` estaba en `4d59632` y era base de `Mandala3.0`; `Mandala3.0` estaba 55 commits encima (`git rev-list --left-right --count codex/stabilize-docker-admin...Mandala3.0` = `0 55`).
 
 ## Commits Relevantes
 
@@ -85,7 +94,7 @@
 
 ## Recomendacion De Integracion
 
-- NO mergear `Mandala3.0` directo a `main`.
-- Primero aprobar/mergear `codex/stabilize-docker-admin`.
-- Luego revisar `Mandala3.0` encima.
-- Despues abrir PR o merge de Admin C0 segun decision de Daniel.
+- Integracion historica completada: PR #1, PR #2 y PR #3 estan mergeados en `main`.
+- No reabrir trabajo sobre `Mandala3.0`.
+- Partir nuevas fases desde `main`.
+- Mantener pagos como contrato/documentacion hasta que Daniel autorice implementacion.

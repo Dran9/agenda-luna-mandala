@@ -2,12 +2,12 @@
 
 ## Trabajo Actual
 
-- **Rama activa**: `Mandala3.0` (rebuild parcial del admin).
-- **Scope actual**: Admin nuevo en `apps/admin-next/`, construido por verticales pequenas contra backend existente.
-- **Edit-zone principal**: `apps/admin-next/` y docs de contrato visual/UX cuando Daniel lo pida explicitamente.
-- **Read-only durante el rebuild admin salvo autorizacion explicita**: `server/`, migraciones aplicadas, runtime/deploy, root `package.json`, root lockfile.
-- **Plan**: ver `docs/REBUILD_ANALYSIS.md` (especialmente secciones 5 y 6).
-- **3 no negociables**: cero commits a `server/`, invalidacion sin reload, ningun `.jsx` > 300 lineas.
+- **Rama activa**: `main`.
+- **Estado**: PR #1 Runtime/Admin stabilization base, PR #2 Admin Next C0 y PR #3 Admin Next Foundation C1 ya estan mergeados en `main`.
+- **Scope actual**: documentacion de contrato para Payment C0 Manual Contract. La fase actual no es implementacion de pagos.
+- **Edit-zone principal**: docs de contrato, especialmente `docs/20_PAYMENT_C0_MANUAL_CONTRACT.md`.
+- **Read-only salvo autorizacion explicita de implementacion**: `server/`, migraciones aplicadas, DB, Admin UI, runtime/deploy, root `package.json`, root lockfile.
+- **No negociables actuales**: no implementar pagos sin contrato; no WhatsApp/OCR/email bancario en C0; no usar precio global de servicio como arancel final; no tocar DB/migraciones hasta autorizacion de implementacion.
 
 Esta seccion se actualiza cuando cambia la fase activa del proyecto. Si esta desactualizada o no coincide con la rama en la que estas, parar y reportar antes de codificar.
 

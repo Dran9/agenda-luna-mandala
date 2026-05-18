@@ -4,9 +4,10 @@
 
 - PR #1 `codex/stabilize-docker-admin -> main`: mergeado.
 - PR #2 `Mandala3.0 -> main`: mergeado despues de integrar la base.
-- `main` contiene Admin Next C0.
+- PR #3 `codex/admin-next-foundation-c1 -> main`: mergeado.
+- `main` contiene Admin Next C0 y Admin Next Foundation C1.
 - `Mandala3.0` ya no es la rama activa de trabajo.
-- La siguiente fase activa es `Admin Next Foundation C1`, partiendo desde `main`.
+- La siguiente fase activa es documentacion de contrato para Payment C0 Manual Contract, partiendo desde `main`.
 
 ## Lectura De La Integracion
 
@@ -16,7 +17,7 @@ La pila original fue:
 main -> codex/stabilize-docker-admin -> Mandala3.0
 ```
 
-La base `codex/stabilize-docker-admin` cerro el bloque de runtime, Docker, backend y estabilizacion previa. Encima, `Mandala3.0` cerro Admin Next C0. Con ambos PRs mergeados, la revision de integracion ya no debe tratar `Mandala3.0` como rama viva ni como base para trabajo nuevo.
+La base `codex/stabilize-docker-admin` cerro el bloque de runtime, Docker, backend y estabilizacion previa. Encima, `Mandala3.0` cerro Admin Next C0. Luego Foundation C1 agrego higiene post-merge, guardrails automaticos y primer pulido visual sistemico. Con esos PRs mergeados, la revision de integracion ya no debe tratar `Mandala3.0` como rama viva ni como base para trabajo nuevo.
 
 Admin Next C0 queda dentro de `main` como cierre funcional de:
 
@@ -29,24 +30,29 @@ Admin Next C0 queda dentro de `main` como cierre funcional de:
 - Terapeutas: lista, creacion, edicion de perfil y asignacion de servicios.
 - Clientes: lista y drawer ampliado de solo lectura.
 
-## Proxima Fase
+## Foundation C1
 
-Admin Next Foundation C1 debe enfocarse en higiene post-merge, guardrails automaticos y primer pase visual sistemico del Admin Next.
+Admin Next Foundation C1 quedo mergeado en `main`.
 
-Scope esperado:
+Scope cerrado:
 
 - Documentacion post-merge.
 - Guardrails versionados para limites de archivos y patrones prohibidos.
 - Pulido visual de superficies existentes.
 - QA visual de `/control`, `/clientes`, `/terapeutas` y `/ajustes`.
 
+## Proxima Fase
+
+Payment C0 Manual Contract debe enfocarse en documentar el contrato de producto y tecnico antes de implementar pagos.
+
 Fuera de scope:
 
-- Features nuevas.
-- Booking publico.
-- Reagendamiento publico.
-- Nuevo cliente dedicado.
-- Cambios en `server/`, migraciones, DB remota o runtime/deploy.
+- Implementar endpoints.
+- Tocar `server/`.
+- Tocar DB o migraciones.
+- Tocar Admin UI.
+- Tocar WhatsApp live, OCR o email bancario/webhooks.
+- Cambios de runtime/deploy.
 
 ## Caveats Vigentes
 
@@ -57,7 +63,7 @@ Fuera de scope:
 - Si se exige un boton dedicado `Nuevo cliente`, requiere decision de producto y endpoint nuevo.
 - Reagendamiento publico sigue documentado como P0 futuro y no esta implementado aqui.
 
-## Gates Esperados Para C1
+## Gates Historicos Para Foundation C1
 
 No conservar numeros historicos en esta nota. Los numeros de test/build, maximos de lineas y evidencia visual deben salir de validaciones corridas en la fase activa.
 
@@ -77,4 +83,5 @@ Gates minimos:
 - Trabajar nuevas fases desde `main`.
 - No reabrir trabajo sobre `Mandala3.0`.
 - Mantener Admin Next separado de runtime/deploy salvo cambios estrictamente necesarios de CI.
-- Convertir guardrails de Admin Next en checks automaticos antes de seguir ampliando producto.
+- Mantener guardrails de Admin Next como checks automaticos antes de seguir ampliando producto.
+- Mantener pagos en contrato/documentacion hasta que Daniel autorice implementacion.
