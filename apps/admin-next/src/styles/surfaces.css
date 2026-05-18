@@ -1,0 +1,86 @@
+.table-frame {
+  background: var(--color-canvas);
+  box-shadow: var(--shadow-subtle);
+}
+
+.table-frame[data-refreshing="true"] {
+  box-shadow:
+    inset 2px 0 0 var(--color-brand-primary),
+    var(--shadow-subtle);
+}
+
+.appointments-table {
+  table-layout: fixed;
+}
+
+.appointments-table th {
+  box-shadow: inset 0 -1px 0 var(--color-hairline);
+}
+
+.appointments-table td {
+  max-width: 240px;
+}
+
+.appointments-table strong,
+.appointments-table td span:not(.chip):not(.skeleton-cell),
+.cell-time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appointments-table tbody tr {
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.appointments-table tbody tr:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--color-brand-primary);
+  outline: none;
+}
+
+.table-row-active {
+  background: var(--color-surface-soft);
+  box-shadow: inset 2px 0 0 var(--color-brand-primary);
+}
+
+.table-empty {
+  background: var(--color-canvas);
+  font-size: 14px;
+}
+
+.chip {
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.modal-backdrop,
+.drawer-backdrop {
+  backdrop-filter: blur(2px);
+}
+
+.modal-panel,
+.drawer-panel {
+  box-shadow: var(--shadow-modal);
+}
+
+.drawer-panel {
+  width: min(100%, 460px);
+}
+
+.drawer-header,
+.modal-header {
+  box-shadow: 0 1px 0 var(--color-hairline-soft);
+}
+
+.service-assignment-list,
+.settings-segment,
+.settings-compact-select select,
+.settings-compact-input input {
+  background: var(--color-canvas);
+}
+
+.service-assignment-row:hover {
+  background: var(--color-surface-soft);
+}
