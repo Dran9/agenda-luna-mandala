@@ -419,7 +419,9 @@ function createAdminRouter({
         paymentId: req.params.id,
         method: req.body?.method,
         reference: req.body?.reference,
-        notes: req.body?.notes
+        notes: req.body?.notes,
+        amount: req.body?.amount,
+        currencyCode: req.body?.currencyCode
       });
 
       res.status(200).json(payload);

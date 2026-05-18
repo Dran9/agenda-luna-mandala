@@ -6,7 +6,8 @@ const {
   cancelAdminPayment,
   createAdminAppointmentPayment,
   rejectAdminPayment,
-  submitAdminPayment
+  submitAdminPayment,
+  updateAdminPayment
 } = require("../server/services/adminPayments.service");
 
 function normalizeSql(sql) {
@@ -160,6 +161,26 @@ test("createAdminAppointmentPayment rejects duplicate active payment", async () 
   );
 
   assert.equal(connection.calls.some((call) => call.type === "rollback"), true);
+});
+
+test("updateAdminPayment rejects amount and currency overrides before querying DB", async () => {
+  const connection = createConnectionMock(() => {
+    throw new Error("No deberia consultar DB");
+  });
+
+  await assert.rejects(
+    () => updateAdminPayment({
+      connection,
+      adminSession,
+      paymentId: 9,
+      reference: "Banco 123",
+      amount: 250,
+      currencyCode: "BOB"
+    }),
+    /amount no editable en C0/
+  );
+
+  assert.equal(connection.calls.length, 0);
 });
 
 test("submitAdminPayment marks pending payment as submitted with manual evidence", async () => {

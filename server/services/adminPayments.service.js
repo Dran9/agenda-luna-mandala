@@ -389,12 +389,15 @@ async function updateAdminPayment({
   paymentId: rawPaymentId,
   method,
   reference,
-  notes
+  notes,
+  amount,
+  currencyCode
 }) {
   const centerId = ensureCenter(adminSession);
   const paymentId = parsePositiveId(rawPaymentId, "paymentId");
   const updates = [];
   const params = [];
+  rejectUnsupportedAmountOverride(amount, currencyCode);
 
   if (method !== undefined) {
     updates.push("method = ?");
