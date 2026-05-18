@@ -1,6 +1,7 @@
 const { toDate } = require("../utils/dates");
 const { releaseAppointmentClaims } = require("./claims.service");
 const { ValidationError } = require("./errors");
+const { paymentStatusToApi } = require("./paymentStatus");
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -158,11 +159,16 @@ function mapClientRow(row) {
 function mapPaymentRow(row) {
   return {
     id: Number(row.id),
-    status: row.status,
+    status: paymentStatusToApi(row.status),
     amount: Number(row.amount || 0),
     currencyCode: row.currencyCode,
     method: row.method,
+    reference: row.reference,
     notes: row.notes,
+    submittedAt: toIso(row.submittedAt),
+    approvedAt: toIso(row.approvedAt),
+    rejectedAt: toIso(row.rejectedAt),
+    canceledAt: toIso(row.canceledAt),
     reviewedAt: toIso(row.reviewedAt),
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
@@ -571,6 +577,11 @@ async function getAdminClientDetail({
       p.amount,
       p.currency_code AS currencyCode,
       p.method,
+      p.reference,
+      p.submitted_at AS submittedAt,
+      p.approved_at AS approvedAt,
+      p.rejected_at AS rejectedAt,
+      p.canceled_at AS canceledAt,
       p.reviewed_at AS reviewedAt,
       p.notes,
       p.created_at AS createdAt,

@@ -6,6 +6,7 @@ const {
 } = require("./claims.service");
 const { createHoldAppointment } = require("./appointments.service");
 const { SlotOccupiedError, ValidationError } = require("./errors");
+const { paymentStatusToApi } = require("./paymentStatus");
 
 const DEFAULT_LIMIT = 20;
 const DEFAULT_HISTORY_LIMIT = 40;
@@ -569,14 +570,15 @@ function mapAppointmentDetail(row, { claims = [], payments = [], requiredFeature
       submitted: 0,
       approved: 0,
       rejected: 0,
-      cancelled: 0
+      canceled: 0
     },
     totalsByCurrency: {}
   };
 
   for (const payment of payments) {
-    if (paymentsSummary.byStatus[payment.status] !== undefined) {
-      paymentsSummary.byStatus[payment.status] += 1;
+    const apiStatus = paymentStatusToApi(payment.status);
+    if (paymentsSummary.byStatus[apiStatus] !== undefined) {
+      paymentsSummary.byStatus[apiStatus] += 1;
     }
 
     const currencyCode = String(payment.currencyCode || "").trim() || "UNKNOWN";
@@ -1038,7 +1040,12 @@ async function getAppointmentPayments({ connection, centerId, appointmentId }) {
       amount,
       currency_code AS currencyCode,
       method,
+      reference,
       proof_file_id AS proofFileId,
+      submitted_at AS submittedAt,
+      approved_at AS approvedAt,
+      rejected_at AS rejectedAt,
+      canceled_at AS canceledAt,
       reviewed_by_admin_user_id AS reviewedByAdminUserId,
       reviewed_at AS reviewedAt,
       notes,
@@ -1053,11 +1060,16 @@ async function getAppointmentPayments({ connection, centerId, appointmentId }) {
 
   return rows.map((row) => ({
     id: Number(row.id),
-    status: row.status,
+    status: paymentStatusToApi(row.status),
     amount: Number(row.amount),
     currencyCode: row.currencyCode,
     method: row.method,
+    reference: row.reference,
     proofFileId: row.proofFileId === null ? null : Number(row.proofFileId),
+    submittedAt: toIso(row.submittedAt),
+    approvedAt: toIso(row.approvedAt),
+    rejectedAt: toIso(row.rejectedAt),
+    canceledAt: toIso(row.canceledAt),
     reviewedByAdminUserId:
       row.reviewedByAdminUserId === null ? null : Number(row.reviewedByAdminUserId),
     reviewedAt: toIso(row.reviewedAt),

@@ -35,6 +35,15 @@ const {
   updateServiceRoomCompatibility,
   updateRoom
 } = require("../services/adminResources.service");
+const {
+  AdminPaymentsError,
+  approveAdminPayment,
+  cancelAdminPayment,
+  createAdminAppointmentPayment,
+  rejectAdminPayment,
+  submitAdminPayment,
+  updateAdminPayment
+} = require("../services/adminPayments.service");
 const { searchAdmin } = require("../services/adminSearch.service");
 const { PublicBookingError, SlotOccupiedError, ValidationError } = require("../services/errors");
 const { AdminAuthError, loginAdmin, verifyAdminToken } = require("../services/adminAuth.service");
@@ -124,6 +133,15 @@ function toErrorResponse(error) {
     };
   }
 
+  if (error instanceof AdminPaymentsError) {
+    return {
+      status: error.status || 400,
+      code: error.code || "ADMIN_PAYMENTS_ERROR",
+      message: error.message,
+      details: error.details || {}
+    };
+  }
+
   return {
     status: 500,
     code: "ADMIN_ROUTE_ERROR",
@@ -189,6 +207,12 @@ function createAdminRouter({
   updateResourceRoom = updateRoom,
   updateResourceCompatibility = updateServiceRoomCompatibility,
   search = searchAdmin,
+  createAppointmentPayment = createAdminAppointmentPayment,
+  updatePayment = updateAdminPayment,
+  submitPayment = submitAdminPayment,
+  approvePayment = approveAdminPayment,
+  rejectPayment = rejectAdminPayment,
+  cancelPayment = cancelAdminPayment,
   login = loginAdmin,
   verifyToken = verifyAdminToken
 } = {}) {
@@ -355,6 +379,134 @@ function createAdminRouter({
       });
 
       res.status(201).json(payload);
+    });
+  });
+
+  router.post("/appointments/:id/payments", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await createAppointmentPayment({
+        connection,
+        adminSession,
+        appointmentId: req.params.id,
+        method: req.body?.method,
+        reference: req.body?.reference,
+        notes: req.body?.notes,
+        amount: req.body?.amount,
+        currencyCode: req.body?.currencyCode
+      });
+
+      res.status(201).json(payload);
+    });
+  });
+
+  router.patch("/payments/:id", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await updatePayment({
+        connection,
+        adminSession,
+        paymentId: req.params.id,
+        method: req.body?.method,
+        reference: req.body?.reference,
+        notes: req.body?.notes
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.post("/payments/:id/submit", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await submitPayment({
+        connection,
+        adminSession,
+        paymentId: req.params.id,
+        reference: req.body?.reference,
+        notes: req.body?.notes,
+        proofFileId: req.body?.proofFileId,
+        now: new Date()
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.post("/payments/:id/approve", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await approvePayment({
+        connection,
+        adminSession,
+        paymentId: req.params.id,
+        notes: req.body?.notes,
+        now: new Date()
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.post("/payments/:id/reject", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await rejectPayment({
+        connection,
+        adminSession,
+        paymentId: req.params.id,
+        reason: req.body?.reason,
+        notes: req.body?.notes,
+        now: new Date()
+      });
+
+      res.status(200).json(payload);
+    });
+  });
+
+  router.post("/payments/:id/cancel", async (req, res) => {
+    const adminSession = authenticateAdmin(req, res, verifyToken);
+
+    if (!adminSession) {
+      return;
+    }
+
+    await withConnection(res, async (connection) => {
+      const payload = await cancelPayment({
+        connection,
+        adminSession,
+        paymentId: req.params.id,
+        reason: req.body?.reason,
+        notes: req.body?.notes,
+        now: new Date()
+      });
+
+      res.status(200).json(payload);
     });
   });
 
