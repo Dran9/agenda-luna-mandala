@@ -69,6 +69,16 @@ export function latestPaymentForAppointment(appointment) {
   return paymentsForAppointment(appointment)[0] || null;
 }
 
+export function operablePaymentForAppointment(appointment) {
+  const activePayment = activePaymentForAppointment(appointment);
+  if (activePayment) {
+    return activePayment;
+  }
+
+  const latestPayment = latestPaymentForAppointment(appointment);
+  return latestPayment?.status === "rejected" ? latestPayment : null;
+}
+
 export function paymentStatusLabel(status) {
   return PAYMENT_STATUS_LABELS[status] || status || "-";
 }

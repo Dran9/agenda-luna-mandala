@@ -7,6 +7,7 @@ import { Select } from "../../ui/Select";
 import {
   activePaymentForAppointment,
   latestPaymentForAppointment,
+  operablePaymentForAppointment,
   paymentActionState,
   paymentAmountLabel,
   paymentStatusLabel,
@@ -66,8 +67,9 @@ function PaymentFieldGrid({ reference, notes, onReferenceChange, onNotesChange }
 
 export function PaymentSection({ appointment, date }) {
   const activePayment = activePaymentForAppointment(appointment);
-  const latestPayment = activePayment || latestPaymentForAppointment(appointment);
-  const actionState = paymentActionState(activePayment);
+  const operablePayment = operablePaymentForAppointment(appointment);
+  const latestPayment = operablePayment || latestPaymentForAppointment(appointment);
+  const actionState = paymentActionState(operablePayment);
   const createMutation = useCreateAppointmentPaymentMutation(date);
   const submitMutation = useSubmitPaymentMutation(date);
   const approveMutation = useApprovePaymentMutation(date);
@@ -98,7 +100,7 @@ export function PaymentSection({ appointment, date }) {
     setNotes("");
     setReviewNote("");
     setRejectReason("");
-  }, [appointment?.id, activePayment?.id]);
+  }, [appointment?.id, operablePayment?.id]);
 
   async function handleCreate(event) {
     event.preventDefault();
@@ -114,7 +116,7 @@ export function PaymentSection({ appointment, date }) {
     event.preventDefault();
     await submitMutation.mutateAsync({
       appointmentId: appointment.id,
-      paymentId: activePayment.id,
+      paymentId: operablePayment.id,
       reference,
       notes
     });
@@ -123,7 +125,7 @@ export function PaymentSection({ appointment, date }) {
   async function handleApprove() {
     await approveMutation.mutateAsync({
       appointmentId: appointment.id,
-      paymentId: activePayment.id,
+      paymentId: operablePayment.id,
       notes: reviewNote
     });
   }
@@ -132,7 +134,7 @@ export function PaymentSection({ appointment, date }) {
     event.preventDefault();
     await rejectMutation.mutateAsync({
       appointmentId: appointment.id,
-      paymentId: activePayment.id,
+      paymentId: operablePayment.id,
       reason: rejectReason,
       notes: reviewNote
     });
@@ -141,7 +143,7 @@ export function PaymentSection({ appointment, date }) {
   async function handleCancel() {
     await cancelMutation.mutateAsync({
       appointmentId: appointment.id,
-      paymentId: activePayment.id,
+      paymentId: operablePayment.id,
       reason: reviewNote || "Pago anulado desde Admin"
     });
   }

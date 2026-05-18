@@ -6,6 +6,7 @@ import {
   activePaymentForAppointment,
   detailValue,
   latestPaymentForAppointment,
+  operablePaymentForAppointment,
   paymentActionState,
   paymentAmountLabel,
   paymentStatusLabel,
@@ -66,6 +67,17 @@ test("payment helpers expose active payment and latest row", () => {
 
   assert.equal(latestPaymentForAppointment(appointment), rejected);
   assert.equal(activePaymentForAppointment(appointment), pending);
+  assert.equal(operablePaymentForAppointment(appointment), pending);
+});
+
+test("payment helpers operate latest rejected payment when no active payment exists", () => {
+  const rejected = { id: 1, status: "rejected" };
+  const appointment = { payments: [rejected] };
+
+  assert.equal(latestPaymentForAppointment(appointment), rejected);
+  assert.equal(activePaymentForAppointment(appointment), null);
+  assert.equal(operablePaymentForAppointment(appointment), rejected);
+  assert.equal(paymentActionState(operablePaymentForAppointment(appointment)), "submit");
 });
 
 test("payment helpers localize canceled as Anulado", () => {
