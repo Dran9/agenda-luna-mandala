@@ -56,3 +56,18 @@ export function updateAppointmentRoomMutationOptions({ date, mutationFn, queryCl
     }
   };
 }
+
+export function paymentMutationOptions({ date, mutationFn, queryClient }) {
+  return {
+    mutationFn,
+    async onSuccess(payload, variables) {
+      const appointmentId = payload?.payment?.appointmentId || variables?.appointmentId;
+
+      await queryClient.invalidateQueries({ queryKey: appointmentsKey(date) });
+
+      if (appointmentId) {
+        await queryClient.invalidateQueries({ queryKey: appointmentDetailKey(appointmentId) });
+      }
+    }
+  };
+}

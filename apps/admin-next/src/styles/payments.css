@@ -1,0 +1,42 @@
+.payment-section {
+  gap: var(--space-md);
+}
+
+.payment-header,
+.payment-snapshot {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.payment-header h4 {
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.payment-header span,
+.payment-snapshot span {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.payment-snapshot strong {
+  color: var(--color-ink);
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.payment-form,
+.payment-fields {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.payment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}

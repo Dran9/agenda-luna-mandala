@@ -26,6 +26,30 @@ export function appointmentRoomPath(appointmentId) {
   return `/api/admin/appointments/${appointmentId}/room`;
 }
 
+export function appointmentPaymentsPath(appointmentId) {
+  return `/api/admin/appointments/${appointmentId}/payments`;
+}
+
+export function paymentPath(paymentId) {
+  return `/api/admin/payments/${paymentId}`;
+}
+
+export function paymentSubmitPath(paymentId) {
+  return `/api/admin/payments/${paymentId}/submit`;
+}
+
+export function paymentApprovePath(paymentId) {
+  return `/api/admin/payments/${paymentId}/approve`;
+}
+
+export function paymentRejectPath(paymentId) {
+  return `/api/admin/payments/${paymentId}/reject`;
+}
+
+export function paymentCancelPath(paymentId) {
+  return `/api/admin/payments/${paymentId}/cancel`;
+}
+
 export function resourcesPath() {
   return "/api/admin/resources";
 }

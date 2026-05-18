@@ -107,6 +107,14 @@ test("paymentSummaryLabel summarizes read-only payment rows", () => {
     }),
     /Aprobado/
   );
+  assert.match(
+    paymentSummaryLabel({
+      amount: 120,
+      status: "canceled",
+      appointment: { startsAt: "2026-05-16T15:00:00.000Z" }
+    }),
+    /Anulado/
+  );
   assert.equal(paymentSummaryLabel(null), "-");
 });
 
