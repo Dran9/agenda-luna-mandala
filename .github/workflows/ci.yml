@@ -38,6 +38,10 @@ jobs:
         if: hashFiles('apps/admin-next/package-lock.json') != ''
         run: npm --prefix apps/admin-next test
 
+      - name: Run Admin Next guardrails
+        if: hashFiles('apps/admin-next/package-lock.json') != ''
+        run: npm --prefix apps/admin-next run check:guardrails
+
       - name: Build web apps
         run: npm run build
 

@@ -19,6 +19,8 @@ import "./styles/table-interactions.css";
 import "./styles/modal.css";
 import "./styles/drawer.css";
 import "./styles/settings.css";
+import "./styles/foundation.css";
+import "./styles/surfaces.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

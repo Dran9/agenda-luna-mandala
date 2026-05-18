@@ -5,6 +5,7 @@
   --color-primary-active: #242424;
   --color-primary-disabled: #e5e7eb;
   --color-brand-primary: #583f8b;
+  --color-brand-primary-strong: #3f2e66;
   --color-brand-primary-soft: #efeaf7;
   --color-brand-lime: #cdd650;
   --color-brand-sky: #77a6d8;
@@ -35,5 +36,6 @@
   --space-lg: 24px;
   --space-xl: 32px;
   --shadow-soft: 0 1px 2px rgb(0 0 0 / 5%);
+  --shadow-subtle: 0 1px 3px rgb(17 17 17 / 6%);
   --shadow-modal: 0 24px 80px rgb(0 0 0 / 18%);
 }
