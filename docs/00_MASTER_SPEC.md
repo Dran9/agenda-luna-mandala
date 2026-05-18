@@ -28,7 +28,7 @@ El primer cliente objetivo es Luna Mandala, pero el producto debe poder revender
 
 - No es Super Agenda.
 - No es un SaaS enterprise en v1.
-- No es una app con VPS obligatorio.
+- No depende de PaaS caro ni servicios administrados costosos.
 - No depende de Google Calendar para disponibilidad.
 - No necesita Redis/BullMQ hasta v2.
 
@@ -102,5 +102,4 @@ La app puede ser pequena, pero no puede mentir:
 - si dice que una sala esta libre, debe estar libre;
 - si confirma una cita, debe tener claims;
 - si un boton existe, debe funcionar;
-- si se despliega, `/api/health` debe responder.
-
+- si se despliega en Docker/VPS, `/api/health` debe responder.

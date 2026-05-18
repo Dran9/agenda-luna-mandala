@@ -10,6 +10,8 @@ const DAY_LABELS = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
  * En v1 se mantiene constante hasta definir origen en DB o regla derivada.
  */
 const DEFAULT_ACCEPTS_NEW = true;
+const AVATAR_KIND_INITIALS = "initials";
+const PHOTO_STORAGE_STATUS_NOT_CONFIGURED = "NOT_CONFIGURED";
 
 class AdminTherapistsError extends Error {
   constructor({
@@ -94,6 +96,161 @@ function parseTherapistId(rawValue) {
   return parsed;
 }
 
+function parseServiceId(rawValue) {
+  const parsed = Number.parseInt(rawValue, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new ValidationError("serviceId invalido", {
+      field: "serviceId",
+      value: rawValue
+    });
+  }
+
+  return parsed;
+}
+
+function slugify(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-")
+    || "terapeuta";
+}
+
+function normalizeTherapistName(value, field = "fullName") {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    throw new ValidationError("Nombre de terapeuta obligatorio", { field });
+  }
+  if (normalized.length > 160) {
+    throw new ValidationError("Nombre de terapeuta demasiado largo", { field });
+  }
+
+  return normalized;
+}
+
+function normalizeOptionalText(value, field, maxLength) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized.length > maxLength) {
+    throw new ValidationError(`${field} demasiado largo`, { field });
+  }
+
+  return normalized;
+}
+
+function normalizeBoolean(value, field = "isActive") {
+  if (value === undefined || value === null) {
+    return 1;
+  }
+  if (value === true || value === 1 || value === "1" || value === "true") {
+    return 1;
+  }
+  if (value === false || value === 0 || value === "0" || value === "false") {
+    return 0;
+  }
+
+  throw new ValidationError(`${field} invalido`, { field });
+}
+
+function normalizeWeekday(rawValue) {
+  const parsed = Number(rawValue);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 6) {
+    throw new ValidationError("weekday invalido", {
+      field: "weekday",
+      min: 0,
+      max: 6
+    });
+  }
+
+  return parsed;
+}
+
+function timeToMinutes(rawValue, field) {
+  const raw = String(rawValue || "").trim();
+  const match = raw.match(/^([01]?\d|2[0-3]):([03]0)(?::00)?$/);
+  if (!match) {
+    throw new ValidationError("Hora debe estar en intervalos de 30 minutos", {
+      field,
+      format: "HH:00 o HH:30"
+    });
+  }
+
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function minutesToDbTime(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:00`;
+}
+
+function normalizeAvailabilityDays(rawDays) {
+  if (!Array.isArray(rawDays)) {
+    throw new ValidationError("days debe ser array", { field: "days" });
+  }
+
+  const rows = [];
+
+  for (const day of rawDays) {
+    const weekday = normalizeWeekday(day?.weekday);
+    const isActive = day?.isActive === true || day?.isActive === 1 || day?.isActive === "1" || day?.isActive === "true";
+    const ranges = Array.isArray(day?.ranges) ? day.ranges : [];
+
+    if (!isActive) {
+      continue;
+    }
+
+    if (!ranges.length) {
+      throw new ValidationError("Dia activo debe tener al menos un rango", {
+        field: `days.${weekday}.ranges`
+      });
+    }
+
+    const normalizedRanges = ranges
+      .map((range, index) => {
+        const startMinutes = timeToMinutes(range?.startTime, `days.${weekday}.ranges.${index}.startTime`);
+        const endMinutes = timeToMinutes(range?.endTime, `days.${weekday}.ranges.${index}.endTime`);
+
+        if (startMinutes >= endMinutes) {
+          throw new ValidationError("Hora inicio debe ser menor que hora fin", {
+            field: `days.${weekday}.ranges.${index}`
+          });
+        }
+
+        return {
+          weekday,
+          startMinutes,
+          endMinutes,
+          startTime: minutesToDbTime(startMinutes),
+          endTime: minutesToDbTime(endMinutes)
+        };
+      })
+      .sort((left, right) => left.startMinutes - right.startMinutes || left.endMinutes - right.endMinutes);
+
+    for (let index = 1; index < normalizedRanges.length; index += 1) {
+      if (normalizedRanges[index].startMinutes < normalizedRanges[index - 1].endMinutes) {
+        throw new ValidationError("Rangos solapados en el mismo dia", {
+          field: `days.${weekday}.ranges`
+        });
+      }
+    }
+
+    rows.push(...normalizedRanges);
+  }
+
+  return rows;
+}
+
 function toStatusMeta(isActiveRaw) {
   const status = Number(isActiveRaw) === 1 ? "ACTIVE" : "INACTIVE";
   return {
@@ -116,6 +273,37 @@ function compactTime(value) {
   return raw;
 }
 
+function buildTherapistInitials({ displayName, fullName }) {
+  const displaySource = String(displayName || "").trim().replace(/\s+/g, " ");
+  const fullSource = String(fullName || "").trim().replace(/\s+/g, " ");
+  const source = (displaySource.split(" ").filter(Boolean).length >= 2 ? displaySource : fullSource) || displaySource || "Terapeuta";
+  const parts = String(source)
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2);
+
+  const initials = parts
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  return initials || "T";
+}
+
+function buildTherapistAvatar(row) {
+  const displayName = row.displayName || row.fullName || "Terapeuta";
+
+  return {
+    kind: AVATAR_KIND_INITIALS,
+    initials: buildTherapistInitials({ displayName, fullName: row.fullName }),
+    imageUrl: null,
+    status: PHOTO_STORAGE_STATUS_NOT_CONFIGURED,
+    statusLabel: "Sin foto",
+    storageProvider: null
+  };
+}
+
 function mapBaseTherapistRow(row) {
   const statusMeta = toStatusMeta(row.isActive);
   const displayName = row.displayName || row.fullName;
@@ -131,6 +319,7 @@ function mapBaseTherapistRow(row) {
     isActive: Number(row.isActive) === 1,
     status: statusMeta.status,
     statusLabel: statusMeta.statusLabel,
+    avatar: buildTherapistAvatar({ ...row, displayName }),
     contactSummary: contactSummary || "-",
     createdAt: toIso(row.createdAt),
     compatibleRoomsCount: 0,
@@ -526,7 +715,7 @@ async function getAdminTherapistDetail({
     });
   }
 
-  const [[serviceRows], [scheduleRows], [compatibleRoomRows]] = await Promise.all([
+  const [[serviceRows], [scheduleRows], [compatibleRoomRows], [availableServiceRows]] = await Promise.all([
     connection.query(
       `SELECT
         s.id,
@@ -582,6 +771,35 @@ async function getAdminTherapistDetail({
          AND sr.is_active = 1
          AND r.is_active = 1`,
       [center.id, resolvedTherapistId]
+    ),
+    connection.query(
+      `SELECT
+        s.id,
+        s.slug,
+        s.name,
+        s.duration_minutes AS durationMinutes,
+        s.is_active AS isActive,
+        COALESCE(ts.priority, 100) AS priority,
+        COALESCE(ts.is_active, 0) AS relationIsActive,
+        (
+          SELECT COUNT(DISTINCT r.id)
+          FROM service_rooms sr
+          INNER JOIN rooms r
+            ON r.center_id = sr.center_id
+           AND r.id = sr.room_id
+          WHERE sr.center_id = s.center_id
+            AND sr.service_id = s.id
+            AND sr.is_active = 1
+            AND r.is_active = 1
+        ) AS compatibleRoomsCount
+       FROM services s
+       LEFT JOIN therapist_services ts
+         ON ts.center_id = s.center_id
+        AND ts.service_id = s.id
+        AND ts.therapist_id = ?
+       WHERE s.center_id = ?
+       ORDER BY s.is_active DESC, s.name ASC, s.id ASC`,
+      [resolvedTherapistId, center.id]
     )
   ]);
   const compatibleRoomsCount = Number(compatibleRoomRows[0]?.compatibleRoomsCount || 0);
@@ -597,6 +815,7 @@ async function getAdminTherapistDetail({
     isActive: Number(therapistRows[0].isActive) === 1,
     status: therapistStatusMeta.status,
     statusLabel: therapistStatusMeta.statusLabel,
+    avatar: buildTherapistAvatar(therapistRows[0]),
     compatibleRoomsCount,
     acceptsNew: DEFAULT_ACCEPTS_NEW,
     createdAt: toIso(therapistRows[0].createdAt)
@@ -620,6 +839,25 @@ async function getAdminTherapistDetail({
         priority: Number(row.priority || 0)
       };
     }),
+    availableServices: availableServiceRows.map((row) => {
+      const relationStatusMeta = toStatusMeta(row.relationIsActive);
+      const serviceStatusMeta = toStatusMeta(row.isActive);
+      return {
+        id: Number(row.id),
+        slug: row.slug,
+        name: row.name,
+        durationMinutes: Number(row.durationMinutes || 0),
+        isActive: Number(row.isActive) === 1,
+        serviceStatus: serviceStatusMeta.status,
+        serviceStatusLabel: serviceStatusMeta.statusLabel,
+        relationIsActive: Number(row.relationIsActive) === 1,
+        relationStatus: relationStatusMeta.status,
+        relationStatusLabel: relationStatusMeta.statusLabel,
+        statusLabel: relationStatusMeta.statusLabel,
+        compatibleRoomsCount: Number(row.compatibleRoomsCount || 0),
+        priority: Number(row.priority || 100)
+      };
+    }),
     schedules: scheduleRows.map((row) => {
       const statusMeta = toStatusMeta(row.isActive);
       return {
@@ -639,8 +877,373 @@ async function getAdminTherapistDetail({
   };
 }
 
+async function createAdminTherapist({
+  connection,
+  adminSession,
+  tenantSlug,
+  fullName,
+  displayName,
+  phone,
+  telegramChatId,
+  isActive = true,
+  now = new Date()
+}) {
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+  const normalizedFullName = normalizeTherapistName(fullName);
+  const normalizedDisplayName = displayName === undefined || displayName === null || String(displayName).trim() === ""
+    ? normalizedFullName
+    : normalizeTherapistName(displayName, "displayName").slice(0, 120);
+  const normalizedPhone = normalizeOptionalText(phone, "phone", 40);
+  const normalizedTelegramChatId = normalizeOptionalText(telegramChatId, "telegramChatId", 100);
+  const normalizedIsActive = normalizeBoolean(isActive);
+  const slug = slugify(normalizedDisplayName || normalizedFullName);
+
+  await connection.beginTransaction();
+
+  try {
+    const [existingRows] = await connection.query(
+      "SELECT id FROM therapists WHERE center_id = ? AND slug = ? LIMIT 1",
+      [center.id, slug]
+    );
+
+    if (existingRows.length) {
+      throw new AdminTherapistsError({
+        status: 409,
+        code: "THERAPIST_SLUG_DUPLICATE",
+        message: `Ya existe un terapeuta con slug "${slug}"`
+      });
+    }
+
+    const [result] = await connection.query(
+      `INSERT INTO therapists (
+        center_id,
+        slug,
+        full_name,
+        display_name,
+        phone,
+        telegram_chat_id,
+        is_active
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        center.id,
+        slug,
+        normalizedFullName,
+        normalizedDisplayName,
+        normalizedPhone,
+        normalizedTelegramChatId,
+        normalizedIsActive
+      ]
+    );
+
+    await connection.commit();
+
+    return getAdminTherapistDetail({
+      connection,
+      adminSession,
+      tenantSlug,
+      therapistId: Number(result.insertId),
+      now
+    });
+  } catch (error) {
+    await connection.rollback();
+
+    if (error instanceof ValidationError || error instanceof AdminTherapistsError) {
+      throw error;
+    }
+
+    if (error?.code === "ER_DUP_ENTRY") {
+      throw new AdminTherapistsError({
+        status: 409,
+        code: "THERAPIST_SLUG_DUPLICATE",
+        message: `Ya existe un terapeuta con slug "${slug}"`
+      });
+    }
+
+    throw new AdminTherapistsError({
+      status: 500,
+      code: "THERAPIST_CREATE_ERROR",
+      message: "No se pudo crear el terapeuta"
+    });
+  }
+}
+
+async function updateAdminTherapistProfile({
+  connection,
+  adminSession,
+  tenantSlug,
+  therapistId,
+  fullName,
+  displayName,
+  phone,
+  telegramChatId,
+  isActive,
+  now = new Date()
+}) {
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+  const resolvedTherapistId = parseTherapistId(therapistId);
+  const normalizedFullName = normalizeTherapistName(fullName);
+  const normalizedDisplayName = displayName === undefined || displayName === null || String(displayName).trim() === ""
+    ? normalizedFullName
+    : normalizeTherapistName(displayName, "displayName").slice(0, 120);
+  const normalizedPhone = normalizeOptionalText(phone, "phone", 40);
+  const normalizedTelegramChatId = normalizeOptionalText(telegramChatId, "telegramChatId", 100);
+  const normalizedIsActive = normalizeBoolean(isActive);
+
+  await connection.beginTransaction();
+
+  try {
+    const [therapistRows] = await connection.query(
+      `SELECT id
+       FROM therapists
+       WHERE center_id = ?
+         AND id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [center.id, resolvedTherapistId]
+    );
+
+    if (therapistRows.length === 0) {
+      throw new AdminTherapistsError({
+        status: 404,
+        code: "THERAPIST_NOT_FOUND",
+        message: "Terapeuta no encontrado"
+      });
+    }
+
+    await connection.query(
+      `UPDATE therapists
+       SET full_name = ?,
+           display_name = ?,
+           phone = ?,
+           telegram_chat_id = ?,
+           is_active = ?
+       WHERE center_id = ?
+         AND id = ?`,
+      [
+        normalizedFullName,
+        normalizedDisplayName,
+        normalizedPhone,
+        normalizedTelegramChatId,
+        normalizedIsActive,
+        center.id,
+        resolvedTherapistId
+      ]
+    );
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+
+    if (error instanceof ValidationError || error instanceof AdminTherapistsError) {
+      throw error;
+    }
+
+    throw new AdminTherapistsError({
+      status: 500,
+      code: "THERAPIST_PROFILE_UPDATE_ERROR",
+      message: "No se pudo actualizar perfil del terapeuta"
+    });
+  }
+
+  return getAdminTherapistDetail({
+    connection,
+    adminSession,
+    tenantSlug,
+    therapistId: resolvedTherapistId,
+    now
+  });
+}
+
+async function updateAdminTherapistService({
+  connection,
+  adminSession,
+  tenantSlug,
+  therapistId,
+  serviceId,
+  isActive,
+  now = new Date()
+}) {
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+  const resolvedTherapistId = parseTherapistId(therapistId);
+  const resolvedServiceId = parseServiceId(serviceId);
+  const normalizedIsActive = normalizeBoolean(isActive);
+
+  await connection.beginTransaction();
+
+  try {
+    const [therapistRows] = await connection.query(
+      `SELECT id
+       FROM therapists
+       WHERE center_id = ?
+         AND id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [center.id, resolvedTherapistId]
+    );
+
+    if (therapistRows.length === 0) {
+      throw new AdminTherapistsError({
+        status: 404,
+        code: "THERAPIST_NOT_FOUND",
+        message: "Terapeuta no encontrado"
+      });
+    }
+
+    const [serviceRows] = await connection.query(
+      `SELECT id
+       FROM services
+       WHERE center_id = ?
+         AND id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [center.id, resolvedServiceId]
+    );
+
+    if (serviceRows.length === 0) {
+      throw new AdminTherapistsError({
+        status: 404,
+        code: "SERVICE_NOT_FOUND",
+        message: "Servicio no encontrado"
+      });
+    }
+
+    await connection.query(
+      `INSERT INTO therapist_services (
+        center_id,
+        therapist_id,
+        service_id,
+        priority,
+        is_active
+      )
+      VALUES (?, ?, ?, 100, ?)
+      ON DUPLICATE KEY UPDATE
+        is_active = VALUES(is_active)`,
+      [center.id, resolvedTherapistId, resolvedServiceId, normalizedIsActive]
+    );
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+
+    if (error instanceof ValidationError || error instanceof AdminTherapistsError) {
+      throw error;
+    }
+
+    throw new AdminTherapistsError({
+      status: 500,
+      code: "THERAPIST_SERVICE_UPDATE_ERROR",
+      message: "No se pudo actualizar servicios del terapeuta"
+    });
+  }
+
+  return getAdminTherapistDetail({
+    connection,
+    adminSession,
+    tenantSlug,
+    therapistId: resolvedTherapistId,
+    now
+  });
+}
+
+async function updateAdminTherapistAvailability({
+  connection,
+  adminSession,
+  tenantSlug,
+  therapistId,
+  days,
+  now = new Date()
+}) {
+  const center = await resolveCenter({ connection, tenantSlug, adminSession });
+  const resolvedTherapistId = parseTherapistId(therapistId);
+  const scheduleRows = normalizeAvailabilityDays(days);
+
+  await connection.beginTransaction();
+
+  try {
+    const [therapistRows] = await connection.query(
+      `SELECT id
+       FROM therapists
+       WHERE center_id = ?
+         AND id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [center.id, resolvedTherapistId]
+    );
+
+    if (therapistRows.length === 0) {
+      throw new AdminTherapistsError({
+        status: 404,
+        code: "THERAPIST_NOT_FOUND",
+        message: "Terapeuta no encontrado"
+      });
+    }
+
+    await connection.query(
+      `DELETE FROM resource_schedules
+       WHERE center_id = ?
+         AND resource_type = 'therapist'
+         AND resource_id = ?`,
+      [center.id, resolvedTherapistId]
+    );
+
+    if (scheduleRows.length) {
+      const values = scheduleRows.map(() => "(?, 'therapist', ?, ?, ?, ?, 30, 1)").join(", ");
+      const params = [];
+      for (const row of scheduleRows) {
+        params.push(
+          center.id,
+          resolvedTherapistId,
+          row.weekday,
+          row.startTime,
+          row.endTime
+        );
+      }
+
+      await connection.query(
+        `INSERT INTO resource_schedules (
+          center_id,
+          resource_type,
+          resource_id,
+          weekday,
+          start_time,
+          end_time,
+          slot_minutes,
+          is_active
+        ) VALUES ${values}`,
+        params
+      );
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+
+    if (error instanceof ValidationError || error instanceof AdminTherapistsError) {
+      throw error;
+    }
+
+    throw new AdminTherapistsError({
+      status: 500,
+      code: "THERAPIST_AVAILABILITY_UPDATE_ERROR",
+      message: "No se pudo actualizar disponibilidad"
+    });
+  }
+
+  return getAdminTherapistDetail({
+    connection,
+    adminSession,
+    tenantSlug,
+    therapistId: resolvedTherapistId,
+    now
+  });
+}
+
 module.exports = {
   AdminTherapistsError,
+  createAdminTherapist,
+  updateAdminTherapistAvailability,
+  updateAdminTherapistProfile,
+  updateAdminTherapistService,
   listAdminTherapists,
   getAdminTherapistDetail
 };

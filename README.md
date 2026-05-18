@@ -10,7 +10,7 @@ Este proyecto nace despues del prototipo `agendaluna`. El prototipo sirvio para 
 
 ## Decision Central
 
-Agenda Luna Mandala es una app Hostinger Web/Node.js-first para centros terapeuticos pequenos con:
+Agenda Luna Mandala es una app VPS Docker-first para centros terapeuticos pequenos con:
 
 - varios terapeutas;
 - varios servicios;
@@ -22,7 +22,7 @@ Agenda Luna Mandala es una app Hostinger Web/Node.js-first para centros terapeut
 - Telegram para terapeutas;
 - admin operativo para secretaria/centro.
 
-No es Super Agenda reducida. No es una app enterprise. No usa VPS en v1.
+No es Super Agenda reducida. No es una app enterprise. No depende de PaaS caro. Usa VPS Hostinger KVM con Docker en v1.
 
 ## Nombres De Superficies
 
@@ -42,7 +42,8 @@ Se mantiene la logica aprendida:
 - MySQL/MariaDB como fuente de verdad.
 - Claims por minuto para evitar doble reserva de terapeuta/sala.
 - Google Calendar solo como espejo opcional futuro.
-- Hostinger Web/Node.js como restriccion v1.
+- VPS Docker como runtime v1.
+- Desarrollo local reproducible con Docker Desktop.
 - React/Vite + Express + MySQL.
 - CSS plano con variables.
 - Phosphor Icons.
@@ -73,7 +74,8 @@ Leer en este orden:
 11. `docs/07_ROADMAP_MICROPHASES.md`
 12. `docs/08_ACCEPTANCE_GATES.md`
 13. `docs/10_PUBLIC_BOOKING_SPEC.md`
-14. `docs/09_CODEX_START_PROMPT.md`
+14. `docs/15_VPS_DOCKER_MIGRATION_PLAN.md`
+15. `docs/09_CODEX_START_PROMPT.md`
 
 ## Nuevo Repo Y Nueva DB
 
@@ -124,13 +126,12 @@ Cada microfase debe:
 - no mezclar runtime con features;
 - pasar tests;
 - pasar build;
-- poder desplegarse en Hostinger;
+- poder desplegarse por Docker Compose;
 - tener rollback facil;
 - dejar una app operativa, aunque pequena.
 
-La primera meta no es feature richness. La primera meta es una tuberia estable:
+La primera meta no es feature richness. La primera meta es una tuberia estable y reproducible:
 
 ```txt
-Express arranca -> sirve /api/health -> sirve / -> sirve /admin -> deploy Hostinger OK
+Docker levanta DB + API -> /api/health responde -> booking/admin cargan -> deploy Compose OK
 ```
-

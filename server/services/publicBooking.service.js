@@ -413,7 +413,8 @@ async function getCatalog({ connection, tenantSlug }) {
       s.id,
       s.name,
       s.duration_minutes AS durationMinutes,
-      COUNT(DISTINCT t.id) AS therapistCount
+      COUNT(DISTINCT t.id) AS therapistCount,
+      COUNT(DISTINCT r.id) AS compatibleRoomsCount
      FROM services s
      LEFT JOIN therapist_services ts
        ON ts.center_id = s.center_id
@@ -423,6 +424,14 @@ async function getCatalog({ connection, tenantSlug }) {
        ON t.id = ts.therapist_id
       AND t.center_id = s.center_id
       AND t.is_active = 1
+     LEFT JOIN service_rooms sr
+       ON sr.center_id = s.center_id
+      AND sr.service_id = s.id
+      AND sr.is_active = 1
+     LEFT JOIN rooms r
+       ON r.id = sr.room_id
+      AND r.center_id = s.center_id
+      AND r.is_active = 1
      WHERE s.center_id = ?
        AND s.is_active = 1
      GROUP BY s.id, s.name, s.duration_minutes
@@ -458,7 +467,8 @@ async function getCatalog({ connection, tenantSlug }) {
       name: row.name,
       durationMinutes: Number(row.durationMinutes),
       therapistCount: Number(row.therapistCount || 0),
-      reservable: Number(row.therapistCount || 0) > 0
+      compatibleRoomsCount: Number(row.compatibleRoomsCount || 0),
+      reservable: Number(row.therapistCount || 0) > 0 && Number(row.compatibleRoomsCount || 0) > 0
     })),
     therapists: therapistRows.map((row) => ({
       id: String(row.id),

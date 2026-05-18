@@ -9,10 +9,12 @@ import {
   CircleNotch,
   Clock,
   ClockCounterClockwise,
+  CopySimple,
   Door,
   Lightning,
   MagnifyingGlass,
   Moon,
+  Plus,
   SignOut,
   SlidersHorizontal,
   Sparkle,
@@ -51,10 +53,43 @@ const SEARCH_FILTERS = [
   { id: "rooms", label: "Salas" }
 ];
 const SETTINGS_MODULES = [
-  { id: "services", label: "Servicios" },
-  { id: "rooms", label: "Salas" },
-  { id: "compatibilities", label: "Compatibilidades" },
-  { id: "schedules", label: "Horarios" }
+  {
+    id: "services",
+    label: "Servicios",
+    group: "Operación",
+    Icon: Sparkle,
+    description: "Catálogo reservable, precios, duración y requisitos de sala."
+  },
+  {
+    id: "rooms",
+    label: "Salas",
+    group: "Operación",
+    Icon: Door,
+    description: "Espacios físicos, capacidad y recursos disponibles."
+  },
+  {
+    id: "compatibilities",
+    label: "Compatibilidades",
+    group: "Operación",
+    Icon: SlidersHorizontal,
+    description: "Relación servicio-sala que habilita o bloquea booking público."
+  },
+  {
+    id: "booking_rules",
+    label: "Reglas booking",
+    group: "Booking",
+    Icon: CalendarDots,
+    description: "Contrato operativo aplicado al flujo público de reserva.",
+    kind: "contract"
+  },
+  {
+    id: "center_config",
+    label: "Centro",
+    group: "Centro",
+    Icon: UsersThree,
+    description: "Identidad operativa del centro usada por Admin y Booking.",
+    kind: "contract"
+  }
 ];
 const SETTINGS_STATUS_FILTERS = [
   { id: "all", label: "Todos" },
@@ -66,12 +101,21 @@ const ROOM_FEATURE_OPTIONS = [
   { key: "mesa", label: "Mesa" }
 ];
 const ROOM_FEATURE_LABELS = new Map(ROOM_FEATURE_OPTIONS.map((option) => [option.key, option.label]));
+const THERAPIST_WEEKDAYS = [
+  { weekday: 1, label: "Lunes", shortLabel: "Lun" },
+  { weekday: 2, label: "Martes", shortLabel: "Mar" },
+  { weekday: 3, label: "Miércoles", shortLabel: "Mié" },
+  { weekday: 4, label: "Jueves", shortLabel: "Jue" },
+  { weekday: 5, label: "Viernes", shortLabel: "Vie" },
+  { weekday: 6, label: "Sábado", shortLabel: "Sáb" },
+  { weekday: 0, label: "Domingo", shortLabel: "Dom" }
+];
 const DEFAULT_TIMEZONE = "America/La_Paz";
 const CONTROL_THERAPISTS_DEFER_MS = 2000;
 const CONTROL_RESOURCES_DEFER_MS = 1500;
 const COUNTRY_TIMEZONE_OPTIONS = [
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Bolivia",
     flag: "🇧🇴",
     timezone: "America/La_Paz",
@@ -81,7 +125,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "71234567"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Argentina",
     flag: "🇦🇷",
     timezone: "America/Argentina/Buenos_Aires",
@@ -91,7 +135,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "1123456789"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Chile",
     flag: "🇨🇱",
     timezone: "America/Santiago",
@@ -101,7 +145,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "912345678"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Peru",
     flag: "🇵🇪",
     timezone: "America/Lima",
@@ -111,7 +155,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "912345678"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Colombia",
     flag: "🇨🇴",
     timezone: "America/Bogota",
@@ -121,7 +165,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "3012345678"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Uruguay",
     flag: "🇺🇾",
     timezone: "America/Montevideo",
@@ -131,7 +175,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "91234567"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Brasil",
     flag: "🇧🇷",
     timezone: "America/Sao_Paulo",
@@ -236,7 +280,7 @@ const STATUS_META = {
   confirmed: { label: "Confirmada", className: "status-confirmed" },
   cancelled: { label: "Cancelada", className: "status-cancelled" },
   completed: { label: "Completada", className: "status-completed" },
-  no_show: { label: "No show", className: "status-no-show" },
+  no_show: { label: "No asistió", className: "status-no-show" },
   active: { label: "Activo", className: "status-active" },
   inactive: { label: "Inactivo", className: "status-inactive" }
 };
@@ -250,17 +294,17 @@ const ACTION_LABELS = {
   confirmed: "Marcar confirmada",
   completed: "Marcar completada",
   cancelled: "Cancelar cita",
-  no_show: "Marcar no show"
+  no_show: "Marcar no asistió"
 };
 const HISTORY_STATUS_FILTERS = [
   { id: "all", label: "Todos" },
   { id: "completed", label: "Completadas" },
   { id: "cancelled", label: "Canceladas" },
-  { id: "no_show", label: "No show" }
+  { id: "no_show", label: "No asistió" }
 ];
 const HISTORY_ORDER_OPTIONS = [
-  { id: "date_desc", label: "Mas reciente" },
-  { id: "date_asc", label: "Mas antigua" }
+  { id: "date_desc", label: "Más reciente" },
+  { id: "date_asc", label: "Más antigua" }
 ];
 const CONTROL_STATUS_FILTERS = [
   { id: "all", label: "Todos" },
@@ -268,7 +312,7 @@ const CONTROL_STATUS_FILTERS = [
   { id: "confirmed", label: "Confirmada" },
   { id: "cancelled", label: "Cancelada" },
   { id: "completed", label: "Completada" },
-  { id: "no_show", label: "No show" }
+  { id: "no_show", label: "No asistió" }
 ];
 const CONTROL_GROUP_OPTIONS = [
   { id: "none", label: "Sin agrupar" },
@@ -343,6 +387,37 @@ function clearAuthStorage() {
 
 function toBoolLabel(value) {
   return value ? "Si" : "No";
+}
+
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return false;
+    }
+
+    return window.matchMedia(query).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+
+    const media = window.matchMedia(query);
+    const handleChange = () => setMatches(media.matches);
+
+    handleChange();
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, [query]);
+
+  return matches;
 }
 
 function normalizeResourceStatus(value, fallbackIsActive = false) {
@@ -451,6 +526,15 @@ function normalizeSettingsPayload(resources) {
       status,
       statusLabel: entry?.statusLabel || getStatusLabelFromValue(status),
       compatibleRoomsCount: Number(entry?.compatibleRoomsCount || 0),
+      compatibleRooms: Array.isArray(entry?.compatibleRooms) ? entry.compatibleRooms : [],
+      compatibleRoomsLabel: entry?.compatibleRoomsLabel || (
+        Number(entry?.compatibleRoomsCount || 0) > 0 ? `${Number(entry.compatibleRoomsCount)} salas` : "Sin salas activas"
+      ),
+      activeTherapistsCount: Number(entry?.activeTherapistsCount || 0),
+      activeTherapists: Array.isArray(entry?.activeTherapists) ? entry.activeTherapists : [],
+      activeTherapistsLabel: entry?.activeTherapistsLabel || (
+        Number(entry?.activeTherapistsCount || 0) > 0 ? `${Number(entry.activeTherapistsCount)} terapeutas` : "Sin terapeutas activos"
+      ),
       requiredFeatureKeys: uniqueFeatureKeys(entry?.requiredFeatureKeys || []),
       requiredFeatures: Array.isArray(entry?.requiredFeatures) ? entry.requiredFeatures : [],
       requiredFeaturesLabel: entry?.requiredFeaturesLabel || "Solo sillas"
@@ -626,6 +710,220 @@ function formatDateOnly(value, timezone) {
       dateStyle: "medium"
     }).format(parsed);
   }
+}
+
+function getPersonInitials(name, fallback = "?") {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!parts.length) {
+    return fallback;
+  }
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 1).toUpperCase();
+  }
+
+  return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+}
+
+function getClientTone(value) {
+  const text = String(value || "").toLowerCase();
+  if (["completed", "active", "confirmed"].includes(text)) return "green";
+  if (["pending", "new"].includes(text)) return "blue";
+  if (["cancelled", "no_show", "risk"].includes(text)) return "amber";
+  return "violet";
+}
+
+function getRelativeAppointmentLabel(value, timezone) {
+  if (!value) {
+    return "Sin próxima";
+  }
+
+  const dateKey = getDateKeyForTimezone(value, timezone);
+  const todayKey = getDateKeyForTimezone(new Date(), timezone);
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  const today = new Date(`${todayKey}T12:00:00Z`);
+  const diffDays = Math.round((date.getTime() - today.getTime()) / 86_400_000);
+
+  if (!Number.isFinite(diffDays)) {
+    return formatDateOnly(value, timezone);
+  }
+  if (diffDays === 0) return "Hoy";
+  if (diffDays === 1) return "Mañana";
+  if (diffDays === -1) return "Ayer";
+  if (diffDays > 1) return `En ${diffDays} días`;
+  return `Hace ${Math.abs(diffDays)} días`;
+}
+
+function GridClientIdentity({ name, meta, tone = "violet", asButton = false, onClick, title }) {
+  const content = (
+    <>
+      <span className={`ops-avatar is-${tone}`} aria-hidden="true">
+        {getPersonInitials(name)}
+      </span>
+      <span className="ops-client-copy">
+        <strong>{name || "Sin nombre"}</strong>
+        {meta ? <span>{meta}</span> : null}
+      </span>
+    </>
+  );
+
+  if (asButton) {
+    return (
+      <button type="button" className="ops-client-button" onClick={onClick} title={title}>
+        {content}
+      </button>
+    );
+  }
+
+  return <span className="ops-client-identity">{content}</span>;
+}
+
+function MetricPill({ value, tone = "neutral", label }) {
+  const number = Number(value || 0);
+  if (!number) {
+    return null;
+  }
+
+  return (
+    <span className={`ops-metric-pill is-${tone}`} title={label}>
+      {number}
+    </span>
+  );
+}
+
+function ClientMetrics({ stats }) {
+  const safeStats = stats || {};
+  return (
+    <span className="ops-metrics">
+      <MetricPill value={safeStats.completedCount} tone="green" label="Completadas" />
+      <MetricPill value={safeStats.confirmedCount} tone="blue" label="Confirmadas" />
+      <MetricPill value={safeStats.pendingCount} tone="violet" label="Pendientes" />
+      <MetricPill value={safeStats.cancelledCount} tone="amber" label="Canceladas" />
+      <MetricPill value={safeStats.noShowCount} tone="red" label="No asistió" />
+      {!Number(safeStats.totalAppointments || 0) ? <span className="ops-empty-mark">-</span> : null}
+    </span>
+  );
+}
+
+function getClientRowTone(client) {
+  return getClientCrmStatus(client).tone;
+}
+
+function getDayDeltaFromToday(value, timezone) {
+  if (!value) return null;
+  const dateKey = getDateKeyForTimezone(value, timezone);
+  const todayKey = getDateKeyForTimezone(new Date(), timezone);
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  const today = new Date(`${todayKey}T12:00:00Z`);
+  const diff = Math.round((date.getTime() - today.getTime()) / 86_400_000);
+  return Number.isFinite(diff) ? diff : null;
+}
+
+function getClientCrmStatus(client, timezone) {
+  const stats = client?.stats || {};
+  const total = Number(stats.totalAppointments || 0);
+  const cancelledOrNoShow = Number(stats.cancelledCount || 0) + Number(stats.noShowCount || 0);
+
+  if (!total) {
+    return { label: "Nuevo", tone: "blue", reason: "Sin historial" };
+  }
+
+  if (client?.nextAppointment) {
+    return { label: "Activo", tone: "green", reason: "Con próxima cita" };
+  }
+
+  const daysSinceLast = getDayDeltaFromToday(client?.lastAppointment?.startsAt, timezone);
+
+  if (cancelledOrNoShow > 0 || (daysSinceLast !== null && daysSinceLast < -45)) {
+    const isChurn = daysSinceLast !== null && daysSinceLast < -90;
+    return {
+      label: isChurn ? "Churn" : "Riesgo",
+      tone: isChurn ? "red" : "amber",
+      reason: cancelledOrNoShow > 0 ? "Canceló o no asistió" : "Sin actividad reciente"
+    };
+  }
+
+  if (!client?.onboardingComplete || (daysSinceLast !== null && daysSinceLast < -21)) {
+    return {
+      label: "Nurture",
+      tone: "violet",
+      reason: !client?.onboardingComplete ? "Onboarding pendiente" : "Reactivar relación"
+    };
+  }
+
+  return { label: "Activo", tone: "green", reason: "Historial sano" };
+}
+
+function ClientCrmCell({ status }) {
+  return (
+    <span className="client-crm-cell">
+      <span className={`inline-tag ops-crm-tag is-${status.tone}`}>{status.label}</span>
+      <span className="client-crm-reason">{status.reason}</span>
+    </span>
+  );
+}
+
+function ClientCrmSnapshot({ clients, timezone }) {
+  if (!clients.length) return null;
+
+  const order = ["Nuevo", "Activo", "Riesgo", "Churn", "Nurture"];
+  const tones = {
+    Nuevo: "blue",
+    Activo: "green",
+    Riesgo: "amber",
+    Churn: "red",
+    Nurture: "violet"
+  };
+  const counts = new Map(order.map((label) => [label, 0]));
+
+  clients.forEach((client) => {
+    const status = getClientCrmStatus(client, timezone);
+    counts.set(status.label, (counts.get(status.label) || 0) + 1);
+  });
+
+  const withRisk = Number(counts.get("Riesgo") || 0) + Number(counts.get("Churn") || 0);
+  const nurture = Number(counts.get("Nurture") || 0);
+
+  return (
+    <div className="clients-crm-strip" aria-label="Resumen CRM de clientes visibles">
+      <span className="clients-crm-title">Lectura CRM</span>
+      {order.map((label) => (
+        <span key={`client-crm-summary-${label}`} className={`clients-crm-chip is-${tones[label]}`}>
+          {label}
+          <strong>{counts.get(label) || 0}</strong>
+        </span>
+      ))}
+      <span className="clients-crm-note">
+        {withRisk || nurture
+          ? `${withRisk} en riesgo/churn · ${nurture} para nurture`
+          : "Sin alertas de retención visibles"}
+      </span>
+    </div>
+  );
+}
+
+function AppointmentSummary({ startsAt, endsAt, serviceName, therapistName, timezone, compact = false }) {
+  if (!startsAt) {
+    return <span className="ops-empty-mark">Sin próxima</span>;
+  }
+
+  return (
+    <span className="ops-appointment-summary">
+      <strong>
+        {compact ? formatDateOnly(startsAt, timezone) : getRelativeAppointmentLabel(startsAt, timezone)}
+        <span className="ops-soft-pill">{formatClock(startsAt, timezone)}</span>
+      </strong>
+      <span>
+        {serviceName || "-"}
+        {therapistName ? ` · ${therapistName}` : ""}
+        {endsAt ? ` · ${formatClock(endsAt, timezone)}` : ""}
+      </span>
+    </span>
+  );
 }
 
 function getDateKeyForTimezone(value = new Date(), timezone = DEFAULT_TIMEZONE) {
@@ -1096,7 +1394,7 @@ function ControlToolbar({
     filters.roomId !== "all"
   ].filter(Boolean).length;
   const chips = [
-    filters.q ? `Busqueda: ${filters.q}` : null,
+    filters.q ? `Búsqueda: ${filters.q}` : null,
     filters.fromDate ? `Desde: ${filters.fromDate}` : null,
     filters.toDate ? `Hasta: ${filters.toDate}` : null,
     filters.status !== "all" ? `Estado: ${statusLabel}` : null,
@@ -1260,6 +1558,8 @@ function ControlToolbar({
   );
 }
 
+const MemoControlToolbar = React.memo(ControlToolbar);
+
 function AppointmentTable({
   appointments,
   timezone,
@@ -1272,6 +1572,8 @@ function AppointmentTable({
   armedDeleteId,
   deleteLoading
 }) {
+  const isMobileLayout = useMediaQuery("(max-width: 760px)");
+
   if (!appointments.length) {
     return <p className="empty-state">No hay citas para este bloque.</p>;
   }
@@ -1280,97 +1582,8 @@ function AppointmentTable({
   const groups = groupAppointmentsForControl(appointments, groupBy, timezone);
   const showGroups = groupBy && groupBy !== "none";
 
-  return (
-    <>
-      <div className="table-wrap" role="region" aria-label="Tabla de citas">
-        <table className="appointments-table">
-          <thead>
-            <tr>
-              <th className="cell-check">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={(event) =>
-                    onToggleSelectAll(
-                      appointments.map((item) => item.id),
-                      event.target.checked
-                    )
-                  }
-                  aria-label="Seleccionar citas visibles"
-                />
-              </th>
-              <th>Cliente</th>
-              <th>Fecha/Hora</th>
-              <th>WhatsApp</th>
-              <th>Servicio</th>
-              <th>Terapeuta</th>
-              <th>Sala</th>
-              <th>Estado</th>
-              <th>Public code</th>
-              <th>Creada</th>
-              <th>Accion</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((group) => (
-              <React.Fragment key={`group-${group.key}`}>
-                {showGroups ? (
-                  <tr className="appointment-group-row">
-                    <td colSpan={11}>
-                      <span>{group.label}</span>
-                      <strong>{group.appointments.length}</strong>
-                    </td>
-                  </tr>
-                ) : null}
-                {group.appointments.map((item) => (
-                  <tr key={item.id}>
-                    <td className="cell-check">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(item.id)}
-                        onChange={(event) => onToggleSelect(item.id, event.target.checked)}
-                        aria-label={`Seleccionar cita ${item.publicCode || item.id}`}
-                      />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="table-open"
-                        onClick={() => onSelect(item.id)}
-                        title="Abrir detalle"
-                      >
-                        {item.client.fullName || "Sin nombre"}
-                      </button>
-                    </td>
-                    <td>{formatDateTime(item.startsAt, timezone)}</td>
-                    <td>{item.client.whatsapp || "-"}</td>
-                    <td>{item.service.name || "-"}</td>
-                    <td>{item.therapist.name || "-"}</td>
-                    <td>{item.room.name || "-"}</td>
-                    <td>
-                      <StatusChip status={item.status} />
-                    </td>
-                    <td>{item.publicCode || "-"}</td>
-                    <td>{formatDateTime(item.createdAt, timezone)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className={`danger-button${armedDeleteId === item.id ? " is-armed" : ""}`}
-                        onClick={() => onDeleteOne(item.id)}
-                        disabled={deleteLoading}
-                      >
-                        <Trash size={14} weight="regular" aria-hidden="true" />
-                        <span>{armedDeleteId === item.id ? "¿Borrar?" : "Borrar"}</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
+  if (isMobileLayout) {
+    return (
       <ul className="appointments-cards" aria-label="Lista de citas mobile">
         {groups.map((group) => (
           <React.Fragment key={`mobile-group-${group.key}`}>
@@ -1414,54 +1627,109 @@ function AppointmentTable({
           </React.Fragment>
         ))}
       </ul>
-    </>
+    );
+  }
+
+  return (
+    <div className="table-wrap ops-grid-wrap" role="region" aria-label="Tabla de citas">
+      <table className="appointments-table ops-grid appointments-grid">
+        <thead>
+          <tr>
+            <th className="cell-check">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={(event) =>
+                  onToggleSelectAll(
+                    appointments.map((item) => item.id),
+                    event.target.checked
+                  )
+                }
+                aria-label="Seleccionar citas visibles"
+              />
+            </th>
+            <th>Cliente</th>
+            <th>Fecha/Hora</th>
+            <th>WhatsApp</th>
+            <th>Servicio</th>
+            <th>Terapeuta</th>
+            <th>Sala</th>
+            <th>Estado</th>
+            <th>Creada</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((group) => (
+            <React.Fragment key={`group-${group.key}`}>
+              {showGroups ? (
+                <tr className="appointment-group-row">
+                  <td colSpan={10}>
+                    <span>{group.label}</span>
+                    <strong>{group.appointments.length}</strong>
+                  </td>
+                </tr>
+              ) : null}
+              {group.appointments.map((item) => (
+                <tr key={item.id} className={`ops-grid-row is-${getClientTone(item.status)}`}>
+                  <td className="cell-check">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(item.id)}
+                      onChange={(event) => onToggleSelect(item.id, event.target.checked)}
+                      aria-label={`Seleccionar cita ${item.publicCode || item.id}`}
+                    />
+                  </td>
+                  <td>
+                    <GridClientIdentity
+                      name={item.client.fullName}
+                      tone={getClientTone(item.status)}
+                      asButton
+                      onClick={() => onSelect(item.id)}
+                      title="Abrir detalle"
+                    />
+                  </td>
+                  <td>{formatDateTime(item.startsAt, timezone)}</td>
+                  <td>{item.client.whatsapp || "-"}</td>
+                  <td>{item.service.name || "-"}</td>
+                  <td>{item.therapist.name || "-"}</td>
+                  <td>{item.room.name || "-"}</td>
+                  <td>
+                    <StatusChip status={item.status} />
+                  </td>
+                  <td>{formatDateTime(item.createdAt, timezone)}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className={`danger-button${armedDeleteId === item.id ? " is-armed" : ""}`}
+                      onClick={() => onDeleteOne(item.id)}
+                      disabled={deleteLoading}
+                    >
+                      <Trash size={14} weight="regular" aria-hidden="true" />
+                      <span>{armedDeleteId === item.id ? "¿Borrar?" : "Borrar"}</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
+const MemoAppointmentTable = React.memo(AppointmentTable);
+
 function HistoryTable({ appointments, timezone }) {
+  const isMobileLayout = useMediaQuery("(max-width: 760px)");
+
   if (!appointments.length) {
     return <p className="empty-state">No hay atenciones para este filtro.</p>;
   }
 
-  return (
-    <>
-      <div className="table-wrap" role="region" aria-label="Tabla de historial">
-        <table className="appointments-table history-table">
-          <thead>
-            <tr>
-              <th className="col-client">Cliente</th>
-              <th className="col-phone">WhatsApp</th>
-              <th className="col-date">Fecha cita</th>
-              <th className="col-time">Horario</th>
-              <th className="col-therapist">Terapeuta</th>
-              <th className="col-service">Terapia</th>
-              <th className="col-room">Sala</th>
-              <th className="col-status">Estado final</th>
-              <th className="col-origin">Origen</th>
-              <th className="col-created">Creada</th>
-            </tr>
-          </thead>
-          <tbody>
-            {appointments.map((item) => (
-              <tr key={`history-${item.id}`}>
-                <td className="col-client">{item.client.fullName || "Sin nombre"}</td>
-                <td className="col-phone">{item.client.whatsapp || "-"}</td>
-                <td className="col-date">{formatDateOnly(item.startsAt, timezone)}</td>
-                <td className="col-time">{formatClock(item.startsAt, timezone)} - {formatClock(item.endsAt, timezone)}</td>
-                <td className="col-therapist">{item.therapist.name || "-"}</td>
-                <td className="col-service">{item.service.name || "-"}</td>
-                <td className="col-room">{item.room.name || "-"}</td>
-                <td className="col-status">
-                  <StatusChip status={item.status} />
-                </td>
-                <td className="col-origin">{item.source || "-"}</td>
-                <td className="col-created">{formatDateTime(item.createdAt, timezone)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
+  if (isMobileLayout) {
+    return (
       <ul className="appointments-cards" aria-label="Historial mobile">
         {appointments.map((item) => (
           <li key={`history-mobile-${item.id}`} className="appointment-card">
@@ -1482,9 +1750,51 @@ function HistoryTable({ appointments, timezone }) {
           </li>
         ))}
       </ul>
-    </>
+    );
+  }
+
+  return (
+    <div className="table-wrap ops-grid-wrap" role="region" aria-label="Tabla de historial">
+      <table className="appointments-table history-table ops-grid">
+        <thead>
+          <tr>
+            <th className="col-client">Cliente</th>
+            <th className="col-date">Fecha/Hora</th>
+            <th className="col-phone">WhatsApp</th>
+            <th className="col-service">Servicio</th>
+            <th className="col-therapist">Terapeuta</th>
+            <th className="col-room">Sala</th>
+            <th className="col-status">Estado</th>
+            <th className="col-created">Creada</th>
+          </tr>
+        </thead>
+        <tbody>
+          {appointments.map((item) => (
+            <tr key={`history-${item.id}`} className={`ops-grid-row is-${getClientTone(item.status)}`}>
+              <td className="col-client">
+                <GridClientIdentity
+                  name={item.client.fullName}
+                  tone={getClientTone(item.status)}
+                />
+              </td>
+              <td className="col-date">{formatDateTime(item.startsAt, timezone)}</td>
+              <td className="col-phone">{item.client.whatsapp || "-"}</td>
+              <td className="col-service">{item.service.name || "-"}</td>
+              <td className="col-therapist">{item.therapist.name || "-"}</td>
+              <td className="col-room">{item.room.name || "-"}</td>
+              <td className="col-status">
+                <StatusChip status={item.status} />
+              </td>
+              <td className="col-created">{formatDateTime(item.createdAt, timezone)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
+
+const MemoHistoryTable = React.memo(HistoryTable);
 
 function TimelineView({ appointments, timezone, onSelect }) {
   if (!appointments.length) {
@@ -1509,6 +1819,8 @@ function TimelineView({ appointments, timezone, onSelect }) {
     </ul>
   );
 }
+
+const MemoTimelineView = React.memo(TimelineView);
 
 function appointmentDurationMinutes(appointment) {
   const start = appointment.startsAt ? new Date(appointment.startsAt) : null;
@@ -1757,9 +2069,9 @@ function RoomsKanban({
   );
 }
 
-function DrawerSection({ title, children }) {
+function DrawerSection({ title, children, className = "" }) {
   return (
-    <section className="drawer-section">
+    <section className={`drawer-section${className ? ` ${className}` : ""}`}>
       <h3>{title}</h3>
       {children}
     </section>
@@ -1796,6 +2108,8 @@ function ClaimSummaryList({ claims, appointment, timezone }) {
     </div>
   );
 }
+
+const MemoRoomsKanban = React.memo(RoomsKanban);
 
 function AppointmentDrawer({
   open,
@@ -2678,6 +2992,8 @@ function ManualAppointmentModal({
   );
 }
 
+const MemoManualAppointmentModal = React.memo(ManualAppointmentModal);
+
 function StatusConfirmModal({ request, loading, onCancel, onConfirm }) {
   if (!request) return null;
 
@@ -2738,10 +3054,10 @@ function ClientTable({
 
   return (
     <>
-      <div className="table-wrap" role="region" aria-label="Tabla de clientes">
-        <table className="appointments-table clients-table">
-          <thead>
-            <tr>
+	      <div className="table-wrap ops-grid-wrap" role="region" aria-label="Tabla de clientes">
+	        <table className="appointments-table clients-table ops-grid clients-grid">
+	          <thead>
+	            <tr>
               <th className="cell-check">
                 <input
                   type="checkbox"
@@ -2755,74 +3071,79 @@ function ClientTable({
                   aria-label="Seleccionar clientes visibles"
                 />
               </th>
-              <th>Cliente</th>
-              <th>WhatsApp</th>
-              <th>Onboarding</th>
-              <th>Total citas</th>
-              <th>Pending</th>
-              <th>Confirmed</th>
-              <th>Completed</th>
-              <th>Cancelled</th>
-              <th>No show</th>
-              <th>Proxima cita</th>
-              <th>Ultima cita</th>
-              <th>Accion</th>
-            </tr>
-          </thead>
-          <tbody>
-            {clients.map((client) => (
-              <tr key={client.id}>
-                <td className="cell-check">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(client.id)}
-                    onChange={(event) => onToggleSelect(client.id, event.target.checked)}
-                    aria-label={`Seleccionar cliente ${client.fullName || client.id}`}
-                  />
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    className="table-open"
-                    onClick={() => onSelect(client.id)}
-                    title="Abrir ficha cliente"
-                  >
-                    {client.fullName || "Sin nombre"}
-                  </button>
-                </td>
-                <td>{client.whatsapp || "-"}</td>
-                <td>{client.onboardingComplete ? "Completo" : "Incompleto"}</td>
-                <td>{client.stats?.totalAppointments || 0}</td>
-                <td>{client.stats?.pendingCount || 0}</td>
-                <td>{client.stats?.confirmedCount || 0}</td>
-                <td>{client.stats?.completedCount || 0}</td>
-                <td>{client.stats?.cancelledCount || 0}</td>
-                <td>{client.stats?.noShowCount || 0}</td>
-                <td>
-                  {client.nextAppointment ? formatDateTime(client.nextAppointment.startsAt, timezone) : "-"}
-                </td>
-                <td>
-                  {client.lastAppointment ? formatDateTime(client.lastAppointment.startsAt, timezone) : "-"}
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    className={`danger-button${armedDeleteId === client.id ? " is-armed" : ""}`}
-                    onClick={() => onDeleteOne(client.id)}
-                    disabled={deleteLoading}
-                  >
-                    <Trash size={14} weight="regular" aria-hidden="true" />
-                    <span>{armedDeleteId === client.id ? "¿Borrar?" : "Borrar"}</span>
-                  </button>
-                </td>
-              </tr>
-            ))}
+	              <th>Cliente</th>
+		              <th>CRM</th>
+		              <th>WhatsApp</th>
+		              <th>Actividad</th>
+		              <th>Próxima cita</th>
+		              <th>Última cita</th>
+		              <th>Ciudad</th>
+		              <th>Origen</th>
+		              <th>Onboarding</th>
+		              <th>Total</th>
+		              <th>Acción</th>
+	            </tr>
+	          </thead>
+	          <tbody>
+	            {clients.map((client) => {
+		              const crmStatus = getClientCrmStatus(client, timezone);
+		              const rowTone = crmStatus.tone;
+		              return (
+	                <tr key={client.id} className={`ops-grid-row is-${rowTone}`}>
+	                  <td className="cell-check">
+	                    <input
+	                      type="checkbox"
+	                      checked={selectedIds.has(client.id)}
+	                      onChange={(event) => onToggleSelect(client.id, event.target.checked)}
+	                      aria-label={`Seleccionar cliente ${client.fullName || client.id}`}
+	                    />
+	                  </td>
+	                  <td>
+		                    <GridClientIdentity
+		                      name={client.fullName}
+		                      tone={rowTone}
+		                      asButton
+		                      onClick={() => onSelect(client.id)}
+		                      title="Abrir ficha cliente"
+		                    />
+		                  </td>
+		                  <td>
+		                    <ClientCrmCell status={crmStatus} />
+		                  </td>
+		                  <td>{client.whatsapp || "-"}</td>
+		                  <td><ClientMetrics stats={client.stats} /></td>
+		                  <td>{client.nextAppointment ? formatDateTime(client.nextAppointment.startsAt, timezone) : "-"}</td>
+		                  <td>{client.lastAppointment ? formatDateTime(client.lastAppointment.startsAt, timezone) : "-"}</td>
+		                  <td>{client.city || "-"}</td>
+		                  <td>{client.source || "-"}</td>
+		                  <td>
+		                    <span className={`inline-tag ${client.onboardingComplete ? "settings-booking-ready" : "ops-onboarding-tag"}`}>
+		                      {client.onboardingComplete ? "Completo" : "Pendiente"}
+		                    </span>
+		                  </td>
+		                  <td className="ops-total-cell">{client.stats?.totalAppointments || 0}</td>
+		                  <td>
+		                    <button
+		                      type="button"
+		                      className={`danger-button${armedDeleteId === client.id ? " is-armed" : ""}`}
+		                      onClick={() => onDeleteOne(client.id)}
+		                      disabled={deleteLoading}
+		                    >
+		                      <Trash size={14} weight="regular" aria-hidden="true" />
+		                      <span>{armedDeleteId === client.id ? "¿Borrar?" : "Borrar"}</span>
+		                    </button>
+		                  </td>
+	                </tr>
+	              );
+	            })}
           </tbody>
         </table>
       </div>
 
       <ul className="appointments-cards" aria-label="Lista de clientes mobile">
-        {clients.map((client) => (
+        {clients.map((client) => {
+          const crmStatus = getClientCrmStatus(client, timezone);
+          return (
           <li key={`client-mobile-${client.id}`} className="appointment-card">
             <label className="inline-check">
               <input
@@ -2834,15 +3155,21 @@ function ClientTable({
             </label>
             <button type="button" className="card-open" onClick={() => onSelect(client.id)}>
               <span className="appointment-title">{client.fullName || "Sin nombre"}</span>
-              <StatusChip status={client.onboardingComplete ? "confirmed" : "pending"} />
+              <span className={`inline-tag ops-crm-tag is-${crmStatus.tone}`}>{crmStatus.label}</span>
             </button>
             <p className="appointment-line">WhatsApp: {client.whatsapp || "-"}</p>
+            <p className="appointment-line">
+              CRM: {crmStatus.label} · {crmStatus.reason}
+            </p>
+            <p className="appointment-line">Ciudad: {client.city || "-"}</p>
+            <p className="appointment-line">Origen: {client.source || "-"}</p>
+            <p className="appointment-line">Onboarding: {client.onboardingComplete ? "Completo" : "Pendiente"}</p>
             <p className="appointment-line">Total citas: {client.stats?.totalAppointments || 0}</p>
             <p className="appointment-line">
-              Proxima: {client.nextAppointment ? formatDateTime(client.nextAppointment.startsAt, timezone) : "-"}
+              Próxima: {client.nextAppointment ? formatDateTime(client.nextAppointment.startsAt, timezone) : "-"}
             </p>
             <p className="appointment-line">
-              Ultima: {client.lastAppointment ? formatDateTime(client.lastAppointment.startsAt, timezone) : "-"}
+              Última: {client.lastAppointment ? formatDateTime(client.lastAppointment.startsAt, timezone) : "-"}
             </p>
             <button
               type="button"
@@ -2854,7 +3181,8 @@ function ClientTable({
               <span>{armedDeleteId === client.id ? "¿Borrar?" : "Borrar"}</span>
             </button>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </>
   );
@@ -2932,24 +3260,24 @@ function ClientDrawer({ open, detail, loading, error, timezone, onClose }) {
             <DrawerSection title="Stats citas">
               <ul className="client-stats-list">
                 <li><span>Total</span><strong>{client.stats?.totalAppointments || 0}</strong></li>
-                <li><span>Pending</span><strong>{client.stats?.pendingCount || 0}</strong></li>
-                <li><span>Confirmed</span><strong>{client.stats?.confirmedCount || 0}</strong></li>
-                <li><span>Completed</span><strong>{client.stats?.completedCount || 0}</strong></li>
-                <li><span>Cancelled</span><strong>{client.stats?.cancelledCount || 0}</strong></li>
-                <li><span>No show</span><strong>{client.stats?.noShowCount || 0}</strong></li>
+                <li><span>Pendientes</span><strong>{client.stats?.pendingCount || 0}</strong></li>
+                <li><span>Confirmadas</span><strong>{client.stats?.confirmedCount || 0}</strong></li>
+                <li><span>Completadas</span><strong>{client.stats?.completedCount || 0}</strong></li>
+                <li><span>Canceladas</span><strong>{client.stats?.cancelledCount || 0}</strong></li>
+                <li><span>No asistió</span><strong>{client.stats?.noShowCount || 0}</strong></li>
               </ul>
             </DrawerSection>
 
-            <DrawerSection title="Proxima / Ultima cita">
+            <DrawerSection title="Próxima / Última cita">
               <ul className="drawer-list">
                 <li>
-                  <span>Proxima</span>
+                  <span>Próxima</span>
                   <span>
                     {client.nextAppointment ? formatDateTime(client.nextAppointment.startsAt, timezone) : "-"}
                   </span>
                 </li>
                 <li>
-                  <span>Ultima</span>
+                  <span>Última</span>
                   <span>
                     {client.lastAppointment ? formatDateTime(client.lastAppointment.startsAt, timezone) : "-"}
                   </span>
@@ -3150,6 +3478,73 @@ function normalizeTherapistScheduleGroups(therapist) {
     });
 }
 
+function buildAvailabilityTimeOptions() {
+  const options = [];
+  for (let minutes = 0; minutes <= (23 * 60) + 30; minutes += 30) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    options.push(`${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`);
+  }
+  return options;
+}
+
+const AVAILABILITY_TIME_OPTIONS = buildAvailabilityTimeOptions();
+
+function compactAvailabilityTime(value, fallback = "09:00") {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d{1,2}):([0-5]\d)/);
+  if (!match) {
+    return fallback;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || hours < 0 || hours > 23 || ![0, 30].includes(minutes)) {
+    return fallback;
+  }
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function addAvailabilityMinutes(timeValue, minutesToAdd) {
+  const [hours, minutes] = compactAvailabilityTime(timeValue).split(":").map(Number);
+  const total = Math.min((23 * 60) + 30, Math.max(0, (hours * 60) + minutes + minutesToAdd));
+  const nextHours = Math.floor(total / 60);
+  const nextMinutes = total % 60;
+  return `${String(nextHours).padStart(2, "0")}:${String(nextMinutes).padStart(2, "0")}`;
+}
+
+function createAvailabilityDays(schedules = []) {
+  const rangesByWeekday = new Map();
+
+  for (const schedule of Array.isArray(schedules) ? schedules : []) {
+    const weekday = Number(schedule?.weekday);
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+      continue;
+    }
+
+    const range = {
+      startTime: compactAvailabilityTime(schedule.startTime),
+      endTime: compactAvailabilityTime(schedule.endTime, "17:00")
+    };
+
+    if (!rangesByWeekday.has(weekday)) {
+      rangesByWeekday.set(weekday, []);
+    }
+    rangesByWeekday.get(weekday).push(range);
+  }
+
+  return THERAPIST_WEEKDAYS.map((day) => {
+    const ranges = (rangesByWeekday.get(day.weekday) || [])
+      .sort((left, right) => left.startTime.localeCompare(right.startTime));
+    return {
+      ...day,
+      isActive: ranges.length > 0,
+      ranges
+    };
+  });
+}
+
 function splitVisibleItems(items, maxVisible) {
   const safeItems = Array.isArray(items) ? items : [];
   const visible = safeItems.slice(0, maxVisible);
@@ -3160,6 +3555,11 @@ function splitVisibleItems(items, maxVisible) {
 }
 
 function getTherapistInitials(therapist) {
+  const avatarInitials = String(therapist?.avatar?.initials || "").trim();
+  if (avatarInitials) {
+    return avatarInitials.slice(0, 3).toUpperCase();
+  }
+
   const displayName = String(therapist?.displayName || therapist?.fullName || "").trim();
   if (!displayName) {
     return "--";
@@ -3171,6 +3571,30 @@ function getTherapistInitials(therapist) {
   }
 
   return displayName[0].toUpperCase();
+}
+
+function getTherapistAvatarImageUrl(therapist) {
+  const imageUrl = String(therapist?.avatar?.imageUrl || therapist?.photoUrl || "").trim();
+  if (!imageUrl) {
+    return "";
+  }
+
+  if (imageUrl.startsWith("/") || imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    return imageUrl;
+  }
+
+  return "";
+}
+
+function TherapistAvatar({ therapist, className }) {
+  const imageUrl = getTherapistAvatarImageUrl(therapist);
+  const initials = getTherapistInitials(therapist);
+
+  return (
+    <span className={className} aria-hidden="true">
+      {imageUrl ? <img src={imageUrl} alt="" loading="lazy" /> : initials}
+    </span>
+  );
 }
 
 function getTherapistSchedulePreview(therapist) {
@@ -3214,9 +3638,7 @@ function TherapistsGrid({ therapists, onSelect }) {
             aria-label={`Abrir perfil de ${displayName}`}
           >
             <div className="therapist-grid-top">
-              <span className="therapist-avatar" aria-hidden="true">
-                {getTherapistInitials(therapist)}
-              </span>
+              <TherapistAvatar therapist={therapist} className="therapist-avatar" />
               <div className="therapist-identity">
                 <h3>{displayName}</h3>
                 <p>
@@ -3273,10 +3695,20 @@ function TherapistsReadonlyView({
   isRefreshing,
   isStale,
   errorMessage,
+  authToken,
+  onUnauthorized,
   onSelect
 }) {
   const [searchValue, setSearchValue] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("active");
+  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
+  const [createFullName, setCreateFullName] = useState("");
+  const [createDisplayName, setCreateDisplayName] = useState("");
+  const [createPhone, setCreatePhone] = useState("");
+  const [createIsActive, setCreateIsActive] = useState(true);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [createFeedback, setCreateFeedback] = useState("");
   const therapists = Array.isArray(payload?.therapists) ? payload.therapists : [];
   const summary = payload?.summary || {
     total: therapists.length,
@@ -3322,6 +3754,79 @@ function TherapistsReadonlyView({
       return haystack.includes(query);
     });
   }, [therapists, searchValue, statusFilter]);
+
+  const resetCreateTherapist = useCallback(() => {
+    setCreateFullName("");
+    setCreateDisplayName("");
+    setCreatePhone("");
+    setCreateIsActive(true);
+    setCreateError("");
+  }, []);
+
+  const openCreateTherapist = useCallback(() => {
+    resetCreateTherapist();
+    setCreateFeedback("");
+    setCreateDrawerOpen(true);
+  }, [resetCreateTherapist]);
+
+  const closeCreateTherapist = useCallback(() => {
+    setCreateDrawerOpen(false);
+    resetCreateTherapist();
+  }, [resetCreateTherapist]);
+
+  const saveCreateTherapist = useCallback(async () => {
+    if (createLoading) {
+      return;
+    }
+
+    setCreateLoading(true);
+    setCreateError("");
+    setCreateFeedback("");
+
+    try {
+      const response = await fetch("/api/admin/therapists", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          fullName: createFullName.trim(),
+          displayName: createDisplayName.trim(),
+          phone: createPhone.trim(),
+          isActive: createIsActive
+        })
+      });
+      const nextPayload = await response.json();
+
+      if (response.status === 401) {
+        onUnauthorized?.();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(nextPayload));
+      }
+
+      setCreateFeedback("Terapeuta creado.");
+      closeCreateTherapist();
+      onRefresh?.();
+    } catch (requestError) {
+      setCreateError(requestError.message || "No se pudo crear el terapeuta.");
+    } finally {
+      setCreateLoading(false);
+    }
+  }, [
+    authToken,
+    closeCreateTherapist,
+    createDisplayName,
+    createFullName,
+    createIsActive,
+    createLoading,
+    createPhone,
+    onRefresh,
+    onUnauthorized
+  ]);
 
   return (
     <section className="therapists-shell" aria-label="Terapeutas operativos">
@@ -3378,14 +3883,25 @@ function TherapistsReadonlyView({
             <ArrowsClockwise size={15} weight="bold" aria-hidden="true" className={isLoading || isRefreshing ? "spin" : ""} />
             <span>{isLoading || isRefreshing ? "Actualizando..." : "Actualizar"}</span>
           </button>
+
+          <button
+            type="button"
+            className="refresh-button therapists-refresh-button"
+            onClick={openCreateTherapist}
+          >
+            Nuevo terapeuta
+          </button>
         </div>
 
         {isRefreshing ? (
           <p className="feedback subtle settings-feedback">Actualizando terapeutas en segundo plano...</p>
         ) : null}
+        {createFeedback ? (
+          <p className="feedback subtle settings-feedback">{createFeedback}</p>
+        ) : null}
         {isStale ? (
           <p className="feedback error settings-feedback">
-            No se pudo refrescar Terapeutas. Mostrando la ultima carga valida.
+            No se pudo refrescar Terapeutas. Mostrando la última carga válida.
             {errorMessage ? ` (${errorMessage})` : ""}
           </p>
         ) : null}
@@ -3402,21 +3918,463 @@ function TherapistsReadonlyView({
           <TherapistsGrid therapists={filteredTherapists} onSelect={onSelect} />
         ) : null}
       </section>
+
+      <TherapistCreateDrawer
+        open={createDrawerOpen}
+        fullName={createFullName}
+        displayName={createDisplayName}
+        phone={createPhone}
+        isActive={createIsActive}
+        loading={createLoading}
+        error={createError}
+        onChangeFullName={setCreateFullName}
+        onChangeDisplayName={setCreateDisplayName}
+        onChangePhone={setCreatePhone}
+        onChangeIsActive={setCreateIsActive}
+        onSave={saveCreateTherapist}
+        onClose={closeCreateTherapist}
+      />
     </section>
   );
 }
 
-function TherapistDrawer({ open, detail, loading, error, onClose }) {
+function TherapistCreateDrawer({
+  open,
+  fullName,
+  displayName,
+  phone,
+  isActive,
+  loading,
+  error,
+  onChangeFullName,
+  onChangeDisplayName,
+  onChangePhone,
+  onChangeIsActive,
+  onSave,
+  onClose
+}) {
   if (!open) {
     return null;
   }
 
+  return (
+    <div className="drawer-overlay" role="presentation" onClick={onClose}>
+      <aside
+        className="drawer settings-editor-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Crear terapeuta"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="drawer-header">
+          <div>
+            <p className="drawer-kicker">Crear terapeuta</p>
+            <h2>Nuevo terapeuta</h2>
+          </div>
+          <button type="button" className="drawer-close" onClick={onClose} aria-label="Cerrar terapeuta">
+            <X size={18} weight="bold" />
+          </button>
+        </header>
+
+        <div className="drawer-body settings-editor-body">
+          <div className="settings-editor-grid">
+            <label className="client-filter-field" htmlFor="therapist-create-full-name">
+              <span>Nombre completo</span>
+              <input
+                id="therapist-create-full-name"
+                type="text"
+                value={fullName}
+                onChange={(event) => onChangeFullName(event.target.value)}
+                placeholder="Nombre terapeuta"
+              />
+            </label>
+
+            <label className="client-filter-field" htmlFor="therapist-create-display-name">
+              <span>Nombre visible</span>
+              <input
+                id="therapist-create-display-name"
+                type="text"
+                value={displayName}
+                onChange={(event) => onChangeDisplayName(event.target.value)}
+                placeholder="Opcional"
+              />
+            </label>
+
+            <label className="client-filter-field" htmlFor="therapist-create-phone">
+              <span>Telefono</span>
+              <input
+                id="therapist-create-phone"
+                type="tel"
+                value={phone}
+                onChange={(event) => onChangePhone(event.target.value)}
+                placeholder="59171234567"
+              />
+            </label>
+          </div>
+
+          <label className={`settings-room-status-toggle${isActive ? " is-active" : ""}`}>
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(event) => onChangeIsActive(event.target.checked)}
+            />
+            <span className="settings-room-status-control" aria-hidden="true" />
+            <span>{isActive ? "Terapeuta activo" : "Terapeuta inactivo"}</span>
+          </label>
+
+          <div className="manual-form-actions settings-editor-actions">
+            <button
+              type="button"
+              className="refresh-button"
+              onClick={onSave}
+              disabled={loading || !fullName.trim()}
+            >
+              {loading ? "Guardando..." : "Crear terapeuta"}
+            </button>
+            <button type="button" className="logout-button" onClick={onClose} disabled={loading}>
+              Cancelar
+            </button>
+          </div>
+
+          {error ? (
+            <p className="feedback error compact-feedback">{error}</p>
+          ) : null}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function TherapistDrawer({
+  open,
+  detail,
+  loading,
+  error,
+  authToken,
+  onClose,
+  onUnauthorized,
+  onAvailabilitySaved
+}) {
+  const [activeTab, setActiveTab] = useState("profile");
+  const [profileFullName, setProfileFullName] = useState("");
+  const [profileDisplayName, setProfileDisplayName] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [profileTelegram, setProfileTelegram] = useState("");
+  const [profileIsActive, setProfileIsActive] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [profileFeedback, setProfileFeedback] = useState("");
+  const [availabilityDays, setAvailabilityDays] = useState(() => createAvailabilityDays([]));
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState("");
+  const [availabilityFeedback, setAvailabilityFeedback] = useState("");
+  const [serviceMutationId, setServiceMutationId] = useState(null);
+  const [serviceMutationError, setServiceMutationError] = useState("");
+  const [serviceMutationFeedback, setServiceMutationFeedback] = useState("");
+  const [copySourceWeekday, setCopySourceWeekday] = useState(null);
+  const [copyTargetWeekdays, setCopyTargetWeekdays] = useState([]);
   const therapist = detail?.therapist || null;
   const services = Array.isArray(detail?.services) ? detail.services : [];
+  const operationServices = Array.isArray(detail?.availableServices) && detail.availableServices.length
+    ? detail.availableServices
+    : services;
+  const assignedServicesCount = operationServices.filter((service) => service?.relationIsActive === true && service?.isActive !== false).length;
   const schedules = Array.isArray(detail?.schedules) ? detail.schedules : [];
+  const hasActiveAvailability = schedules.some((slot) => slot?.isActive === true || normalizeResourceStatus(slot?.status, slot?.isActive === true) === "ACTIVE");
+  const operationIssues = [
+    assignedServicesCount > 0 && !hasActiveAvailability
+      ? "Tiene servicios activos, pero no tiene disponibilidad activa."
+      : null,
+    ...operationServices
+      .filter((service) => service?.relationIsActive === true && service?.isActive !== false && Number(service?.compatibleRoomsCount ?? 1) === 0)
+      .map((service) => `${service.name || "Servicio"} no tiene sala compatible activa.`)
+  ].filter(Boolean);
   const scheduleGroups = normalizeTherapistScheduleGroups({ schedulesByDay: [], schedules });
   const statusMeta = getTherapistStatusMeta(therapist);
   const therapistName = therapist?.displayName || therapist?.fullName || "Terapeuta";
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setActiveTab("profile");
+    setProfileError("");
+    setProfileFeedback("");
+    setAvailabilityError("");
+    setAvailabilityFeedback("");
+    setServiceMutationId(null);
+    setServiceMutationError("");
+    setServiceMutationFeedback("");
+    setCopySourceWeekday(null);
+    setCopyTargetWeekdays([]);
+  }, [open, therapist?.id]);
+
+  useEffect(() => {
+    if (!open || !therapist) {
+      return;
+    }
+
+    setProfileFullName(therapist.fullName || "");
+    setProfileDisplayName(therapist.displayName || therapist.fullName || "");
+    setProfilePhone(therapist.phone || "");
+    setProfileTelegram(therapist.telegramChatId || "");
+    setProfileIsActive(therapist.isActive !== false);
+  }, [open, therapist]);
+
+  useEffect(() => {
+    if (!open || !therapist) {
+      return;
+    }
+
+    setAvailabilityDays(createAvailabilityDays(schedules));
+  }, [open, therapist?.id, schedules]);
+
+  const updateAvailabilityDay = useCallback((weekday, updater) => {
+    setAvailabilityDays((current) =>
+      current.map((day) => {
+        if (day.weekday !== weekday) {
+          return day;
+        }
+        return updater(day);
+      })
+    );
+  }, []);
+
+  const toggleAvailabilityDay = useCallback((weekday, checked) => {
+    updateAvailabilityDay(weekday, (day) => ({
+      ...day,
+      isActive: checked,
+      ranges: checked && day.ranges.length === 0
+        ? [{ startTime: "09:00", endTime: "17:00" }]
+        : day.ranges
+    }));
+  }, [updateAvailabilityDay]);
+
+  const addAvailabilityRange = useCallback((weekday) => {
+    updateAvailabilityDay(weekday, (day) => {
+      const lastRange = day.ranges[day.ranges.length - 1] || null;
+      const startTime = lastRange ? lastRange.endTime : "09:00";
+      const endTime = addAvailabilityMinutes(startTime, 60);
+      return {
+        ...day,
+        isActive: true,
+        ranges: [
+          ...day.ranges,
+          {
+            startTime,
+            endTime: endTime === startTime ? addAvailabilityMinutes(startTime, 30) : endTime
+          }
+        ]
+      };
+    });
+  }, [updateAvailabilityDay]);
+
+  const removeAvailabilityRange = useCallback((weekday, rangeIndex) => {
+    updateAvailabilityDay(weekday, (day) => {
+      const ranges = day.ranges.filter((_, index) => index !== rangeIndex);
+      return {
+        ...day,
+        isActive: ranges.length > 0,
+        ranges
+      };
+    });
+  }, [updateAvailabilityDay]);
+
+  const changeAvailabilityRange = useCallback((weekday, rangeIndex, field, value) => {
+    updateAvailabilityDay(weekday, (day) => ({
+      ...day,
+      ranges: day.ranges.map((range, index) => (
+        index === rangeIndex ? { ...range, [field]: value } : range
+      ))
+    }));
+  }, [updateAvailabilityDay]);
+
+  const openCopyAvailability = useCallback((weekday) => {
+    setCopySourceWeekday((current) => (current === weekday ? null : weekday));
+    setCopyTargetWeekdays([]);
+  }, []);
+
+  const toggleCopyTarget = useCallback((weekday, checked) => {
+    setCopyTargetWeekdays((current) => {
+      if (checked) {
+        return current.includes(weekday) ? current : [...current, weekday];
+      }
+      return current.filter((item) => item !== weekday);
+    });
+  }, []);
+
+  const applyCopyAvailability = useCallback(() => {
+    const sourceDay = availabilityDays.find((day) => day.weekday === copySourceWeekday);
+    if (!sourceDay) {
+      return;
+    }
+
+    const copiedRanges = sourceDay.ranges.map((range) => ({ ...range }));
+    setAvailabilityDays((current) =>
+      current.map((day) => (
+        copyTargetWeekdays.includes(day.weekday)
+          ? { ...day, isActive: copiedRanges.length > 0, ranges: copiedRanges.map((range) => ({ ...range })) }
+          : day
+      ))
+    );
+    setCopySourceWeekday(null);
+    setCopyTargetWeekdays([]);
+  }, [availabilityDays, copySourceWeekday, copyTargetWeekdays]);
+
+  const saveAvailability = useCallback(async () => {
+    if (!therapist?.id || availabilitySaving) {
+      return;
+    }
+
+    setAvailabilitySaving(true);
+    setAvailabilityError("");
+    setAvailabilityFeedback("");
+
+    try {
+      const response = await fetch(`/api/admin/therapists/${therapist.id}/availability`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          days: availabilityDays.map((day) => ({
+            weekday: day.weekday,
+            isActive: day.isActive,
+            ranges: day.ranges
+          }))
+        })
+      });
+      const payload = await response.json();
+
+      if (response.status === 401) {
+        onUnauthorized?.();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(payload));
+      }
+
+      setAvailabilityFeedback("Disponibilidad actualizada.");
+      onAvailabilitySaved?.(payload);
+    } catch (requestError) {
+      setAvailabilityError(requestError.message || "No se pudo guardar disponibilidad.");
+    } finally {
+      setAvailabilitySaving(false);
+    }
+  }, [
+    authToken,
+    availabilityDays,
+    availabilitySaving,
+    onAvailabilitySaved,
+    onUnauthorized,
+    therapist?.id
+  ]);
+
+  const toggleTherapistService = useCallback(async (service, nextIsActive) => {
+    if (!therapist?.id || !service?.id || serviceMutationId) {
+      return;
+    }
+
+    setServiceMutationId(service.id);
+    setServiceMutationError("");
+    setServiceMutationFeedback("");
+
+    try {
+      const response = await fetch(`/api/admin/therapists/${therapist.id}/services/${service.id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ isActive: nextIsActive })
+      });
+
+      if (response.status === 401) {
+        onUnauthorized?.();
+        throw new Error("Sesion expirada. Vuelve a entrar.");
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error?.message || "No se pudo actualizar el servicio.");
+      }
+
+      setServiceMutationFeedback(nextIsActive ? "Servicio asignado." : "Servicio desactivado.");
+      onAvailabilitySaved?.(payload);
+    } catch (saveError) {
+      setServiceMutationError(saveError.message || "No se pudo actualizar el servicio.");
+    } finally {
+      setServiceMutationId(null);
+    }
+  }, [
+    authToken,
+    onAvailabilitySaved,
+    onUnauthorized,
+    serviceMutationId,
+    therapist?.id
+  ]);
+
+  const saveProfile = useCallback(async () => {
+    if (!therapist?.id || profileSaving) {
+      return;
+    }
+
+    setProfileSaving(true);
+    setProfileError("");
+    setProfileFeedback("");
+
+    try {
+      const response = await fetch(`/api/admin/therapists/${therapist.id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          fullName: profileFullName.trim(),
+          displayName: profileDisplayName.trim(),
+          phone: profilePhone.trim(),
+          telegramChatId: profileTelegram.trim(),
+          isActive: profileIsActive
+        })
+      });
+
+      if (response.status === 401) {
+        onUnauthorized?.();
+        throw new Error("Sesion expirada. Vuelve a entrar.");
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error?.message || "No se pudo actualizar el perfil.");
+      }
+
+      setProfileFeedback("Perfil actualizado.");
+      onAvailabilitySaved?.(payload);
+    } catch (saveError) {
+      setProfileError(saveError.message || "No se pudo actualizar el perfil.");
+    } finally {
+      setProfileSaving(false);
+    }
+  }, [
+    authToken,
+    onAvailabilitySaved,
+    onUnauthorized,
+    profileDisplayName,
+    profileFullName,
+    profileIsActive,
+    profilePhone,
+    profileSaving,
+    profileTelegram,
+    therapist?.id
+  ]);
+
+  if (!open) {
+    return null;
+  }
 
   return (
     <div className="drawer-overlay" role="presentation" onClick={onClose}>
@@ -3429,9 +4387,7 @@ function TherapistDrawer({ open, detail, loading, error, onClose }) {
       >
         <header className="drawer-header therapist-drawer-header" id="therapist-drawer-title">
           <div className="therapist-drawer-hero">
-            <span className="therapist-drawer-avatar" aria-hidden="true">
-              {getTherapistInitials(therapist)}
-            </span>
+            <TherapistAvatar therapist={therapist} className="therapist-drawer-avatar" />
             <div className="therapist-drawer-heading">
               <h2>{therapistName}</h2>
               <div className="therapist-drawer-meta-row">
@@ -3445,15 +4401,27 @@ function TherapistDrawer({ open, detail, loading, error, onClose }) {
           </button>
         </header>
         <nav className="therapist-drawer-tabs" aria-label="Secciones terapeuta">
-          <button type="button" className="is-active">
+          <button
+            type="button"
+            className={activeTab === "profile" ? "is-active" : ""}
+            onClick={() => setActiveTab("profile")}
+          >
             <UserCircle size={16} weight="regular" aria-hidden="true" />
             <span>Perfil</span>
           </button>
-          <button type="button" disabled aria-disabled="true" title="Proximamente">
+          <button
+            type="button"
+            className={activeTab === "operations" ? "is-active" : ""}
+            onClick={() => setActiveTab("operations")}
+          >
             <SlidersHorizontal size={16} weight="regular" aria-hidden="true" />
             <span>Operativa</span>
           </button>
-          <button type="button" disabled aria-disabled="true" title="Proximamente">
+          <button
+            type="button"
+            className={activeTab === "availability" ? "is-active" : ""}
+            onClick={() => setActiveTab("availability")}
+          >
             <CalendarDots size={16} weight="regular" aria-hidden="true" />
             <span>Disponibilidad</span>
           </button>
@@ -3464,66 +4432,381 @@ function TherapistDrawer({ open, detail, loading, error, onClose }) {
 
         {!loading && !error && therapist ? (
           <div className="drawer-body therapist-drawer-body">
-            <DrawerSection title="Contacto">
-              <ul className="therapist-contact-list">
-                <li>
-                  <span>Telefono</span>
-                  <strong>{therapist.phone || "-"}</strong>
-                </li>
-                <li>
-                  <span>Telegram</span>
-                  <strong>{therapist.telegramChatId || "-"}</strong>
-                </li>
-              </ul>
-            </DrawerSection>
+            {activeTab === "profile" ? (
+              <div className="therapist-profile-panel">
+                <section className="therapist-profile-section" aria-labelledby="therapist-photo-title">
+                  <div className="therapist-section-head">
+                    <h3 id="therapist-photo-title">Foto</h3>
+                    <span className="inline-tag therapist-avatar-status">
+                      {therapist?.avatar?.statusLabel || "Iniciales"}
+                    </span>
+                  </div>
+                  <div className="therapist-photo-card">
+                    <TherapistAvatar therapist={therapist} className="therapist-drawer-avatar therapist-profile-avatar" />
+                    <div className="therapist-photo-copy">
+                      <strong>Avatar operativo</strong>
+                      <span>Iniciales visibles en Admin hasta conectar storage de fotos.</span>
+                    </div>
+                  </div>
+                </section>
 
-            <DrawerSection title="Servicios">
-              {services.length ? (
-                <ul className="drawer-list therapist-drawer-list therapist-drawer-list-services">
-                  {services.map((service) => {
-                    const relationStatus = normalizeResourceStatus(
-                      service?.relationStatus,
-                      service?.relationIsActive === true
-                    );
+                <section className="therapist-profile-section" aria-labelledby="therapist-profile-title">
+                  <div className="therapist-section-head">
+                    <h3 id="therapist-profile-title">Perfil</h3>
+                    <button
+                      type="button"
+                      className="table-open"
+                      onClick={saveProfile}
+                      disabled={profileSaving}
+                    >
+                      {profileSaving ? "Guardando..." : "Guardar"}
+                    </button>
+                  </div>
+                  <div className="therapist-profile-form">
+                    <label className="client-filter-field" htmlFor="therapist-profile-full-name">
+                      <span>Nombre completo</span>
+                      <input
+                        id="therapist-profile-full-name"
+                        className="control-input"
+                        type="text"
+                        value={profileFullName}
+                        onChange={(event) => setProfileFullName(event.target.value)}
+                      />
+                    </label>
+                    <label className="client-filter-field" htmlFor="therapist-profile-display-name">
+                      <span>Nombre visible</span>
+                      <input
+                        id="therapist-profile-display-name"
+                        className="control-input"
+                        type="text"
+                        value={profileDisplayName}
+                        onChange={(event) => setProfileDisplayName(event.target.value)}
+                      />
+                    </label>
+                    <label className="client-filter-field" htmlFor="therapist-profile-phone">
+                      <span>Telefono</span>
+                      <input
+                        id="therapist-profile-phone"
+                        className="control-input"
+                        type="tel"
+                        value={profilePhone}
+                        onChange={(event) => setProfilePhone(event.target.value)}
+                      />
+                    </label>
+                    <label className="client-filter-field" htmlFor="therapist-profile-telegram">
+                      <span>Telegram</span>
+                      <input
+                        id="therapist-profile-telegram"
+                        className="control-input"
+                        type="text"
+                        value={profileTelegram}
+                        onChange={(event) => setProfileTelegram(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <label className={`settings-room-status-toggle${profileIsActive ? " is-active" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={profileIsActive}
+                      onChange={(event) => setProfileIsActive(event.target.checked)}
+                    />
+                    <span className="settings-room-status-control" aria-hidden="true" />
+                    <span>{profileIsActive ? "Activo" : "Inactivo"}</span>
+                  </label>
+                  {profileFeedback ? (
+                    <p className="feedback subtle settings-feedback therapist-profile-feedback">{profileFeedback}</p>
+                  ) : null}
+                  {profileError ? (
+                    <p className="feedback error settings-feedback therapist-profile-feedback">{profileError}</p>
+                  ) : null}
+                </section>
+
+                <section className="therapist-profile-section" aria-labelledby="therapist-summary-title">
+                  <div className="therapist-section-head">
+                    <h3 id="therapist-summary-title">Resumen</h3>
+                    <StatusChip status={statusToChipKey(statusMeta.status)} />
+                  </div>
+                  <dl className="therapist-metrics-grid">
+                    <div>
+                      <dt>Servicios</dt>
+                      <dd>{assignedServicesCount}</dd>
+                    </div>
+                    <div>
+                      <dt>Salas compatibles</dt>
+                      <dd>{therapist.compatibleRoomsCount || 0}</dd>
+                    </div>
+                    <div>
+                      <dt>Estado</dt>
+                      <dd>{statusMeta.statusLabel}</dd>
+                    </div>
+                  </dl>
+                </section>
+              </div>
+            ) : null}
+
+            {activeTab === "operations" ? (
+              <section className="therapist-operations-panel" aria-labelledby="therapist-services-title">
+                <div className="therapist-section-head">
+                  <h3 id="therapist-services-title">Servicios</h3>
+                  <span>{assignedServicesCount} activos</span>
+                </div>
+                {operationIssues.length ? (
+                  <ul className="therapist-operation-alerts">
+                    {operationIssues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {serviceMutationFeedback ? (
+                  <p className="feedback subtle settings-feedback">{serviceMutationFeedback}</p>
+                ) : null}
+                {serviceMutationError ? (
+                  <p className="feedback error settings-feedback">{serviceMutationError}</p>
+                ) : null}
+                {operationServices.length ? (
+                  <ul className="therapist-service-rows">
+                    {operationServices.map((service) => {
+                      const relationStatus = normalizeResourceStatus(
+                        service?.relationStatus,
+                        service?.relationIsActive === true
+                      );
+                      const isAssigned = service?.relationIsActive === true;
+                      const serviceIsActive = service?.isActive !== false;
+                      const isSavingService = String(serviceMutationId) === String(service.id);
+                      const statusLabel = !serviceIsActive
+                        ? "Servicio inactivo"
+                        : isSavingService
+                          ? "Guardando..."
+                          : isAssigned
+                            ? (service.statusLabel || getStatusLabelFromValue(relationStatus))
+                            : "No asignado";
+                      const serviceWarnings = [
+                        isAssigned && serviceIsActive && Number(service?.compatibleRoomsCount ?? 1) === 0
+                          ? "Sin sala compatible activa"
+                          : null
+                      ].filter(Boolean);
+                      return (
+                        <li
+                          key={`therapist-service-${service.id}`}
+                          className={`${isAssigned ? "is-assigned" : "is-unassigned"}${!serviceIsActive ? " is-service-inactive" : ""}`}
+                        >
+                          <label className="therapist-service-toggle">
+                            <input
+                              type="checkbox"
+                              checked={isAssigned}
+                              disabled={isSavingService || !serviceIsActive}
+                              onChange={(event) => toggleTherapistService(service, event.target.checked)}
+                            />
+                            <span aria-hidden="true" />
+                          </label>
+                          <div>
+                            <strong>{service.name || "Servicio"}</strong>
+                            <span>
+                              {service.durationMinutes ? `${service.durationMinutes} min` : "Sin duracion"}
+                              {Number.isFinite(Number(service?.compatibleRoomsCount))
+                                ? ` · ${Number(service.compatibleRoomsCount)} salas`
+                                : ""}
+                            </span>
+                            {serviceWarnings.map((warning) => (
+                              <em key={warning}>{warning}</em>
+                            ))}
+                          </div>
+                          <span className="therapist-row-status">
+                            {statusLabel}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="empty-state compact">No hay servicios creados.</p>
+                )}
+              </section>
+            ) : null}
+
+            {activeTab === "availability" ? (
+              <section className="availability-editor" aria-label="Disponibilidad semanal">
+                <div className="availability-editor-head">
+                  <div>
+                    <h3>Disponibilidad</h3>
+                    <p>{scheduleGroups.length ? scheduleGroups[0].timeRange : "Sin horario base"}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="refresh-button availability-save-button"
+                    onClick={saveAvailability}
+                    disabled={availabilitySaving}
+                  >
+                    {availabilitySaving ? "Guardando..." : "Guardar"}
+                  </button>
+                </div>
+
+                {availabilityFeedback ? (
+                  <p className="feedback subtle settings-feedback">{availabilityFeedback}</p>
+                ) : null}
+                {availabilityError ? (
+                  <p className="feedback error settings-feedback">{availabilityError}</p>
+                ) : null}
+
+                <div className="availability-week">
+                  {availabilityDays.map((day) => {
+                    const copyOpen = copySourceWeekday === day.weekday;
+                    const copyTargets = availabilityDays.filter((item) => item.weekday !== day.weekday);
                     return (
-                      <li key={`therapist-service-${service.id}`}>
-                        <span>{service.name || "Servicio"}</span>
-                        <span className="therapist-drawer-service-meta">
-                          {service.durationMinutes ? `${service.durationMinutes} min` : "Sin duracion"} ·{" "}
-                          {service.statusLabel || getStatusLabelFromValue(relationStatus)}
-                        </span>
-                      </li>
+                      <div key={`availability-day-${day.weekday}`} className={`availability-day${day.isActive ? " is-active" : ""}`}>
+                        <label className="availability-toggle">
+                          <input
+                            type="checkbox"
+                            checked={day.isActive}
+                            onChange={(event) => toggleAvailabilityDay(day.weekday, event.target.checked)}
+                          />
+                          <span className="availability-toggle-control" aria-hidden="true" />
+                          <span>{day.label}</span>
+                        </label>
+
+                        <div className="availability-ranges">
+                          {day.isActive && day.ranges.length ? (
+                            day.ranges.map((range, rangeIndex) => (
+                              <div key={`availability-range-${day.weekday}-${rangeIndex}`} className="availability-range">
+                                <select
+                                  aria-label={`${day.label} inicio ${rangeIndex + 1}`}
+                                  value={range.startTime}
+                                  onChange={(event) => changeAvailabilityRange(day.weekday, rangeIndex, "startTime", event.target.value)}
+                                >
+                                  {AVAILABILITY_TIME_OPTIONS.map((timeOption) => (
+                                    <option key={`start-${day.weekday}-${rangeIndex}-${timeOption}`} value={timeOption}>
+                                      {timeOption}
+                                    </option>
+                                  ))}
+                                </select>
+                                <span className="availability-range-separator">-</span>
+                                <select
+                                  aria-label={`${day.label} fin ${rangeIndex + 1}`}
+                                  value={range.endTime}
+                                  onChange={(event) => changeAvailabilityRange(day.weekday, rangeIndex, "endTime", event.target.value)}
+                                >
+                                  {AVAILABILITY_TIME_OPTIONS.map((timeOption) => (
+                                    <option key={`end-${day.weekday}-${rangeIndex}-${timeOption}`} value={timeOption}>
+                                      {timeOption}
+                                    </option>
+                                  ))}
+                                </select>
+                                {rangeIndex === 0 ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="icon-button availability-icon"
+                                      onClick={() => addAvailabilityRange(day.weekday)}
+                                      aria-label={`Agregar rango ${day.label}`}
+                                    >
+                                      <Plus size={17} weight="bold" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`icon-button availability-icon${copyOpen ? " is-active" : ""}`}
+                                      onClick={() => openCopyAvailability(day.weekday)}
+                                      aria-label={`Copiar ${day.label}`}
+                                    >
+                                      <CopySimple size={17} weight="regular" />
+                                    </button>
+                                  </>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className="icon-button availability-icon"
+                                  onClick={() => removeAvailabilityRange(day.weekday, rangeIndex)}
+                                  aria-label={`Eliminar rango ${day.label} ${rangeIndex + 1}`}
+                                >
+                                  <Trash size={17} weight="regular" />
+                                </button>
+                              </div>
+                            ))
+                          ) : (
+                            <button
+                              type="button"
+                              className="availability-add-empty"
+                              onClick={() => addAvailabilityRange(day.weekday)}
+                            >
+                              <Plus size={15} weight="bold" aria-hidden="true" />
+                              <span>Agregar rango</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {copyOpen ? (
+                          <div className="availability-copy-popover">
+                            <h4>Copiar horarios a</h4>
+                            <label className="availability-copy-option">
+                              <input
+                                type="checkbox"
+                                checked={copyTargets.every((target) => copyTargetWeekdays.includes(target.weekday))}
+                                onChange={(event) => {
+                                  setCopyTargetWeekdays(event.target.checked
+                                    ? copyTargets.map((target) => target.weekday)
+                                    : []);
+                                }}
+                              />
+                              <span>Seleccionar todo</span>
+                            </label>
+                            {copyTargets.map((target) => (
+                              <label key={`copy-target-${day.weekday}-${target.weekday}`} className="availability-copy-option">
+                                <input
+                                  type="checkbox"
+                                  checked={copyTargetWeekdays.includes(target.weekday)}
+                                  onChange={(event) => toggleCopyTarget(target.weekday, event.target.checked)}
+                                />
+                                <span>{target.label}</span>
+                              </label>
+                            ))}
+                            <div className="availability-copy-actions">
+                              <button type="button" className="logout-button" onClick={() => setCopySourceWeekday(null)}>
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                className="refresh-button"
+                                onClick={applyCopyAvailability}
+                                disabled={!copyTargetWeekdays.length}
+                              >
+                                Aplicar
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
                     );
                   })}
-                </ul>
-              ) : (
-                <p className="empty-state compact">Sin servicios asociados.</p>
-              )}
-            </DrawerSection>
-
-            <DrawerSection title="Horarios base">
-              {scheduleGroups.length ? (
-                <ul className="drawer-list therapist-drawer-list therapist-drawer-list-schedules">
-                  {scheduleGroups.map((group) => (
-                    <li key={`therapist-schedule-${group.daysLabel}-${group.timeRange}-${group.status}`}>
-                      <span className="therapist-drawer-schedule-days">{group.daysLabel}</span>
-                      <span className="therapist-drawer-schedule-time">
-                        {group.timeRange}
-                      </span>
-                      <span className="therapist-drawer-service-meta">
-                        {group.slotMinutes} min · {group.statusLabel}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="empty-state compact">Sin horarios base.</p>
-              )}
-            </DrawerSection>
+                </div>
+              </section>
+            ) : null}
           </div>
         ) : null}
       </aside>
     </div>
+  );
+}
+
+function ServicePackageList({ items, emptyLabel }) {
+  const normalizedItems = Array.isArray(items)
+    ? items.filter((item) => item && String(item.name || "").trim())
+    : [];
+  const visibleItems = splitVisibleItems(normalizedItems, 2);
+
+  if (!normalizedItems.length) {
+    return <span className="settings-package-empty">{emptyLabel}</span>;
+  }
+
+  return (
+    <span className="settings-package-list">
+      {visibleItems.visible.map((item) => (
+        <span key={`${item.id || item.name}`} className="inline-tag">
+          {item.name}
+        </span>
+      ))}
+      {visibleItems.hiddenCount ? (
+        <span className="inline-tag settings-package-more">+{visibleItems.hiddenCount}</span>
+      ) : null}
+    </span>
   );
 }
 
@@ -3545,20 +4828,34 @@ function ResourcesReadonlyView({
   );
   const [activeModule, setActiveModule] = useState("services");
   const [searchValue, setSearchValue] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("active");
+  const [serviceFormOpen, setServiceFormOpen] = useState(false);
+  const [editingServiceId, setEditingServiceId] = useState(null);
+  const [serviceFormName, setServiceFormName] = useState("");
+  const [serviceFormDuration, setServiceFormDuration] = useState("60");
+  const [serviceFormPrice, setServiceFormPrice] = useState("0");
+  const [serviceFormIsActive, setServiceFormIsActive] = useState(true);
+  const [serviceFormFeatureKeys, setServiceFormFeatureKeys] = useState([]);
+  const [serviceFormLoading, setServiceFormLoading] = useState(false);
+  const [serviceFormError, setServiceFormError] = useState("");
+  const [serviceFormFeedback, setServiceFormFeedback] = useState("");
   const [roomFormOpen, setRoomFormOpen] = useState(false);
   const [editingRoomId, setEditingRoomId] = useState(null);
   const [roomFormName, setRoomFormName] = useState("");
   const [roomFormCapacity, setRoomFormCapacity] = useState("1");
+  const [roomFormIsActive, setRoomFormIsActive] = useState(true);
   const [roomFormFeatureKeys, setRoomFormFeatureKeys] = useState([]);
   const [roomFormLoading, setRoomFormLoading] = useState(false);
   const [roomFormError, setRoomFormError] = useState("");
   const [roomFormFeedback, setRoomFormFeedback] = useState("");
+  const [compatibilityMutationId, setCompatibilityMutationId] = useState("");
+  const [compatibilityMutationError, setCompatibilityMutationError] = useState("");
+  const [compatibilityMutationFeedback, setCompatibilityMutationFeedback] = useState("");
 
   const moduleRows = useMemo(() => {
     if (activeModule === "rooms") return normalizedSettings.rooms;
     if (activeModule === "compatibilities") return normalizedSettings.compatibilities;
-    if (activeModule === "schedules") return normalizedSettings.schedules;
+    if (activeModule !== "services") return [];
     return normalizedSettings.services;
   }, [activeModule, normalizedSettings]);
 
@@ -3585,7 +4882,10 @@ function ResourcesReadonlyView({
           entry?.name,
           entry?.durationLabel,
           entry?.priceLabel,
-          entry?.statusLabel
+          entry?.statusLabel,
+          entry?.requiredFeaturesLabel,
+          entry?.compatibleRoomsLabel,
+          entry?.activeTherapistsLabel
         ]
           .filter(Boolean)
           .join(" ")
@@ -3618,19 +4918,7 @@ function ResourcesReadonlyView({
         return haystack.includes(query);
       }
 
-      const scheduleHaystack = [
-        entry?.resourceLabel,
-        entry?.resourceTypeLabel,
-        entry?.dayLabel,
-        entry?.timeRangeLabel,
-        entry?.slotLabel,
-        entry?.validityLabel,
-        entry?.statusLabel
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return scheduleHaystack.includes(query);
+      return false;
     });
   }, [activeModule, moduleRows, searchValue, statusFilter]);
 
@@ -3642,31 +4930,94 @@ function ResourcesReadonlyView({
     services: normalizedSettings.summary.servicesTotal,
     rooms: normalizedSettings.summary.roomsTotal,
     compatibilities: normalizedSettings.summary.compatibilitiesTotal,
-    schedules: normalizedSettings.summary.schedulesTotal
+    booking_rules: 3,
+    center_config: 1
   };
+
+  const activeModuleMeta = SETTINGS_MODULES.find((item) => item.id === activeModule) || SETTINGS_MODULES[0];
+  const isTableModule = !activeModuleMeta.kind;
+  const groupedSettingsModules = useMemo(() => SETTINGS_MODULES.reduce((groups, module) => {
+    const group = groups.get(module.group) || [];
+    group.push(module);
+    groups.set(module.group, group);
+    return groups;
+  }, new Map()), []);
+  const bookingBlockedServices = normalizedSettings.services.filter(
+    (service) => Number(service.compatibleRoomsCount || 0) === 0 || Number(service.activeTherapistsCount || 0) === 0
+  );
+  const centerDisplayName = resources?.center?.displayName || resources?.center?.name || "Luna Mandala";
+  const centerSlug = resources?.center?.slug || "-";
+
+  const resetServiceForm = useCallback(() => {
+    setEditingServiceId(null);
+    setServiceFormName("");
+    setServiceFormDuration("60");
+    setServiceFormPrice("0");
+    setServiceFormIsActive(true);
+    setServiceFormFeatureKeys([]);
+    setServiceFormError("");
+  }, []);
 
   const resetRoomForm = useCallback(() => {
     setEditingRoomId(null);
     setRoomFormName("");
     setRoomFormCapacity("1");
+    setRoomFormIsActive(true);
     setRoomFormFeatureKeys([]);
     setRoomFormError("");
   }, []);
 
+  const openNewServiceForm = useCallback(() => {
+    resetServiceForm();
+    setServiceFormFeedback("");
+    setRoomFormOpen(false);
+    resetRoomForm();
+    setServiceFormOpen(true);
+  }, [resetRoomForm, resetServiceForm]);
+
+  const openEditServiceForm = useCallback((service) => {
+    setEditingServiceId(service.id);
+    setServiceFormName(service.name || "");
+    setServiceFormDuration(String(service.durationMinutes || 60));
+    setServiceFormPrice(String(service.priceAmount ?? 0));
+    setServiceFormIsActive(normalizeResourceStatus(service.status, service.isActive === true) === "ACTIVE");
+    setServiceFormFeatureKeys(Array.isArray(service.requiredFeatureKeys) ? [...service.requiredFeatureKeys] : []);
+    setServiceFormError("");
+    setServiceFormFeedback("");
+    setRoomFormOpen(false);
+    resetRoomForm();
+    setServiceFormOpen(true);
+  }, [resetRoomForm]);
+
   const openNewRoomForm = useCallback(() => {
     resetRoomForm();
     setRoomFormFeedback("");
+    setServiceFormOpen(false);
+    resetServiceForm();
     setRoomFormOpen(true);
-  }, [resetRoomForm]);
+  }, [resetRoomForm, resetServiceForm]);
 
   const openEditRoomForm = useCallback((room) => {
     setEditingRoomId(room.id);
     setRoomFormName(room.name || "");
     setRoomFormCapacity(String(room.capacity || 1));
+    setRoomFormIsActive(normalizeResourceStatus(room.status, room.isActive === true) === "ACTIVE");
     setRoomFormFeatureKeys(Array.isArray(room.featureKeys) ? [...room.featureKeys] : []);
     setRoomFormError("");
     setRoomFormFeedback("");
+    setServiceFormOpen(false);
+    resetServiceForm();
     setRoomFormOpen(true);
+  }, [resetServiceForm]);
+
+  const toggleServiceFeature = useCallback((featureKey, checked) => {
+    setServiceFormFeatureKeys((current) => {
+      if (checked) {
+        return current.includes(featureKey) ? current : [...current, featureKey];
+      }
+
+      return current.filter((key) => key !== featureKey);
+    });
   }, []);
 
   const toggleRoomFeature = useCallback((featureKey, checked) => {
@@ -3678,6 +5029,80 @@ function ResourcesReadonlyView({
       return current.filter((key) => key !== featureKey);
     });
   }, []);
+
+  const closeSettingsEditor = useCallback(() => {
+    setServiceFormOpen(false);
+    resetServiceForm();
+    setRoomFormOpen(false);
+    resetRoomForm();
+  }, [resetRoomForm, resetServiceForm]);
+
+  const switchSettingsModule = useCallback((moduleId) => {
+    setActiveModule(moduleId);
+    setSearchValue("");
+    setStatusFilter("active");
+  }, []);
+
+  const saveService = useCallback(async () => {
+    if (serviceFormLoading) {
+      return;
+    }
+
+    setServiceFormLoading(true);
+    setServiceFormError("");
+    setServiceFormFeedback("");
+
+    try {
+      const endpoint = editingServiceId
+        ? `/api/admin/resources/services/${editingServiceId}`
+        : "/api/admin/resources/services";
+      const response = await fetch(endpoint, {
+        method: editingServiceId ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          name: serviceFormName.trim(),
+          durationMinutes: serviceFormDuration,
+          priceAmount: serviceFormPrice,
+          isActive: serviceFormIsActive,
+          requiredFeatureKeys: serviceFormFeatureKeys
+        })
+      });
+      const payload = await response.json();
+
+      if (response.status === 401) {
+        onUnauthorized?.();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(payload));
+      }
+
+      setServiceFormFeedback(editingServiceId ? "Servicio actualizado." : "Servicio creado.");
+      setServiceFormOpen(false);
+      resetServiceForm();
+      onRoomSaved?.();
+    } catch (requestError) {
+      setServiceFormError(requestError.message || "No se pudo guardar el servicio.");
+    } finally {
+      setServiceFormLoading(false);
+    }
+  }, [
+    authToken,
+    editingServiceId,
+    onRoomSaved,
+    onUnauthorized,
+    resetServiceForm,
+    serviceFormDuration,
+    serviceFormFeatureKeys,
+    serviceFormIsActive,
+    serviceFormLoading,
+    serviceFormName,
+    serviceFormPrice
+  ]);
 
   const saveRoom = useCallback(async () => {
     if (roomFormLoading) {
@@ -3701,6 +5126,7 @@ function ResourcesReadonlyView({
         body: JSON.stringify({
           name: roomFormName.trim(),
           capacity: roomFormCapacity,
+          ...(editingRoomId ? { isActive: roomFormIsActive } : {}),
           featureKeys: roomFormFeatureKeys
         })
       });
@@ -3732,39 +5158,105 @@ function ResourcesReadonlyView({
     resetRoomForm,
     roomFormCapacity,
     roomFormFeatureKeys,
+    roomFormIsActive,
     roomFormLoading,
     roomFormName
   ]);
 
+  const toggleCompatibility = useCallback(async (compatibility) => {
+    if (!compatibility || compatibilityMutationId) {
+      return;
+    }
+
+    const serviceId = Number(compatibility.serviceId);
+    const roomId = Number(compatibility.roomId);
+    if (!Number.isInteger(serviceId) || serviceId <= 0 || !Number.isInteger(roomId) || roomId <= 0) {
+      setCompatibilityMutationError("Compatibilidad inválida.");
+      return;
+    }
+
+    const nextIsActive = normalizeResourceStatus(compatibility.status, compatibility.isActive === true) !== "ACTIVE";
+    const mutationId = `${serviceId}-${roomId}`;
+    setCompatibilityMutationId(mutationId);
+    setCompatibilityMutationError("");
+    setCompatibilityMutationFeedback("");
+
+    try {
+      const response = await fetch(`/api/admin/resources/compatibilities/${serviceId}/${roomId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ isActive: nextIsActive })
+      });
+      const payload = await response.json();
+
+      if (response.status === 401) {
+        onUnauthorized?.();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(payload));
+      }
+
+      setCompatibilityMutationFeedback(nextIsActive ? "Compatibilidad activada." : "Compatibilidad desactivada.");
+      onRoomSaved?.();
+    } catch (requestError) {
+      setCompatibilityMutationError(requestError.message || "No se pudo actualizar la compatibilidad.");
+    } finally {
+      setCompatibilityMutationId("");
+    }
+  }, [authToken, compatibilityMutationId, onRoomSaved, onUnauthorized]);
+
   return (
     <section className="settings-shell" aria-label="Ajustes operativos">
-      <header className="settings-header">
-        <div>
-          <h2>Ajustes</h2>
-          <p>Configuracion operativa de servicios, salas, compatibilidades y horarios base.</p>
-        </div>
-        <div className="settings-header-meta">
-          <span className="settings-chip">Actualizado: {generatedAtLabel}</span>
-          <span className="settings-chip">Modulo: {SETTINGS_MODULES.find((item) => item.id === activeModule)?.label || "Servicios"}</span>
-        </div>
-      </header>
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label="Navegacion local ajustes">
+          {Array.from(groupedSettingsModules.entries()).map(([groupLabel, modules]) => (
+            <div key={`settings-group-${groupLabel}`} className="settings-nav-group">
+              <p className="settings-nav-label">{groupLabel}</p>
+              {modules.map((module) => {
+                const Icon = module.Icon;
+                return (
+                  <button
+                    key={`settings-module-${module.id}`}
+                    type="button"
+                    className={`settings-nav-button${activeModule === module.id ? " is-active" : ""}`}
+                    onClick={() => switchSettingsModule(module.id)}
+                    aria-current={activeModule === module.id ? "page" : undefined}
+                  >
+                    <Icon size={17} weight="regular" aria-hidden="true" />
+                    <span>{module.label}</span>
+                    <span className="settings-tab-count">{totalByModule[module.id] || 0}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
 
-      <nav className="settings-tab-nav" aria-label="Navegacion local ajustes">
-        {SETTINGS_MODULES.map((module) => (
-          <button
-            key={`settings-module-${module.id}`}
-            type="button"
-            className={`settings-tab-button${activeModule === module.id ? " is-active" : ""}`}
-            onClick={() => setActiveModule(module.id)}
-            aria-current={activeModule === module.id ? "page" : undefined}
-          >
-            <span>{module.label}</span>
-            <span className="settings-tab-count">{totalByModule[module.id] || 0}</span>
-          </button>
-        ))}
-      </nav>
+        <div className="settings-workspace">
+          <header className="settings-header">
+            <div>
+              <h2>{activeModuleMeta.label}</h2>
+              <p>{activeModuleMeta.description}</p>
+            </div>
+            <div className="settings-header-meta">
+              <span className="settings-chip">Actualizado: {generatedAtLabel}</span>
+              {bookingBlockedServices.length ? (
+                <span className="settings-chip settings-chip-warning">
+                  {bookingBlockedServices.length} servicios con alerta
+                </span>
+              ) : (
+                <span className="settings-chip">Booking listo</span>
+              )}
+            </div>
+          </header>
 
-      <section className="panel settings-panel" aria-label="Tabla de ajustes">
+          {isTableModule ? (
+            <section className="panel settings-panel" aria-label="Tabla de ajustes">
         <div className="settings-toolbar">
           <label className="settings-search-field" htmlFor="settings-search">
             <MagnifyingGlass size={16} aria-hidden="true" />
@@ -3773,7 +5265,7 @@ function ResourcesReadonlyView({
               type="search"
               value={searchValue}
               onChange={(event) => setSearchValue(event.target.value)}
-              placeholder="Buscar en modulo activo"
+              placeholder="Buscar en módulo activo"
             />
           </label>
 
@@ -3805,6 +5297,26 @@ function ResourcesReadonlyView({
           >
             {isLoading || isRefreshing ? "Actualizando..." : "Actualizar"}
           </button>
+
+          {activeModule === "rooms" ? (
+            <button
+              type="button"
+              className="refresh-button settings-room-new-button"
+              onClick={openNewRoomForm}
+            >
+              Nueva sala
+            </button>
+          ) : null}
+
+          {activeModule === "services" ? (
+            <button
+              type="button"
+              className="refresh-button settings-room-new-button"
+              onClick={openNewServiceForm}
+            >
+              Nuevo servicio
+            </button>
+          ) : null}
         </div>
 
         {isRefreshing ? (
@@ -3812,9 +5324,20 @@ function ResourcesReadonlyView({
         ) : null}
         {isStale ? (
           <p className="feedback error settings-feedback">
-            No se pudo refrescar Ajustes. Mostrando la ultima carga valida.
+            No se pudo refrescar Ajustes. Mostrando la última carga válida.
             {errorMessage ? ` (${errorMessage})` : ""}
           </p>
+        ) : null}
+
+        {activeModule === "services" ? (
+          <div className="settings-room-actions">
+            {serviceFormFeedback ? (
+              <p className="feedback subtle settings-feedback">{serviceFormFeedback}</p>
+            ) : null}
+            {serviceFormError ? (
+              <p className="feedback error settings-feedback">{serviceFormError}</p>
+            ) : null}
+          </div>
         ) : null}
 
         {activeModule === "rooms" ? (
@@ -3822,98 +5345,19 @@ function ResourcesReadonlyView({
             {roomFormFeedback ? (
               <p className="feedback subtle settings-feedback">{roomFormFeedback}</p>
             ) : null}
+            {roomFormError ? (
+              <p className="feedback error settings-feedback">{roomFormError}</p>
+            ) : null}
+          </div>
+        ) : null}
 
-            <button
-              type="button"
-              className="refresh-button settings-room-new-button"
-              onClick={openNewRoomForm}
-              disabled={roomFormOpen && !editingRoomId}
-            >
-              Nueva sala
-            </button>
-
-            {roomFormOpen ? (
-              <section className="settings-room-form" aria-label="Formulario de sala">
-                <div className="settings-room-form-header">
-                  <h3>{editingRoomId ? `Editar sala #${editingRoomId}` : "Nueva sala"}</h3>
-                </div>
-
-                <div className="settings-room-form-grid">
-                  <label className="client-filter-field" htmlFor="settings-room-name">
-                    <span>Nombre</span>
-                    <input
-                      id="settings-room-name"
-                      type="text"
-                      value={roomFormName}
-                      onChange={(event) => setRoomFormName(event.target.value)}
-                      placeholder="Sala Fénix"
-                    />
-                  </label>
-
-                  <label className="client-filter-field" htmlFor="settings-room-capacity">
-                    <span>Capacidad (1-50)</span>
-                    <input
-                      id="settings-room-capacity"
-                      type="number"
-                      min="1"
-                      max="50"
-                      value={roomFormCapacity}
-                      onChange={(event) => setRoomFormCapacity(event.target.value)}
-                    />
-                  </label>
-                </div>
-
-                <fieldset className="settings-room-features">
-                  <legend>Recursos</legend>
-                  <div className="settings-room-feature-list">
-                    {ROOM_FEATURE_OPTIONS.map((feature) => {
-                      const checked = roomFormFeatureKeys.includes(feature.key);
-                      return (
-                        <label
-                          key={`room-feature-${feature.key}`}
-                          className={`settings-room-feature${checked ? " is-selected" : ""}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(event) => toggleRoomFeature(feature.key, event.target.checked)}
-                          />
-                          <span>{feature.label}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </fieldset>
-
-                <div className="manual-form-actions">
-                  <button
-                    type="button"
-                    className="refresh-button"
-                    onClick={saveRoom}
-                    disabled={roomFormLoading || !roomFormName.trim()}
-                  >
-                    {roomFormLoading
-                      ? "Guardando..."
-                      : editingRoomId
-                        ? "Guardar cambios"
-                        : "Crear sala"}
-                  </button>
-                  <button
-                    type="button"
-                    className="logout-button"
-                    onClick={() => {
-                      setRoomFormOpen(false);
-                      resetRoomForm();
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-
-                {roomFormError ? (
-                  <p className="feedback error compact-feedback">{roomFormError}</p>
-                ) : null}
-              </section>
+        {activeModule === "compatibilities" ? (
+          <div className="settings-room-actions">
+            {compatibilityMutationFeedback ? (
+              <p className="feedback subtle settings-feedback">{compatibilityMutationFeedback}</p>
+            ) : null}
+            {compatibilityMutationError ? (
+              <p className="feedback error settings-feedback">{compatibilityMutationError}</p>
             ) : null}
           </div>
         ) : null}
@@ -3929,36 +5373,104 @@ function ResourcesReadonlyView({
                     <thead>
                       <tr>
                         <th>Servicio</th>
-                        <th>Duracion</th>
+                        <th>Duración</th>
                         <th>Precio</th>
-                        <th>Salas compatibles</th>
-                        <th>Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRows.map((service) => (
-                        <tr key={`settings-service-${service.id}`}>
-                          <td>{service.name}</td>
-                          <td>{service.durationLabel}</td>
-                          <td>{service.priceLabel}</td>
-                          <td>{service.compatibleRoomsCount}</td>
-                          <td><StatusChip status={statusToChipKey(service.status)} /></td>
-                        </tr>
-                      ))}
+                        <th>Requiere</th>
+	                        <th>Salas booking</th>
+	                        <th>Terapeutas</th>
+	                        <th>Booking</th>
+	                        <th>Estado</th>
+	                        <th>Acción</th>
+	                      </tr>
+	                    </thead>
+	                    <tbody>
+	                      {filteredRows.map((service) => {
+	                        const bookingIssues = [
+	                          Number(service.compatibleRoomsCount || 0) === 0 ? "Sin sala" : "",
+	                          Number(service.activeTherapistsCount || 0) === 0 ? "Sin terapeuta" : ""
+	                        ].filter(Boolean);
+	                        return (
+	                          <tr key={`settings-service-${service.id}`}>
+	                            <td>{service.name}</td>
+	                            <td>{service.durationLabel}</td>
+	                            <td>{service.priceLabel}</td>
+	                            <td>
+	                              {service.requiredFeatureKeys.length ? (
+	                                <span className="inline-tag-list">
+	                                  {service.requiredFeatures.map((feature) => (
+	                                    <span key={feature.key} className="inline-tag">{feature.label}</span>
+	                                  ))}
+	                                </span>
+	                              ) : (
+	                                <span className="inline-tag is-empty">Solo sillas</span>
+	                              )}
+	                            </td>
+	                            <td>
+	                              <ServicePackageList
+	                                items={service.compatibleRooms}
+	                                emptyLabel="Sin salas activas"
+	                              />
+	                            </td>
+	                            <td>
+	                              <ServicePackageList
+	                                items={service.activeTherapists}
+	                                emptyLabel="Sin terapeutas activos"
+	                              />
+	                            </td>
+	                            <td>
+	                              {bookingIssues.length ? (
+	                                <span className="inline-tag settings-booking-warning">{bookingIssues.join(" + ")}</span>
+	                              ) : (
+	                                <span className="inline-tag settings-booking-ready">Listo</span>
+	                              )}
+	                            </td>
+	                            <td><StatusChip status={statusToChipKey(service.status)} /></td>
+	                            <td>
+	                              <button
+	                                type="button"
+	                                className="table-open"
+	                                onClick={() => openEditServiceForm(service)}
+	                              >
+	                                Editar
+	                              </button>
+	                            </td>
+	                          </tr>
+	                        );
+	                      })}
                     </tbody>
                   </table>
                 </div>
 
                 <ul className="settings-mobile-cards" aria-label="Servicios mobile">
-                  {filteredRows.map((service) => (
-                    <li key={`settings-service-mobile-${service.id}`} className="settings-mobile-card">
-                      <p className="settings-mobile-title">{service.name}</p>
-                      <p className="settings-mobile-line">Duracion: {service.durationLabel}</p>
-                      <p className="settings-mobile-line">Precio: {service.priceLabel}</p>
-                      <p className="settings-mobile-line">Salas compatibles: {service.compatibleRoomsCount}</p>
-                      <StatusChip status={statusToChipKey(service.status)} />
-                    </li>
-                  ))}
+	                  {filteredRows.map((service) => {
+	                    const bookingIssues = [
+	                      Number(service.compatibleRoomsCount || 0) === 0 ? "Sin sala" : "",
+	                      Number(service.activeTherapistsCount || 0) === 0 ? "Sin terapeuta" : ""
+	                    ].filter(Boolean);
+	                    return (
+	                      <li key={`settings-service-mobile-${service.id}`} className="settings-mobile-card">
+	                        <p className="settings-mobile-title">{service.name}</p>
+	                        <p className="settings-mobile-line">Duración: {service.durationLabel}</p>
+	                        <p className="settings-mobile-line">Precio: {service.priceLabel}</p>
+	                        <p className="settings-mobile-line">Requiere: {service.requiredFeaturesLabel}</p>
+	                        <p className="settings-mobile-line">Salas booking: {service.compatibleRoomsLabel}</p>
+	                        <p className="settings-mobile-line">Terapeutas: {service.activeTherapistsLabel}</p>
+	                        <p className="settings-mobile-line">
+	                          Booking: {bookingIssues.length ? bookingIssues.join(" + ") : "Listo"}
+	                        </p>
+	                        <div className="settings-mobile-card-actions">
+	                          <StatusChip status={statusToChipKey(service.status)} />
+	                          <button
+	                            type="button"
+	                            className="table-open"
+	                            onClick={() => openEditServiceForm(service)}
+	                          >
+	                            Editar
+	                          </button>
+	                        </div>
+	                      </li>
+	                    );
+	                  })}
                 </ul>
               </>
             ) : null}
@@ -3974,7 +5486,7 @@ function ResourcesReadonlyView({
 	                        <th>Recursos</th>
 	                        <th>Servicios compatibles</th>
 	                        <th>Estado</th>
-	                        <th>Accion</th>
+	                        <th>Acción</th>
 	                      </tr>
 	                    </thead>
 	                    <tbody>
@@ -4040,6 +5552,7 @@ function ResourcesReadonlyView({
                         <th>Servicio</th>
                         <th>Sala</th>
                         <th>Estado</th>
+                        <th>Acción</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4048,6 +5561,20 @@ function ResourcesReadonlyView({
                           <td>{item.serviceLabel}</td>
                           <td>{item.roomLabel}</td>
                           <td><StatusChip status={statusToChipKey(item.status)} /></td>
+                          <td>
+                            <button
+                              type="button"
+                              className="table-open"
+                              onClick={() => toggleCompatibility(item)}
+                              disabled={compatibilityMutationId === item.id}
+                            >
+                              {compatibilityMutationId === item.id
+                                ? "Guardando..."
+                                : item.status === "ACTIVE"
+                                  ? "Desactivar"
+                                  : "Activar"}
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -4059,63 +5586,323 @@ function ResourcesReadonlyView({
                     <li key={`settings-compat-mobile-${item.id}`} className="settings-mobile-card">
                       <p className="settings-mobile-title">{item.serviceLabel}</p>
                       <p className="settings-mobile-line">Sala: {item.roomLabel}</p>
-                      <StatusChip status={statusToChipKey(item.status)} />
+                      <div className="settings-mobile-card-actions">
+                        <StatusChip status={statusToChipKey(item.status)} />
+                        <button
+                          type="button"
+                          className="table-open"
+                          onClick={() => toggleCompatibility(item)}
+                          disabled={compatibilityMutationId === item.id}
+                        >
+                          {compatibilityMutationId === item.id
+                            ? "Guardando..."
+                            : item.status === "ACTIVE"
+                              ? "Desactivar"
+                              : "Activar"}
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
               </>
             ) : null}
 
-            {activeModule === "schedules" ? (
-              <>
-                <div className="table-wrap">
-                  <table className="appointments-table settings-table settings-schedules-table">
-                    <thead>
-                      <tr>
-                        <th>Recurso</th>
-                        <th>Tipo</th>
-                        <th>Dia</th>
-                        <th>Horario</th>
-                        <th>Slot</th>
-                        <th>Vigencia</th>
-                        <th>Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRows.map((slot) => (
-                        <tr key={`settings-schedule-${slot.id}`}>
-                          <td>{slot.resourceLabel}</td>
-                          <td>{slot.resourceTypeLabel}</td>
-                          <td>{slot.dayLabel}</td>
-                          <td>{slot.timeRangeLabel}</td>
-                          <td>{slot.slotLabel}</td>
-                          <td>{slot.validityLabel}</td>
-                          <td><StatusChip status={statusToChipKey(slot.status)} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <ul className="settings-mobile-cards" aria-label="Horarios mobile">
-                  {filteredRows.map((slot) => (
-                    <li key={`settings-schedule-mobile-${slot.id}`} className="settings-mobile-card">
-                      <p className="settings-mobile-title">{slot.resourceLabel}</p>
-                      <p className="settings-mobile-line">Tipo: {slot.resourceTypeLabel}</p>
-                      <p className="settings-mobile-line">Dia: {slot.dayLabel}</p>
-                      <p className="settings-mobile-line">Horario: {slot.timeRangeLabel}</p>
-                      <p className="settings-mobile-line">Slot: {slot.slotLabel}</p>
-                      <p className="settings-mobile-line">Vigencia: {slot.validityLabel}</p>
-                      <StatusChip status={statusToChipKey(slot.status)} />
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : null}
           </>
         )}
-      </section>
+            </section>
+          ) : (
+            <section className="settings-contract-panel" aria-label={activeModuleMeta.label}>
+              {activeModule === "booking_rules" ? (
+                <div className="settings-contract-grid">
+                  <article className="settings-contract-card">
+                    <h3>Cadena de disponibilidad</h3>
+                    <p>Booking solo debe ofrecer horarios cuando el servicio tiene sala compatible activa, terapeuta activo y disponibilidad real.</p>
+                    <dl>
+                      <div><dt>Servicios listos</dt><dd>{normalizedSettings.services.length - bookingBlockedServices.length}</dd></div>
+                      <div><dt>Servicios con alerta</dt><dd>{bookingBlockedServices.length}</dd></div>
+                    </dl>
+                  </article>
+                  <article className="settings-contract-card">
+                    <h3>Identificación previa</h3>
+                    <p>El cliente valida WhatsApp antes de ver horarios. La disponibilidad no se expone sin ese paso.</p>
+                    <dl>
+                      <div><dt>País base</dt><dd>Bolivia</dd></div>
+                      <div><dt>Zona horaria</dt><dd>{resources?.center?.timezone || DEFAULT_TIMEZONE}</dd></div>
+                    </dl>
+                  </article>
+                  <article className="settings-contract-card">
+                    <h3>Claims por minuto</h3>
+                    <p>La confirmación y los holds reservan terapeuta y sala por minuto para evitar doble reserva.</p>
+                    <dl>
+                      <div><dt>Fuente de verdad</dt><dd>MySQL/MariaDB</dd></div>
+                      <div><dt>Motor</dt><dd>API local Docker</dd></div>
+                    </dl>
+                  </article>
+                </div>
+              ) : (
+                <div className="settings-contract-grid">
+                  <article className="settings-contract-card settings-contract-card-wide">
+                    <h3>Centro operativo</h3>
+                    <p>Datos base usados para etiquetar Admin, Booking público y respuestas de API.</p>
+                    <dl>
+                      <div><dt>Nombre visible</dt><dd>{centerDisplayName}</dd></div>
+                      <div><dt>Tenant</dt><dd>{centerSlug}</dd></div>
+                      <div><dt>Zona horaria</dt><dd>{resources?.center?.timezone || DEFAULT_TIMEZONE}</dd></div>
+                      <div><dt>Servicios</dt><dd>{normalizedSettings.summary.servicesTotal}</dd></div>
+                      <div><dt>Salas</dt><dd>{normalizedSettings.summary.roomsTotal}</dd></div>
+                      <div><dt>Compatibilidades</dt><dd>{normalizedSettings.summary.compatibilitiesTotal}</dd></div>
+                    </dl>
+                  </article>
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+      </div>
+
+      <SettingsEditorDrawer
+        open={serviceFormOpen || roomFormOpen}
+        type={serviceFormOpen ? "service" : "room"}
+        service={{
+          editingId: editingServiceId,
+          name: serviceFormName,
+          duration: serviceFormDuration,
+          price: serviceFormPrice,
+          isActive: serviceFormIsActive,
+          featureKeys: serviceFormFeatureKeys,
+          loading: serviceFormLoading,
+          error: serviceFormError,
+          setName: setServiceFormName,
+          setDuration: setServiceFormDuration,
+          setPrice: setServiceFormPrice,
+          setIsActive: setServiceFormIsActive,
+          toggleFeature: toggleServiceFeature,
+          onSave: saveService
+        }}
+        room={{
+          editingId: editingRoomId,
+          name: roomFormName,
+          capacity: roomFormCapacity,
+          isActive: roomFormIsActive,
+          featureKeys: roomFormFeatureKeys,
+          loading: roomFormLoading,
+          error: roomFormError,
+          setName: setRoomFormName,
+          setCapacity: setRoomFormCapacity,
+          setIsActive: setRoomFormIsActive,
+          toggleFeature: toggleRoomFeature,
+          onSave: saveRoom
+        }}
+        onClose={closeSettingsEditor}
+      />
     </section>
+  );
+}
+
+function SettingsEditorDrawer({ open, type, service, room, onClose }) {
+  if (!open) {
+    return null;
+  }
+
+  const isService = type === "service";
+  const title = isService
+    ? service.editingId
+      ? service.name || "Servicio"
+      : "Nuevo servicio"
+    : room.editingId
+      ? room.name || "Sala"
+      : "Nueva sala";
+  const kicker = isService
+    ? service.editingId ? "Editar servicio" : "Crear servicio"
+    : room.editingId ? "Editar sala" : "Crear sala";
+  const loading = isService ? service.loading : room.loading;
+  const error = isService ? service.error : room.error;
+
+  return (
+    <div className="drawer-overlay" role="presentation" onClick={onClose}>
+      <aside
+        className="drawer settings-editor-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label={kicker}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="drawer-header">
+          <div>
+            <p className="drawer-kicker">{kicker}</p>
+            <h2>{title}</h2>
+          </div>
+          <button type="button" className="drawer-close" onClick={onClose} aria-label="Cerrar ajustes">
+            <X size={18} weight="bold" />
+          </button>
+        </header>
+
+        <div className="drawer-body settings-editor-body">
+          {isService ? (
+            <>
+              <div className="settings-editor-grid">
+                <label className="client-filter-field" htmlFor="settings-service-name">
+                  <span>Nombre</span>
+                  <input
+                    id="settings-service-name"
+                    type="text"
+                    value={service.name}
+                    onChange={(event) => service.setName(event.target.value)}
+                    placeholder="Carta Astral"
+                  />
+                </label>
+
+                <label className="client-filter-field" htmlFor="settings-service-duration">
+                  <span>Duración</span>
+                  <input
+                    id="settings-service-duration"
+                    type="number"
+                    min="15"
+                    max="480"
+                    step="15"
+                    value={service.duration}
+                    onChange={(event) => service.setDuration(event.target.value)}
+                  />
+                </label>
+
+                <label className="client-filter-field" htmlFor="settings-service-price">
+                  <span>Precio BOB</span>
+                  <input
+                    id="settings-service-price"
+                    type="number"
+                    min="0"
+                    max="999999"
+                    step="0.01"
+                    value={service.price}
+                    onChange={(event) => service.setPrice(event.target.value)}
+                  />
+                </label>
+              </div>
+
+              <label className={`settings-room-status-toggle${service.isActive ? " is-active" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={service.isActive}
+                  onChange={(event) => service.setIsActive(event.target.checked)}
+                />
+                <span className="settings-room-status-control" aria-hidden="true" />
+                <span>{service.isActive ? "Servicio activo" : "Servicio inactivo"}</span>
+              </label>
+
+              <fieldset className="settings-room-features">
+                <legend>Requisito de sala</legend>
+                <div className="settings-room-feature-list">
+                  {ROOM_FEATURE_OPTIONS.map((feature) => {
+                    const checked = service.featureKeys.includes(feature.key);
+                    return (
+                      <label
+                        key={`service-feature-${feature.key}`}
+                        className={`settings-room-feature${checked ? " is-selected" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => service.toggleFeature(feature.key, event.target.checked)}
+                        />
+                        <span>{feature.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            </>
+          ) : (
+            <>
+              <div className="settings-editor-grid">
+                <label className="client-filter-field" htmlFor="settings-room-name">
+                  <span>Nombre</span>
+                  <input
+                    id="settings-room-name"
+                    type="text"
+                    value={room.name}
+                    onChange={(event) => room.setName(event.target.value)}
+                    placeholder="Sala Fenix"
+                  />
+                </label>
+
+                <label className="client-filter-field" htmlFor="settings-room-capacity">
+                  <span>Capacidad</span>
+                  <input
+                    id="settings-room-capacity"
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={room.capacity}
+                    onChange={(event) => room.setCapacity(event.target.value)}
+                  />
+                </label>
+              </div>
+
+              {room.editingId ? (
+                <label className={`settings-room-status-toggle${room.isActive ? " is-active" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={room.isActive}
+                    onChange={(event) => room.setIsActive(event.target.checked)}
+                  />
+                  <span className="settings-room-status-control" aria-hidden="true" />
+                  <span>{room.isActive ? "Sala activa" : "Sala inactiva"}</span>
+                </label>
+              ) : null}
+
+              <fieldset className="settings-room-features">
+                <legend>Recursos</legend>
+                <div className="settings-room-feature-list">
+                  {ROOM_FEATURE_OPTIONS.map((feature) => {
+                    const checked = room.featureKeys.includes(feature.key);
+                    return (
+                      <label
+                        key={`room-feature-${feature.key}`}
+                        className={`settings-room-feature${checked ? " is-selected" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => room.toggleFeature(feature.key, event.target.checked)}
+                        />
+                        <span>{feature.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            </>
+          )}
+
+          <div className="manual-form-actions settings-editor-actions">
+            <button
+              type="button"
+              className="refresh-button"
+              onClick={isService ? service.onSave : room.onSave}
+              disabled={
+                loading ||
+                (isService ? !service.name.trim() : !room.name.trim())
+              }
+            >
+              {loading
+                ? "Guardando..."
+                : isService
+                  ? service.editingId ? "Guardar servicio" : "Crear servicio"
+                  : room.editingId
+                    ? "Guardar sala"
+                    : "Crear sala"}
+            </button>
+            <button type="button" className="logout-button" onClick={onClose} disabled={loading}>
+              Cancelar
+            </button>
+          </div>
+
+          {error ? (
+            <p className="feedback error compact-feedback">{error}</p>
+          ) : null}
+        </div>
+      </aside>
+    </div>
   );
 }
 
@@ -4298,11 +6085,11 @@ function GlobalSearchModal({
         className="global-search-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="Busqueda global admin"
+        aria-label="Búsqueda global admin"
       >
         <header className="global-search-header">
           <div>
-            <p className="global-search-eyebrow">Busqueda global</p>
+            <p className="global-search-eyebrow">Búsqueda global</p>
             <p className="global-search-subtitle">Clientes, citas, casos y salas</p>
           </div>
           <button
@@ -4526,6 +6313,7 @@ function AdminApp() {
   const clientsPayloadRef = useRef(null);
   const historyPayloadRef = useRef(null);
   const therapistsPayloadRef = useRef(null);
+  const resourcesPayloadRef = useRef(null);
   const detailPayloadRef = useRef(null);
   const clientDetailPayloadRef = useRef(null);
   const therapistDetailPayloadRef = useRef(null);
@@ -4545,6 +6333,10 @@ function AdminApp() {
   useEffect(() => {
     therapistsPayloadRef.current = therapistsPayload;
   }, [therapistsPayload]);
+
+  useEffect(() => {
+    resourcesPayloadRef.current = resourcesPayload;
+  }, [resourcesPayload]);
 
   useEffect(() => {
     detailPayloadRef.current = detailPayload;
@@ -4662,7 +6454,7 @@ function AdminApp() {
     setSelectedClientId(null);
     setClientDetailPayload(null);
     setLastRefreshedAt(null);
-    setAuthError("Sesion expirada o token invalido. Inicia sesion nuevamente.");
+    setAuthError("Sesión expirada o token inválido. Inicia sesión nuevamente.");
   }, []);
 
   const fetchAppointmentDetail = useCallback(
@@ -4986,7 +6778,7 @@ function AdminApp() {
         return;
       }
 
-      const hasCachedPayload = Boolean(resourcesPayload);
+      const hasCachedPayload = Boolean(resourcesPayloadRef.current);
       if (hasCachedPayload) {
         setResourcesRefreshing(true);
       } else {
@@ -5030,10 +6822,10 @@ function AdminApp() {
       }
     }
 
-    if (authToken && activeSection === "control" && !manualModalOpen && resourcesPayload) {
+    if (authToken && activeSection === "control" && !manualModalOpen && resourcesPayloadRef.current) {
       setResourcesLoading(false);
       setResourcesRefreshing(false);
-    } else if (authToken && activeSection === "control" && !manualModalOpen && !resourcesPayload) {
+    } else if (authToken && activeSection === "control" && !manualModalOpen && !resourcesPayloadRef.current) {
       setResourcesLoading(false);
       setResourcesRefreshing(false);
       deferTimer = window.setTimeout(loadResources, CONTROL_RESOURCES_DEFER_MS);
@@ -5047,7 +6839,7 @@ function AdminApp() {
       }
       controller.abort();
     };
-  }, [authToken, activeSection, manualModalOpen, resourcesPayload, resourcesRefreshTick, handleUnauthorized]);
+  }, [authToken, activeSection, manualModalOpen, resourcesRefreshTick, handleUnauthorized]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -5346,20 +7138,28 @@ function AdminApp() {
   const recentAppointments = payload?.recentCreated || [];
 
   const timelineAppointments = useMemo(() => {
+    if (activeSection !== "control" || activeTab !== "timeline") {
+      return [];
+    }
+
     return sortByStartsAt(mergeById(todayAppointments, upcomingAppointments));
-  }, [todayAppointments, upcomingAppointments]);
+  }, [activeSection, activeTab, todayAppointments, upcomingAppointments]);
 
   const listAppointments = useMemo(() => {
     return sortByStartsAt(mergeById(todayAppointments, upcomingAppointments, recentAppointments));
   }, [todayAppointments, upcomingAppointments, recentAppointments]);
 
   const roomsAppointments = useMemo(() => {
+    if (activeSection !== "control" || activeTab !== "rooms") {
+      return [];
+    }
+
     if (Array.isArray(payload?.roomsActive)) {
       return sortByStartsAt(payload.roomsActive);
     }
 
     return sortByStartsAt(listAppointments.filter((entry) => isActiveRoomAppointment(entry)));
-  }, [payload, listAppointments]);
+  }, [activeSection, activeTab, payload, listAppointments]);
 
   const listedClients = clientsPayload?.clients || [];
   const historyAppointments = historyPayload?.history || [];
@@ -5418,46 +7218,92 @@ function AdminApp() {
     );
   }, [listedTherapists, listAppointments]);
   const controlServiceOptions = useMemo(
-    () => buildAppointmentEntityOptions({
-      appointments: listAppointments,
-      resources: manualServices,
-      resourceType: "service"
-    }),
-    [listAppointments, manualServices]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return buildAppointmentEntityOptions({
+        appointments: listAppointments,
+        resources: manualServices,
+        resourceType: "service"
+      });
+    },
+    [activeSection, activeTab, listAppointments, manualServices]
   );
   const controlTherapistOptions = useMemo(
-    () => buildAppointmentEntityOptions({
-      appointments: listAppointments,
-      resources: manualTherapists,
-      resourceType: "therapist"
-    }),
-    [listAppointments, manualTherapists]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return buildAppointmentEntityOptions({
+        appointments: listAppointments,
+        resources: manualTherapists,
+        resourceType: "therapist"
+      });
+    },
+    [activeSection, activeTab, listAppointments, manualTherapists]
   );
   const controlRoomOptions = useMemo(
-    () => buildAppointmentEntityOptions({
-      appointments: listAppointments,
-      resources: manualRooms,
-      resourceType: "room"
-    }),
-    [listAppointments, manualRooms]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return buildAppointmentEntityOptions({
+        appointments: listAppointments,
+        resources: manualRooms,
+        resourceType: "room"
+      });
+    },
+    [activeSection, activeTab, listAppointments, manualRooms]
   );
   const filteredTodayAppointments = useMemo(
-    () => filterAppointmentsForControl(todayAppointments, controlFilters, timezone),
-    [todayAppointments, controlFilters, timezone]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return filterAppointmentsForControl(todayAppointments, controlFilters, timezone);
+    },
+    [activeSection, activeTab, todayAppointments, controlFilters, timezone]
   );
   const filteredUpcomingAppointments = useMemo(
-    () => filterAppointmentsForControl(upcomingAppointments, controlFilters, timezone),
-    [upcomingAppointments, controlFilters, timezone]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return filterAppointmentsForControl(upcomingAppointments, controlFilters, timezone);
+    },
+    [activeSection, activeTab, upcomingAppointments, controlFilters, timezone]
   );
   const filteredRecentAppointments = useMemo(
-    () => filterAppointmentsForControl(recentAppointments, controlFilters, timezone),
-    [recentAppointments, controlFilters, timezone]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return filterAppointmentsForControl(recentAppointments, controlFilters, timezone);
+    },
+    [activeSection, activeTab, recentAppointments, controlFilters, timezone]
   );
   const filteredListAppointments = useMemo(
-    () => filterAppointmentsForControl(listAppointments, controlFilters, timezone),
-    [listAppointments, controlFilters, timezone]
+    () => {
+      if (activeSection !== "control" || activeTab !== "today") {
+        return [];
+      }
+
+      return filterAppointmentsForControl(listAppointments, controlFilters, timezone);
+    },
+    [activeSection, activeTab, listAppointments, controlFilters, timezone]
   );
   const filteredCasesByStatus = useMemo(() => {
+    if (activeSection !== "control" || activeTab !== "today") {
+      return [];
+    }
+
     return [
       {
         status: "pending",
@@ -5466,7 +7312,7 @@ function AdminApp() {
       },
       {
         status: "no_show",
-        label: "No show",
+        label: "No asistió",
         appointments: filteredListAppointments.filter((item) => item.status === "no_show")
       },
       {
@@ -5475,7 +7321,7 @@ function AdminApp() {
         appointments: filteredListAppointments.filter((item) => item.status === "cancelled")
       }
     ];
-  }, [filteredListAppointments]);
+  }, [activeSection, activeTab, filteredListAppointments]);
 
   const selectedAppointmentIdsSet = useMemo(
     () => new Set(selectedAppointmentIds),
@@ -5485,6 +7331,28 @@ function AdminApp() {
     () => new Set(selectedClientIds),
     [selectedClientIds]
   );
+  const resetControlFilters = useCallback(() => {
+    setControlFilters({
+      q: "",
+      fromDate: "",
+      toDate: "",
+      status: "all",
+      serviceId: "all",
+      therapistId: "all",
+      roomId: "all",
+      groupBy: "none"
+    });
+  }, []);
+  const openManualAppointmentModal = useCallback(() => {
+    setManualCreateError("");
+    setManualCreateSuccess("");
+    setManualDraft((value) => ({
+      ...value,
+      date: controlDate || getDateKeyForTimezone(new Date(), value.timezone),
+      startsAt: ""
+    }));
+    setManualModalOpen(true);
+  }, [controlDate]);
 
   useEffect(() => {
     const availableAppointmentIds = new Set(listAppointments.map((entry) => Number(entry.id)));
@@ -5666,7 +7534,7 @@ function AdminApp() {
       const admin = loginPayload?.admin || null;
 
       if (!token || !admin) {
-        throw new Error("Respuesta de login invalida");
+        throw new Error("Respuesta de login inválida");
       }
 
       saveAuth(token, admin);
@@ -5677,7 +7545,7 @@ function AdminApp() {
       setRefreshTick((value) => value + 1);
       setClientsRefreshTick((value) => value + 1);
     } catch (loginRequestError) {
-      setAuthError(loginRequestError.message || "No se pudo iniciar sesion");
+      setAuthError(loginRequestError.message || "No se pudo iniciar sesión");
     } finally {
       setLoginLoading(false);
     }
@@ -5922,7 +7790,7 @@ function AdminApp() {
     });
   }
 
-  function toggleAppointmentSelection(appointmentId, checked) {
+  const toggleAppointmentSelection = useCallback((appointmentId, checked) => {
     const normalizedId = Number(appointmentId);
     setSelectedAppointmentIds((current) => {
       const currentSet = new Set(current.map((entry) => Number(entry)));
@@ -5935,9 +7803,9 @@ function AdminApp() {
 
       return Array.from(currentSet.values());
     });
-  }
+  }, []);
 
-  function toggleAppointmentSelectionGroup(ids, checked) {
+  const toggleAppointmentSelectionGroup = useCallback((ids, checked) => {
     const normalizedIds = ids.map((entry) => Number(entry)).filter((entry) => Number.isInteger(entry) && entry > 0);
     setSelectedAppointmentIds((current) => {
       const currentSet = new Set(current.map((entry) => Number(entry)));
@@ -5952,9 +7820,9 @@ function AdminApp() {
 
       return Array.from(currentSet.values());
     });
-  }
+  }, []);
 
-  async function requestDeleteAppointments(ids) {
+  const requestDeleteAppointments = useCallback(async (ids) => {
     if (!ids.length || deleteAppointmentsLoading) {
       return;
     }
@@ -5996,9 +7864,15 @@ function AdminApp() {
     } finally {
       setDeleteAppointmentsLoading(false);
     }
-  }
+  }, [
+    authToken,
+    closeDrawer,
+    deleteAppointmentsLoading,
+    handleUnauthorized,
+    selectedAppointmentId
+  ]);
 
-  function handleDeleteAppointmentButton(appointmentId) {
+  const handleDeleteAppointmentButton = useCallback((appointmentId) => {
     if (deleteAppointmentsLoading) {
       return;
     }
@@ -6013,9 +7887,9 @@ function AdminApp() {
     setDeleteAppointmentsError("");
     setConfirmBulkAppointmentsDelete(false);
     setArmedDeleteAppointmentId(normalizedId);
-  }
+  }, [armedDeleteAppointmentId, deleteAppointmentsLoading, requestDeleteAppointments]);
 
-  function handleBulkDeleteAppointmentsButton() {
+  const handleBulkDeleteAppointmentsButton = useCallback(() => {
     if (deleteAppointmentsLoading || selectedAppointmentIds.length === 0) {
       return;
     }
@@ -6028,7 +7902,12 @@ function AdminApp() {
     setDeleteAppointmentsError("");
     setArmedDeleteAppointmentId(null);
     setConfirmBulkAppointmentsDelete(true);
-  }
+  }, [
+    confirmBulkAppointmentsDelete,
+    deleteAppointmentsLoading,
+    requestDeleteAppointments,
+    selectedAppointmentIds
+  ]);
 
   function toggleClientSelection(clientId, checked) {
     const normalizedId = Number(clientId);
@@ -6558,7 +8437,7 @@ function AdminApp() {
           {!authToken ? (
             <section className="auth-panel" aria-label="Login admin">
               <h2>Ingreso Admin</h2>
-              <p className="auth-subtitle">Inicia sesion para acceder al Control.</p>
+              <p className="auth-subtitle">Inicia sesión para acceder al Control.</p>
 
               <form className="auth-form" onSubmit={handleLogin}>
                 <label className="auth-field" htmlFor="admin-email">
@@ -6600,7 +8479,7 @@ function AdminApp() {
                     {activeTab === "history" ? (
                       <>
                         <p>
-                          Busqueda: <strong>{historyFilters.q || "-"}</strong>
+                          Búsqueda: <strong>{historyFilters.q || "-"}</strong>
                         </p>
                         <p>
                           Estado: <strong>{historyFilters.status}</strong>
@@ -6609,7 +8488,7 @@ function AdminApp() {
                           Orden: <strong>{historyFilters.order}</strong>
                         </p>
                         <p>
-                          Ultima carga: <strong>{historyGeneratedAtLabel}</strong>
+                          Última carga: <strong>{historyGeneratedAtLabel}</strong>
                         </p>
                       </>
                     ) : (
@@ -6621,7 +8500,7 @@ function AdminApp() {
                           Upcoming: <strong>{toBoolLabel(includeUpcoming)}</strong>
                         </p>
                         <p>
-                          Ultima carga: <strong>{generatedAtLabel}</strong>
+                          Última carga: <strong>{generatedAtLabel}</strong>
                         </p>
                       </>
                     )}
@@ -6653,7 +8532,7 @@ function AdminApp() {
                       ) : null}
                       {historyError && !hasHistoryData ? <p className="feedback error">{historyError}</p> : null}
                       {historyError && hasHistoryData ? (
-                        <p className="feedback error">No se pudo actualizar historial. Mostrando ultima carga valida.</p>
+                        <p className="feedback error">No se pudo actualizar historial. Mostrando última carga válida.</p>
                       ) : null}
                       {historyRefreshing ? (
                         <p className="feedback subtle">Actualizando historial en segundo plano...</p>
@@ -6664,7 +8543,7 @@ function AdminApp() {
                       {isLoading && !hasControlData ? <p className="feedback">Cargando tablero...</p> : null}
                       {error && !hasControlData ? <p className="feedback error">{error}</p> : null}
                       {error && hasControlData ? (
-                        <p className="feedback error">No se pudo actualizar el tablero. Mostrando ultima carga valida.</p>
+                        <p className="feedback error">No se pudo actualizar el tablero. Mostrando última carga válida.</p>
                       ) : null}
                       {deleteAppointmentsError ? (
                         <p className="feedback error">{deleteAppointmentsError}</p>
@@ -6763,7 +8642,7 @@ function AdminApp() {
                           <h2>Historial</h2>
                           <p>Actualizado: {historyGeneratedAtLabel}</p>
                         </div>
-                        <HistoryTable appointments={historyAppointments} timezone={timezone} />
+                        <MemoHistoryTable appointments={historyAppointments} timezone={timezone} />
                       </section>
                     </>
                   ) : null}
@@ -6773,18 +8652,18 @@ function AdminApp() {
                       {activeTab === "today" ? (
                         <>
                           <section className="summary-grid" aria-label="Resumen por estado">
-                            <SummaryCard label="Pending" value={summary.pending} className="status-pending" />
-                            <SummaryCard label="Confirmed" value={summary.confirmed} className="status-confirmed" />
-                            <SummaryCard label="Cancelled" value={summary.cancelled} className="status-cancelled" />
-                            <SummaryCard label="Completed" value={summary.completed} className="status-completed" />
-                            <SummaryCard label="No show" value={summary.no_show} className="status-no-show" />
+                            <SummaryCard label="Pendientes" value={summary.pending} className="status-pending" />
+                            <SummaryCard label="Confirmadas" value={summary.confirmed} className="status-confirmed" />
+                            <SummaryCard label="Canceladas" value={summary.cancelled} className="status-cancelled" />
+                            <SummaryCard label="Completadas" value={summary.completed} className="status-completed" />
+                            <SummaryCard label="No asistió" value={summary.no_show} className="status-no-show" />
                             <SummaryCard label="Total" value={summary.total} className="status-total" />
                           </section>
 
                           <section className="panel" aria-label="Casos prioritarios">
                             <div className="panel-heading">
                               <h2>Casos</h2>
-                              <p>Pending / No show / Canceladas</p>
+                              <p>Pendientes / No asistió / Canceladas</p>
                             </div>
                             <div className="cases-grid">
                               {filteredCasesByStatus.map((group) => (
@@ -6817,7 +8696,7 @@ function AdminApp() {
                             </div>
                           </section>
 
-                          <ControlToolbar
+                          <MemoControlToolbar
                             filters={controlFilters}
                             services={controlServiceOptions}
                             therapists={controlTherapistOptions}
@@ -6826,28 +8705,8 @@ function AdminApp() {
                             totalCount={listAppointments.length}
                             createDisabled={hasResourcesData && !manualServices.length}
                             onChange={setControlFilters}
-                            onReset={() =>
-                              setControlFilters({
-                                q: "",
-                                fromDate: "",
-                                toDate: "",
-                                status: "all",
-                                serviceId: "all",
-                                therapistId: "all",
-                                roomId: "all",
-                                groupBy: "none"
-                              })
-                            }
-                            onCreate={() => {
-                              setManualCreateError("");
-                              setManualCreateSuccess("");
-                              setManualDraft((value) => ({
-                                ...value,
-                                date: controlDate || getDateKeyForTimezone(new Date(), value.timezone),
-                                startsAt: ""
-                              }));
-                              setManualModalOpen(true);
-                            }}
+                            onReset={resetControlFilters}
+                            onCreate={openManualAppointmentModal}
                           />
 
                           <section className="panel" aria-label="Citas del día">
@@ -6855,7 +8714,7 @@ function AdminApp() {
                               <h2>Citas del día</h2>
                               <p>{filteredTodayAppointments.length} de {todayAppointments.length} registros</p>
                             </div>
-                            <AppointmentTable
+                            <MemoAppointmentTable
                               appointments={filteredTodayAppointments}
                               timezone={timezone}
                               groupBy={controlFilters.groupBy}
@@ -6870,12 +8729,12 @@ function AdminApp() {
                           </section>
 
                           {includeUpcoming ? (
-                            <section className="panel" aria-label="Proximas citas">
+                            <section className="panel" aria-label="Próximas citas">
                               <div className="panel-heading">
-                                <h2>Proximas citas</h2>
+                                <h2>Próximas citas</h2>
                                 <p>{filteredUpcomingAppointments.length} de {upcomingAppointments.length} registros</p>
                               </div>
-                              <AppointmentTable
+                              <MemoAppointmentTable
                                 appointments={filteredUpcomingAppointments}
                                 timezone={timezone}
                                 groupBy={controlFilters.groupBy}
@@ -6890,12 +8749,12 @@ function AdminApp() {
                             </section>
                           ) : null}
 
-                          <section className="panel" aria-label="Ultimas citas creadas">
+                          <section className="panel" aria-label="Últimas citas creadas">
                             <div className="panel-heading">
-                              <h2>Ultimas citas creadas</h2>
+                              <h2>Últimas citas creadas</h2>
                               <p>{filteredRecentAppointments.length} de {recentAppointments.length} registros</p>
                             </div>
-                            <AppointmentTable
+                            <MemoAppointmentTable
                               appointments={filteredRecentAppointments}
                               timezone={timezone}
                               groupBy={controlFilters.groupBy}
@@ -6917,7 +8776,7 @@ function AdminApp() {
                             <h2>Timeline</h2>
                             <p>{timelineAppointments.length} citas</p>
                           </div>
-                          <TimelineView
+                          <MemoTimelineView
                             appointments={timelineAppointments}
                             timezone={timezone}
                             onSelect={openDrawer}
@@ -6934,7 +8793,7 @@ function AdminApp() {
                           {kanbanError ? (
                             <p className="feedback error compact-feedback">{kanbanError}</p>
                           ) : null}
-                          <RoomsKanban
+                          <MemoRoomsKanban
                             appointments={roomsAppointments}
                             rooms={payload?.rooms || []}
                             timezone={timezone}
@@ -7029,7 +8888,7 @@ function AdminApp() {
                       Onboarding: <strong>{clientsFilters.onboarding}</strong>
                     </p>
                     <p>
-                      Ultima carga: <strong>{clientsGeneratedAtLabel}</strong>
+                      Última carga: <strong>{clientsGeneratedAtLabel}</strong>
                     </p>
                   </section>
 
@@ -7038,7 +8897,7 @@ function AdminApp() {
                     <p className="feedback error">{clientsError}</p>
                   ) : null}
                   {clientsError && hasClientsData ? (
-                    <p className="feedback error">No se pudo actualizar clientes. Mostrando ultima carga valida.</p>
+                    <p className="feedback error">No se pudo actualizar clientes. Mostrando última carga válida.</p>
                   ) : null}
                   {clientsRefreshing ? (
                     <p className="feedback subtle">Actualizando clientes en segundo plano...</p>
@@ -7053,6 +8912,7 @@ function AdminApp() {
                         <h2>Clientes</h2>
                         <p>{listedClients.length} registros</p>
                       </div>
+                      <ClientCrmSnapshot clients={listedClients} timezone={timezone} />
                       <ClientTable
                         clients={listedClients}
                         timezone={timezone}
@@ -7080,6 +8940,8 @@ function AdminApp() {
                       isRefreshing={therapistsRefreshing}
                       isStale={Boolean(therapistsError && hasTherapistsData)}
                       errorMessage={therapistsError}
+                      authToken={authToken}
+                      onUnauthorized={handleUnauthorized}
                       onSelect={openTherapistDrawer}
                     />
                   ) : null}
@@ -7145,10 +9007,16 @@ function AdminApp() {
         detail={therapistDetailPayload}
         loading={therapistDetailLoading}
         error={therapistDetailError}
+        authToken={authToken}
         onClose={closeTherapistDrawer}
+        onUnauthorized={handleUnauthorized}
+        onAvailabilitySaved={(nextPayload) => {
+          setTherapistDetailPayload(nextPayload);
+          setTherapistsRefreshTick((value) => value + 1);
+        }}
       />
 
-      <ManualAppointmentModal
+      <MemoManualAppointmentModal
         open={manualModalOpen}
         draft={manualDraft}
         services={manualServices}

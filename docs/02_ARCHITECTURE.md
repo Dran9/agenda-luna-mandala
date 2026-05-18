@@ -11,6 +11,8 @@ Phosphor Icons
 Zod
 JWT
 node:test
+Docker Compose
+Caddy
 ```
 
 ## Estructura Esperada
@@ -56,18 +58,21 @@ agenda-luna-mandala/
 
 ## Runtime
 
-Un solo proceso Node en Hostinger Web:
+Runtime principal v1: VPS Hostinger KVM con Docker Compose.
 
-- Express sirve API.
-- Express sirve build admin en `/admin`.
-- Express sirve booking en `/` y `/booking`.
-- Jobs internos livianos pueden correr despues, pero no en Fase 0.
+- Contenedor `api`: Express sirve API.
+- Contenedor `db`: MySQL/MariaDB es fuente de verdad.
+- Contenedor `caddy`: reverse proxy y terminacion HTTP/HTTPS en VPS.
+- Cloudflare queda delante del VPS.
+- Cloudflare Pages puede servir Reserva publica y Admin estaticos en produccion.
+- Express puede conservar serving estatico en `/`, `/booking` y `/admin` como fallback local/prod-sim durante la transicion.
+- Jobs internos livianos pueden correr despues, pero no se introducen Redis/BullMQ en v1.
 
 ## Regla De Runtime
 
-`server/index.js` es sagrado.
+`server/index.js`, `server/utils/env.js`, `package.json`, `Dockerfile`, `compose*.yaml`, `.env.example`, `ops/` y workflows de deploy son superficie sensible.
 
-Fase 0 debe dejarlo estable. Despues no se toca salvo tarea explicita de runtime.
+No se tocan salvo tarea explicita de runtime/deploy. Runtime/deploy nunca se mezcla con features de booking, admin, pagos o UI.
 
 Arranque esperado:
 
@@ -77,7 +82,7 @@ app.listen(env.PORT, () => {
 });
 ```
 
-No enlazar a `HOST` salvo que Hostinger lo exija y se pruebe explicitamente.
+No enlazar a `HOST` salvo prueba explicita. En Docker, el proceso debe escuchar en `env.PORT` y quedar expuesto por Compose/Caddy.
 
 ## Disponibilidad
 
@@ -112,7 +117,7 @@ UNIQUE(center_id, resource_type, resource_id, claim_time)
 
 Si hay conflicto de insert, el slot ya no esta disponible.
 
-## Preparacion Futura VPS
+## Extensiones Futuras
 
 Interfaces que deben existir sin usar Redis/BullMQ:
 
@@ -126,5 +131,4 @@ Interfaces que deben existir sin usar Redis/BullMQ:
   - v1: test_outbox/log_only/whatsapp_live.
   - v2: cola.
 
-La migracion a VPS no debe reescribir negocio.
-
+El runtime VPS Docker no debe reescribir negocio. Redis/BullMQ, workers separados o cambios de DB se evaluan despues, cuando duela.

@@ -10,31 +10,107 @@ const CENTER = {
 
 const SERVICES = [
   {
-    slug: "masaje-relajante",
-    name: "Masaje Relajante",
-    description: "Sesion corporal para relajacion profunda y descarga de tension.",
+    slug: "terapia-almica-individual-o-de-pareja",
+    name: "Terapia Álmica individual o de pareja",
+    description: null,
     durationMinutes: 60,
-    priceAmount: 180
+    priceAmount: 0
   },
   {
-    slug: "reiki-integral",
-    name: "Reiki Integral",
-    description: "Armonizacion energetica integral enfocada en equilibrio emocional.",
+    slug: "carta-astral",
+    name: "Carta Astral",
+    description: null,
     durationMinutes: 60,
-    priceAmount: 160
+    priceAmount: 0
   },
   {
-    slug: "aromaterapia",
-    name: "Aromaterapia",
-    description: "Sesion terapeutica con aceites esenciales para regulacion del sistema nervioso.",
-    durationMinutes: 90,
-    priceAmount: 220
+    slug: "desbloqueo-y-limpieza-de-aura",
+    name: "Desbloqueo y limpieza de Aura",
+    description: null,
+    durationMinutes: 60,
+    priceAmount: 0
+  },
+  {
+    slug: "alineacion-de-chakras",
+    name: "Alineación de Chakras",
+    description: null,
+    durationMinutes: 60,
+    priceAmount: 0
+  },
+  {
+    slug: "corte-de-lazos-karmicos",
+    name: "Corte de Lazos Kármicos",
+    description: null,
+    durationMinutes: 60,
+    priceAmount: 0
+  },
+  {
+    slug: "tarot-evolutivo",
+    name: "Tarot Evolutivo",
+    description: null,
+    durationMinutes: 60,
+    priceAmount: 0
+  },
+  {
+    slug: "registros-akhasicos",
+    name: "Registros Akáshicos",
+    description: null,
+    durationMinutes: 60,
+    priceAmount: 0
+  },
+  {
+    slug: "sanacion-reiki",
+    name: "Sanación Reiki",
+    description: null,
+    durationMinutes: 60,
+    priceAmount: 0
+  },
+  {
+    slug: "terapia-de-pareja",
+    name: "Terapia de Pareja",
+    description: null,
+    durationMinutes: 60,
+    priceAmount: 0
+  },
+  {
+    slug: "constelaciones-familiares",
+    name: "Constelaciones Familiares",
+    description: null,
+    durationMinutes: 60,
+    priceAmount: 0
+  },
+  {
+    slug: "osteopatia",
+    name: "Osteopatía",
+    description: null,
+    durationMinutes: 60,
+    priceAmount: 0
+  },
+  {
+    slug: "bioenergetica",
+    name: "Bioenergética",
+    description: null,
+    durationMinutes: 60,
+    priceAmount: 0
+  },
+  {
+    slug: "masaje-craneosacral",
+    name: "Masaje Craneosacral",
+    description: null,
+    durationMinutes: 60,
+    priceAmount: 0
   }
 ];
 const SERVICE_ROOM_REQUIREMENTS = {
-  "masaje-relajante": ["camilla"],
-  "reiki-integral": ["camilla"],
-  aromaterapia: ["camilla"]
+  "carta-astral": ["mesa"],
+  "desbloqueo-y-limpieza-de-aura": ["camilla"],
+  "alineacion-de-chakras": ["camilla"],
+  "corte-de-lazos-karmicos": ["camilla"],
+  "tarot-evolutivo": ["mesa"],
+  "sanacion-reiki": ["camilla"],
+  osteopatia: ["camilla"],
+  bioenergetica: ["camilla"],
+  "masaje-craneosacral": ["camilla"]
 };
 
 const ROOMS = [
@@ -45,22 +121,48 @@ const ROOMS = [
 ];
 
 const OBSOLETE_ROOM_SLUGS = ["sala-luna", "sala-sol", "sala-aurora"];
+const OBSOLETE_SERVICE_SLUGS = ["masaje-relajante", "reiki-integral", "aromaterapia"];
+const OBSOLETE_THERAPIST_SLUGS = [
+  "ana-quispe",
+  "beatriz-vargas",
+  "carla-rojas",
+  "diego-lopez",
+  "elena-mamani"
+];
 const ROOM_FEATURE_KEYS = new Set(["camilla", "mesa"]);
 
 const THERAPISTS = [
-  { slug: "ana-quispe", fullName: "Ana Quispe", displayName: "Ana" },
-  { slug: "beatriz-vargas", fullName: "Beatriz Vargas", displayName: "Bea" },
-  { slug: "carla-rojas", fullName: "Carla Rojas", displayName: "Carla" },
-  { slug: "diego-lopez", fullName: "Diego Lopez", displayName: "Diego" },
-  { slug: "elena-mamani", fullName: "Elena Mamani", displayName: "Elena" }
+  { slug: "cecy-mendoza", fullName: "Cecy Mendoza", displayName: "Cecy Mendoza" },
+  { slug: "orion-inti", fullName: "Orion Inti", displayName: "Orion Inti" },
+  { slug: "horacio-marengo", fullName: "Horacio Marengo", displayName: "Horacio Marengo" },
+  { slug: "carla-bustamante", fullName: "Carla Bustamante", displayName: "Carla Bustamante" },
+  { slug: "daniel-maclean", fullName: "Daniel MacLean", displayName: "Daniel MacLean" }
 ];
 
 const THERAPIST_SERVICE_MATRIX = {
-  "ana-quispe": ["masaje-relajante", "reiki-integral"],
-  "beatriz-vargas": ["reiki-integral", "aromaterapia"],
-  "carla-rojas": ["masaje-relajante", "aromaterapia"],
-  "diego-lopez": ["masaje-relajante", "reiki-integral"],
-  "elena-mamani": ["reiki-integral", "aromaterapia"]
+  "cecy-mendoza": [
+    "terapia-almica-individual-o-de-pareja",
+    "tarot-evolutivo",
+    "registros-akhasicos",
+    "terapia-de-pareja"
+  ],
+  "orion-inti": [
+    "terapia-almica-individual-o-de-pareja",
+    "carta-astral",
+    "desbloqueo-y-limpieza-de-aura",
+    "alineacion-de-chakras",
+    "corte-de-lazos-karmicos",
+    "tarot-evolutivo",
+    "sanacion-reiki"
+  ],
+  "horacio-marengo": [
+    "sanacion-reiki",
+    "osteopatia",
+    "bioenergetica",
+    "masaje-craneosacral"
+  ],
+  "carla-bustamante": ["constelaciones-familiares"],
+  "daniel-maclean": ["constelaciones-familiares"]
 };
 
 const WORKING_WEEKDAYS = [1, 2, 3, 4, 5, 6];
@@ -165,8 +267,26 @@ async function upsertServices(connection, centerId) {
     );
   }
 
-  const [rows] = await connection.query("SELECT id, slug FROM services WHERE center_id = ?", [centerId]);
+  const serviceSlugs = SERVICES.map((service) => service.slug);
+  const [rows] = await connection.query(
+    `SELECT id, slug FROM services WHERE center_id = ? AND slug IN (${serviceSlugs.map(() => "?").join(", ")})`,
+    [centerId, ...serviceSlugs]
+  );
   return new Map(rows.map((row) => [row.slug, row.id]));
+}
+
+async function deactivateObsoleteServices(connection, centerId) {
+  for (const slug of OBSOLETE_SERVICE_SLUGS) {
+    await connection.query(
+      `UPDATE services
+       SET is_active = 0,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE center_id = ?
+         AND slug = ?
+         AND is_active = 1`,
+      [centerId, slug]
+    );
+  }
 }
 
 async function upsertServiceRoomRequirements(connection, centerId, serviceBySlug) {
@@ -262,16 +382,40 @@ async function upsertTherapists(connection, centerId) {
     );
   }
 
-  const [rows] = await connection.query("SELECT id, slug FROM therapists WHERE center_id = ?", [centerId]);
+  const therapistSlugs = THERAPISTS.map((therapist) => therapist.slug);
+  const [rows] = await connection.query(
+    `SELECT id, slug FROM therapists WHERE center_id = ? AND slug IN (${therapistSlugs.map(() => "?").join(", ")})`,
+    [centerId, ...therapistSlugs]
+  );
   return new Map(rows.map((row) => [row.slug, row.id]));
+}
+
+async function deactivateObsoleteTherapists(connection, centerId) {
+  for (const slug of OBSOLETE_THERAPIST_SLUGS) {
+    await connection.query(
+      `UPDATE therapists
+       SET is_active = 0,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE center_id = ?
+         AND slug = ?
+         AND is_active = 1`,
+      [centerId, slug]
+    );
+  }
 }
 
 async function upsertTherapistServices(connection, centerId, serviceBySlug, therapistBySlug) {
   for (const [therapistSlug, serviceSlugs] of Object.entries(THERAPIST_SERVICE_MATRIX)) {
     const therapistId = therapistBySlug.get(therapistSlug);
+    if (!therapistId) {
+      continue;
+    }
 
     for (const serviceSlug of serviceSlugs) {
       const serviceId = serviceBySlug.get(serviceSlug);
+      if (!serviceId) {
+        continue;
+      }
 
       await connection.query(
         `INSERT INTO therapist_services (
@@ -391,7 +535,9 @@ async function runSeed() {
     const roomBySlug = await upsertRooms(connection, centerId);
     const therapistBySlug = await upsertTherapists(connection, centerId);
 
+    await deactivateObsoleteServices(connection, centerId);
     await deactivateObsoleteRooms(connection, centerId);
+    await deactivateObsoleteTherapists(connection, centerId);
     await upsertServiceRoomRequirements(connection, centerId, serviceBySlug);
     await upsertRoomFeatures(connection, centerId, roomBySlug);
     await upsertTherapistServices(connection, centerId, serviceBySlug, therapistBySlug);

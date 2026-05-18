@@ -36,11 +36,24 @@ Evitar:
 ```bash
 npm test
 npm run build
-npm start
-curl -s http://127.0.0.1:3000/api/health
 ```
 
-Si `npm start` deja proceso corriendo, detenerlo antes de cerrar.
+Si la tarea toca runtime/deploy, agregar el gate Docker correspondiente:
+
+```bash
+docker compose up -d
+curl -fsS http://127.0.0.1/api/health
+docker compose ps
+```
+
+Si se usa la fase local inicial:
+
+```bash
+docker compose -f compose.local.yaml up -d db api
+curl -fsS http://127.0.0.1:4000/api/health
+```
+
+Detener o dejar documentados los procesos/servicios levantados segun corresponda.
 
 ## Tests
 

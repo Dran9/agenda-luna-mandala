@@ -45,7 +45,7 @@ const EMPTY_ONBOARDING_FORM = {
 
 const COUNTRY_TIMEZONE_OPTIONS = [
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Bolivia",
     flag: "🇧🇴",
     timezone: "America/La_Paz",
@@ -55,7 +55,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "71234567"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Argentina",
     flag: "🇦🇷",
     timezone: "America/Argentina/Buenos_Aires",
@@ -65,7 +65,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "1123456789"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Chile",
     flag: "🇨🇱",
     timezone: "America/Santiago",
@@ -75,7 +75,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "912345678"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Peru",
     flag: "🇵🇪",
     timezone: "America/Lima",
@@ -85,7 +85,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "912345678"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Colombia",
     flag: "🇨🇴",
     timezone: "America/Bogota",
@@ -95,7 +95,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "3012345678"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Uruguay",
     flag: "🇺🇾",
     timezone: "America/Montevideo",
@@ -105,7 +105,7 @@ const COUNTRY_TIMEZONE_OPTIONS = [
     example: "91234567"
   },
   {
-    region: "Sudamerica",
+    region: "Sudamérica",
     country: "Brasil",
     flag: "🇧🇷",
     timezone: "America/Sao_Paulo",
@@ -297,13 +297,13 @@ function normalizeOnboardingPayload(values) {
   if (!city) {
     errors.city = "Ingresa tu ciudad.";
   } else if (!resolveAllowedOptionValue(city, ONBOARDING_CITY_OPTIONS)) {
-    errors.city = "Selecciona una ciudad valida.";
+    errors.city = "Selecciona una ciudad válida.";
   }
 
   if (!source) {
     errors.source = "Indica como nos encontraste.";
   } else if (!resolveAllowedOptionValue(source, ONBOARDING_SOURCE_OPTIONS)) {
-    errors.source = "Selecciona una fuente valida.";
+    errors.source = "Selecciona una fuente válida.";
   }
 
   const normalizedCity = resolveAllowedOptionValue(city, ONBOARDING_CITY_OPTIONS);
@@ -618,10 +618,10 @@ function formatTimezoneLocalClock(timezone) {
 
 function formatDigitsRule(option) {
   if (option.digitsMin === option.digitsMax) {
-    return `${option.digitsMin} digitos`;
+    return `${option.digitsMin} dígitos`;
   }
 
-  return `${option.digitsMin}-${option.digitsMax} digitos`;
+  return `${option.digitsMin}-${option.digitsMax} dígitos`;
 }
 
 function isPhoneValidByTimezone(phoneDigits, timezoneOption) {
@@ -779,7 +779,7 @@ function BookingApp() {
   const [onboardingHint, setOnboardingHint] = useState("");
   const [confirmedClientName, setConfirmedClientName] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState("");
-  const [nowTick, setNowTick] = useState(Date.now());
+  const [, setNowTick] = useState(Date.now());
   const confirmationSectionRef = useRef(null);
 
   const catalog = catalogState.data;
@@ -804,7 +804,7 @@ function BookingApp() {
   const isPhoneValid = isPhoneLengthValid && isPhoneCountryRuleValid;
   const phoneForApi = buildPhonePayload(phoneDigits, selectedTimezoneOption);
   const phoneHelper = selectedTimezoneOption.timezone === "America/La_Paz"
-    ? `En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7. Ingresaste ${phoneDigits.length}.`
+    ? `En Bolivia el WhatsApp móvil debe tener 8 dígitos y empezar con 6 o 7. Ingresaste ${phoneDigits.length}.`
     : `${selectedTimezoneOption.flag} ${selectedTimezoneOption.country}: ${formatDigitsRule(selectedTimezoneOption)} · ingresaste ${phoneDigits.length}.`;
   const onboardingValidation = useMemo(() => normalizeOnboardingPayload(onboardingForm), [onboardingForm]);
   const onboardingErrors = useMemo(
@@ -1226,7 +1226,7 @@ function BookingApp() {
           status: 422,
           code: "PHONE_INVALID",
           message: selectedTimezoneOption.timezone === "America/La_Paz"
-            ? "En Bolivia el WhatsApp movil debe tener 8 digitos y empezar con 6 o 7."
+            ? "En Bolivia el WhatsApp móvil debe tener 8 dígitos y empezar con 6 o 7."
             : `WhatsApp invalido para ${selectedTimezoneOption.country}. Usa ${formatDigitsRule(selectedTimezoneOption)}.`
         }
       });
@@ -1736,19 +1736,19 @@ function BookingApp() {
       </section>
 
       <section className="surface" aria-labelledby="booking-flow-title">
-        <h2 id="booking-flow-title">Reserva tu sesion</h2>
-        <p className="supporting">Primero elige servicio y valida tu WhatsApp. Los horarios aparecen recien despues de identificarte.</p>
+        <h2 id="booking-flow-title">Reserva tu sesión</h2>
+        <p className="supporting">Primero elige servicio y valida tu WhatsApp. Los horarios aparecen recién después de identificarte.</p>
 
         {catalogState.status === "loading" ? (
           <p className="inline-state" role="status">
             <CircleNotch size={18} className="spin" aria-hidden="true" />
-            Cargando catalogo...
+            Cargando catálogo...
           </p>
         ) : null}
 
         {catalogState.status === "error" ? (
           <div className="feedback feedback-error" role="alert">
-            <p>{catalogState.error?.message || "No pudimos cargar el catalogo."}</p>
+            <p>{catalogState.error?.message || "No pudimos cargar el catálogo."}</p>
             <button
               type="button"
               className="btn btn-primary"
@@ -1819,7 +1819,7 @@ function BookingApp() {
                   }}
                   disabled={!selectedServiceId || compatibleTherapists.length === 0 || lockByHold || isRescheduleFlow}
                 >
-                  <option value="">{isRescheduleFlow ? "Fijo por reagendamiento" : "Recomendado automaticamente"}</option>
+                  <option value="">{isRescheduleFlow ? "Fijo por reagendamiento" : "Recomendado automáticamente"}</option>
                   {compatibleTherapists.map((therapist) => (
                     <option key={therapist.id} value={therapist.id}>
                       {therapist.displayName}
@@ -1832,14 +1832,14 @@ function BookingApp() {
                   ? `Reagendando con ${nextAppointment?.therapistName || selectedTherapist?.displayName || "tu terapeuta original"}.`
                   : (selectedTherapist
                     ? `Seleccionaste a ${selectedTherapist.displayName}.`
-                    : "Terapeuta sugerido automaticamente.")}
+                    : "Terapeuta sugerido automáticamente.")}
               </p>
             </div>
 
             <div className="step">
               <p className="step-label">3. WhatsApp</p>
               <label className="field">
-                <span>Numero WhatsApp ({selectedTimezoneOption.dialCode})</span>
+                <span>Número WhatsApp ({selectedTimezoneOption.dialCode})</span>
                 <input
                   className="phone-input"
                   type="tel"
@@ -1868,7 +1868,7 @@ function BookingApp() {
             </div>
 
             <div className="step">
-              <p className="step-label">4. Pais y zona horaria</p>
+              <p className="step-label">4. País y zona horaria</p>
               <div className="timezone-picker">
                 <button
                   type="button"
@@ -1942,7 +1942,7 @@ function BookingApp() {
                   </div>
                 ) : null}
               </div>
-              <p className="timezone-help">Los horarios y recordatorios se mostraran en esta zona horaria.</p>
+              <p className="timezone-help">Los horarios y recordatorios se mostrarán en esta zona horaria.</p>
               <button
                 type="submit"
                 className="btn btn-primary"
@@ -2038,7 +2038,7 @@ function BookingApp() {
             >
               <span className="date-chip-calendar-top">
                 <CalendarCheck size={18} weight="regular" aria-hidden="true" />
-                Ver mas
+                Ver más
               </span>
               <span className="date-chip-calendar-icon" aria-hidden="true">
                 <CalendarCheck size={22} weight={showCalendar ? "fill" : "regular"} />
@@ -2140,7 +2140,7 @@ function BookingApp() {
                 </li>
               </ul>
               <p className="hold-note">
-                Servicio, terapeuta, telefono, fecha y zona horaria quedan bloqueados para proteger este horario.
+                Servicio, terapeuta, teléfono, fecha y zona horaria quedan bloqueados para proteger este horario.
               </p>
 
               {isBookAnotherFlow && nextAppointment ? (
@@ -2234,7 +2234,7 @@ function BookingApp() {
                     </label>
 
                     <div className="field">
-                      <span>Como nos encontraste</span>
+                      <span>Cómo nos encontraste</span>
                       <div className="source-options" role="radiogroup" aria-label="Fuente de llegada">
                         {ONBOARDING_SOURCE_OPTIONS.map((sourceOption) => {
                           const isSelected = onboardingForm.source === sourceOption;
@@ -2310,7 +2310,7 @@ function BookingApp() {
                 <div className="slot-group">
                   <p className="slot-group-title">
                     <Sun size={16} aria-hidden="true" />
-                    Manana
+                    Mañana
                   </p>
                   <ul className="slot-list">
                     {slotGroups.morning.map((slot) => {
@@ -2477,9 +2477,6 @@ function BookingApp() {
         </section>
       ) : null}
 
-      <span className="sr-only" aria-hidden="true">
-        {nowTick}
-      </span>
     </main>
   );
 }

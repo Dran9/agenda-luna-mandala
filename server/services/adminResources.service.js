@@ -256,8 +256,10 @@ async function fetchAdminResourcesBase({ connection, centerId, resourceType }) {
      SELECT
       sr.service_id AS serviceId,
       s.name AS serviceName,
+      s.is_active AS serviceIsActive,
       sr.room_id AS roomId,
       r.name AS roomName,
+      r.is_active AS roomIsActive,
       sr.is_active AS isActive
      FROM service_rooms sr
      INNER JOIN services s
@@ -311,8 +313,25 @@ async function fetchAdminResourcesBase({ connection, centerId, resourceType }) {
               resourceName ASC,
               rs.weekday ASC,
               rs.start_time ASC,
-              rs.id ASC`,
-    [centerId, centerId, centerId, centerId, ...scheduleParams]
+              rs.id ASC;
+     /* admin_resources_base:therapist_services */
+     SELECT
+      ts.service_id AS serviceId,
+      t.id AS therapistId,
+      COALESCE(t.display_name, t.full_name) AS therapistName,
+      ts.is_active AS isActive,
+      t.is_active AS therapistIsActive,
+      s.is_active AS serviceIsActive
+     FROM therapist_services ts
+     INNER JOIN therapists t
+       ON t.center_id = ts.center_id
+      AND t.id = ts.therapist_id
+     INNER JOIN services s
+       ON s.center_id = ts.center_id
+      AND s.id = ts.service_id
+     WHERE ts.center_id = ?
+     ORDER BY ts.is_active DESC, t.is_active DESC, therapistName ASC, t.id ASC`,
+    [centerId, centerId, centerId, centerId, ...scheduleParams, centerId]
   );
 
   const [
@@ -320,7 +339,8 @@ async function fetchAdminResourcesBase({ connection, centerId, resourceType }) {
     roomRows = [],
     compatibilityRows = [],
     featureRows = [],
-    scheduleRows = []
+    scheduleRows = [],
+    therapistServiceRows = []
   ] = resultSets || [];
 
   return {
@@ -328,7 +348,8 @@ async function fetchAdminResourcesBase({ connection, centerId, resourceType }) {
     roomRows,
     compatibilityRows,
     featureRows,
-    scheduleRows
+    scheduleRows,
+    therapistServiceRows
   };
 }
 
@@ -348,7 +369,8 @@ async function listAdminResources({
     roomRows,
     compatibilityRows,
     featureRows,
-    scheduleRows
+    scheduleRows,
+    therapistServiceRows
   } = await fetchAdminResourcesBase({
     connection,
     centerId: center.id,
@@ -357,7 +379,9 @@ async function listAdminResources({
   const requirementRows = await loadServiceRoomRequirements(connection, center.id);
 
   const activeCompatibilityByServiceId = new Map();
+  const activeRoomsByServiceId = new Map();
   const activeCompatibilityByRoomId = new Map();
+  const activeTherapistsByServiceId = new Map();
   const featuresByRoomId = new Map();
 
   for (const row of featureRows) {
@@ -388,7 +412,9 @@ async function listAdminResources({
   }
 
   for (const row of compatibilityRows) {
-    const isActive = Number(row.isActive) === 1;
+    const isActive = Number(row.isActive) === 1 &&
+      Number(row.serviceIsActive) === 1 &&
+      Number(row.roomIsActive) === 1;
     if (!isActive) {
       continue;
     }
@@ -400,10 +426,40 @@ async function listAdminResources({
       serviceId,
       (activeCompatibilityByServiceId.get(serviceId) || 0) + 1
     );
+    if (!activeRoomsByServiceId.has(serviceId)) {
+      activeRoomsByServiceId.set(serviceId, []);
+    }
+    activeRoomsByServiceId.get(serviceId).push({
+      id: roomId,
+      name: row.roomName || `Sala ${roomId}`
+    });
     activeCompatibilityByRoomId.set(
       roomId,
       (activeCompatibilityByRoomId.get(roomId) || 0) + 1
     );
+  }
+
+  for (const row of therapistServiceRows) {
+    const isActive = Number(row.isActive) === 1 &&
+      Number(row.therapistIsActive) === 1 &&
+      Number(row.serviceIsActive) === 1;
+    if (!isActive) {
+      continue;
+    }
+
+    const serviceId = Number(row.serviceId);
+    const therapistId = Number(row.therapistId);
+    if (!serviceId || !therapistId) {
+      continue;
+    }
+
+    if (!activeTherapistsByServiceId.has(serviceId)) {
+      activeTherapistsByServiceId.set(serviceId, []);
+    }
+    activeTherapistsByServiceId.get(serviceId).push({
+      id: therapistId,
+      name: row.therapistName || `Terapeuta ${therapistId}`
+    });
   }
 
   const services = serviceRows.map((row) => {
@@ -411,6 +467,8 @@ async function listAdminResources({
     const priceAmount = toSafeNumber(row.priceAmount, 0);
     const statusMeta = toStatusMeta(row.isActive);
     const requiredFeatures = requiredFeaturesByServiceId.get(Number(row.id)) || [];
+    const compatibleRooms = activeRoomsByServiceId.get(Number(row.id)) || [];
+    const activeTherapists = activeTherapistsByServiceId.get(Number(row.id)) || [];
 
     return {
       id: Number(row.id),
@@ -421,7 +479,16 @@ async function listAdminResources({
       priceLabel: toPriceLabel(priceAmount, row.currencyCode),
       status: statusMeta.status,
       statusLabel: statusMeta.statusLabel,
-      compatibleRoomsCount: activeCompatibilityByServiceId.get(Number(row.id)) || 0,
+      compatibleRoomsCount: compatibleRooms.length,
+      compatibleRooms,
+      compatibleRoomsLabel: compatibleRooms.length
+        ? compatibleRooms.map((room) => room.name).join(", ")
+        : "Sin salas activas",
+      activeTherapistsCount: activeTherapists.length,
+      activeTherapists,
+      activeTherapistsLabel: activeTherapists.length
+        ? activeTherapists.map((therapist) => therapist.name).join(", ")
+        : "Sin terapeutas activos",
       requiredFeatures,
       requiredFeatureKeys: requiredFeatures.map((feature) => feature.key),
       requiredFeaturesLabel: requiredFeatures.length
@@ -452,7 +519,10 @@ async function listAdminResources({
   });
 
   const compatibilities = compatibilityRows.map((row) => {
-    const statusMeta = toStatusMeta(row.isActive);
+    const isUsable = Number(row.isActive) === 1 &&
+      Number(row.serviceIsActive) === 1 &&
+      Number(row.roomIsActive) === 1;
+    const statusMeta = toStatusMeta(isUsable ? 1 : 0);
     const serviceId = Number(row.serviceId);
     const roomId = Number(row.roomId);
 
@@ -584,6 +654,80 @@ function normalizeRoomIsActive(value) {
   throw new ValidationError("isActive invalido", { field: "isActive" });
 }
 
+function normalizeRequiredIsActive(value) {
+  if (value === undefined) {
+    throw new ValidationError("isActive obligatorio", { field: "isActive" });
+  }
+
+  return normalizeRoomIsActive(value);
+}
+
+function normalizeServiceName(value) {
+  const trimmedName = String(value || "").trim();
+  if (!trimmedName) {
+    throw new ValidationError("Nombre de servicio obligatorio", { field: "name" });
+  }
+  if (trimmedName.length > 160) {
+    throw new ValidationError("Nombre de servicio demasiado largo", { field: "name" });
+  }
+
+  return trimmedName;
+}
+
+function normalizeServiceDuration(value) {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    throw new ValidationError("Duracion debe ser entero entre 15 y 480", { field: "durationMinutes" });
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 15 || parsed > 480) {
+    throw new ValidationError("Duracion debe ser entero entre 15 y 480", { field: "durationMinutes" });
+  }
+
+  return parsed;
+}
+
+function normalizeServicePrice(value) {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return 0;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 999999) {
+    throw new ValidationError("Precio debe ser numero entre 0 y 999999", { field: "priceAmount" });
+  }
+
+  return Math.round(parsed * 100) / 100;
+}
+
+function toServiceMutationResult(serviceRow, requirementRows = []) {
+  const durationMinutes = Math.max(0, Math.trunc(toSafeNumber(serviceRow.durationMinutes, 0)));
+  const priceAmount = toSafeNumber(serviceRow.priceAmount, 0);
+  const statusMeta = toStatusMeta(serviceRow.isActive);
+  const requiredFeatureKeys = requirementRows
+    .map((row) => String(row.featureKey || "").trim())
+    .filter(Boolean);
+  const requiredFeatures = requiredFeatureKeys.map(featureKeyToViewModel).filter(Boolean);
+
+  return {
+    id: Number(serviceRow.id),
+    name: serviceRow.name,
+    durationMinutes,
+    durationLabel: `${durationMinutes} min`,
+    priceAmount,
+    priceLabel: toPriceLabel(priceAmount, serviceRow.currencyCode),
+    currencyCode: serviceRow.currencyCode || "BOB",
+    isActive: Number(serviceRow.isActive) === 1,
+    status: statusMeta.status,
+    statusLabel: statusMeta.statusLabel,
+    requiredFeatureKeys,
+    requiredFeatures,
+    requiredFeaturesLabel: requiredFeatures.length
+      ? requiredFeatures.map((feature) => feature.label).join(", ")
+      : "Solo sillas"
+  };
+}
+
 function toRoomMutationResult(roomRow, featureRows = []) {
   const featureKeys = featureRows.map((row) => String(row.featureKey || "").trim()).filter(Boolean);
   const features = featureKeys.map(featureKeyToViewModel).filter(Boolean);
@@ -703,6 +847,190 @@ async function createRoom({ connection, adminSession, name, capacity, featureKey
   }
 }
 
+async function insertServiceRequirements(connection, centerId, serviceId, featureKeys) {
+  if (!featureKeys.length) {
+    return;
+  }
+
+  const values = featureKeys.map(() => "(?, ?, ?, 1)").join(", ");
+  const params = [];
+  for (const featureKey of featureKeys) {
+    params.push(centerId, serviceId, featureKey);
+  }
+
+  await connection.query(
+    `INSERT INTO service_room_requirements (center_id, service_id, feature_key, is_active)
+     VALUES ${values}`,
+    params
+  );
+}
+
+async function loadEligibleRoomIdsForService(connection, centerId, requiredFeatureKeys) {
+  if (!requiredFeatureKeys.length) {
+    const [rows] = await connection.query(
+      `SELECT id
+       FROM rooms
+       WHERE center_id = ?
+         AND is_active = 1
+       ORDER BY id ASC`,
+      [centerId]
+    );
+    return rows.map((row) => Number(row.id)).filter(Boolean);
+  }
+
+  const featurePlaceholders = requiredFeatureKeys.map(() => "?").join(", ");
+  const [rows] = await connection.query(
+    `SELECT r.id
+     FROM rooms r
+     INNER JOIN room_features rf
+       ON rf.center_id = r.center_id
+      AND rf.room_id = r.id
+     WHERE r.center_id = ?
+       AND r.is_active = 1
+       AND rf.feature_key IN (${featurePlaceholders})
+     GROUP BY r.id
+     HAVING COUNT(DISTINCT rf.feature_key) = ?
+     ORDER BY r.id ASC`,
+    [centerId, ...requiredFeatureKeys, requiredFeatureKeys.length]
+  );
+
+  return rows.map((row) => Number(row.id)).filter(Boolean);
+}
+
+async function insertServiceRoomCompatibilities(connection, centerId, serviceId, roomIds) {
+  if (!roomIds.length) {
+    return;
+  }
+
+  const values = roomIds.map(() => "(?, ?, ?, 1)").join(", ");
+  const params = [];
+  for (const roomId of roomIds) {
+    params.push(centerId, serviceId, roomId);
+  }
+
+  await connection.query(
+    `INSERT INTO service_rooms (center_id, service_id, room_id, is_active)
+     VALUES ${values}
+     ON DUPLICATE KEY UPDATE
+       is_active = VALUES(is_active)`,
+    params
+  );
+}
+
+async function createService({
+  connection,
+  adminSession,
+  name,
+  durationMinutes,
+  priceAmount,
+  isActive = true,
+  requiredFeatureKeys
+}) {
+  const centerId = parseAdminCenterId(adminSession);
+  if (!centerId) {
+    throw new ValidationError("Sesion admin sin centerId", { field: "adminSession.centerId" });
+  }
+
+  const trimmedName = normalizeServiceName(name);
+  const normalizedDuration = normalizeServiceDuration(durationMinutes);
+  const normalizedPrice = normalizeServicePrice(priceAmount);
+  const normalizedIsActive = normalizeRoomIsActive(isActive);
+  const normalizedFeatureKeys = normalizeRoomFeatureKeys(requiredFeatureKeys) || [];
+  const slug = slugify(trimmedName);
+
+  await connection.beginTransaction();
+
+  try {
+    const [existingRows] = await connection.query(
+      "SELECT id FROM services WHERE center_id = ? AND slug = ? LIMIT 1",
+      [centerId, slug]
+    );
+
+    if (existingRows.length) {
+      throw new AdminResourcesError({
+        status: 409,
+        code: "SERVICE_SLUG_DUPLICATE",
+        message: `Ya existe un servicio con slug "${slug}"`
+      });
+    }
+
+    const [result] = await connection.query(
+      `INSERT INTO services (
+        center_id,
+        slug,
+        name,
+        duration_minutes,
+        price_amount,
+        currency_code,
+        is_active
+       ) VALUES (?, ?, ?, ?, ?, 'BOB', ?)`,
+      [centerId, slug, trimmedName, normalizedDuration, normalizedPrice, normalizedIsActive]
+    );
+    const serviceId = Number(result.insertId);
+
+    if (normalizedFeatureKeys.length && !(await hasServiceRoomRequirementsTable(connection))) {
+      throw new AdminResourcesError({
+        status: 500,
+        code: "SERVICE_REQUIREMENTS_SCHEMA_MISSING",
+        message: "No se pudo crear requisitos del servicio"
+      });
+    }
+
+    await insertServiceRequirements(connection, centerId, serviceId, normalizedFeatureKeys);
+    const eligibleRoomIds = await loadEligibleRoomIdsForService(connection, centerId, normalizedFeatureKeys);
+    await insertServiceRoomCompatibilities(connection, centerId, serviceId, eligibleRoomIds);
+
+    const [createdService] = await connection.query(
+      `SELECT id,
+        name,
+        duration_minutes AS durationMinutes,
+        price_amount AS priceAmount,
+        currency_code AS currencyCode,
+        is_active AS isActive
+       FROM services
+       WHERE center_id = ? AND id = ?
+       LIMIT 1`,
+      [centerId, serviceId]
+    );
+    const [createdRequirements] = normalizedFeatureKeys.length
+      ? await connection.query(
+          `SELECT feature_key AS featureKey
+           FROM service_room_requirements
+           WHERE center_id = ? AND service_id = ? AND is_active = 1
+           ORDER BY feature_key ASC`,
+          [centerId, serviceId]
+        )
+      : [[]];
+
+    await connection.commit();
+    return {
+      ...toServiceMutationResult(createdService[0], createdRequirements),
+      slug,
+      compatibleRoomsCount: eligibleRoomIds.length
+    };
+  } catch (error) {
+    await connection.rollback();
+
+    if (error instanceof ValidationError || error instanceof AdminResourcesError) {
+      throw error;
+    }
+
+    if (error?.code === "ER_DUP_ENTRY") {
+      throw new AdminResourcesError({
+        status: 409,
+        code: "SERVICE_SLUG_DUPLICATE",
+        message: `Ya existe un servicio con slug "${slug}"`
+      });
+    }
+
+    throw new AdminResourcesError({
+      status: 500,
+      code: "SERVICE_CREATE_ERROR",
+      message: "No se pudo crear el servicio"
+    });
+  }
+}
+
 async function updateRoom({ connection, adminSession, roomId: rawRoomId, name, capacity, isActive, featureKeys }) {
   const centerId = parseAdminCenterId(adminSession);
   if (!centerId) {
@@ -807,10 +1135,256 @@ async function updateRoom({ connection, adminSession, roomId: rawRoomId, name, c
   }
 }
 
+async function updateService({
+  connection,
+  adminSession,
+  serviceId: rawServiceId,
+  name,
+  durationMinutes,
+  priceAmount,
+  isActive,
+  requiredFeatureKeys
+}) {
+  const centerId = parseAdminCenterId(adminSession);
+  if (!centerId) {
+    throw new ValidationError("Sesion admin sin centerId", { field: "adminSession.centerId" });
+  }
+
+  const serviceId = Number(rawServiceId);
+  if (!Number.isInteger(serviceId) || serviceId <= 0) {
+    throw new ValidationError("serviceId invalido", { field: "serviceId" });
+  }
+
+  const updates = [];
+  const updateParams = [];
+
+  if (name !== undefined) {
+    updates.push("name = ?");
+    updateParams.push(normalizeServiceName(name));
+  }
+
+  if (durationMinutes !== undefined) {
+    updates.push("duration_minutes = ?");
+    updateParams.push(normalizeServiceDuration(durationMinutes));
+  }
+
+  if (priceAmount !== undefined) {
+    updates.push("price_amount = ?");
+    updateParams.push(normalizeServicePrice(priceAmount));
+  }
+
+  if (isActive !== undefined) {
+    updates.push("is_active = ?");
+    updateParams.push(normalizeRoomIsActive(isActive));
+  }
+
+  const normalizedFeatureKeys = normalizeRoomFeatureKeys(requiredFeatureKeys);
+
+  await connection.beginTransaction();
+
+  try {
+    const [existingRows] = await connection.query(
+      `SELECT id
+       FROM services
+       WHERE center_id = ?
+         AND id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [centerId, serviceId]
+    );
+
+    if (existingRows.length === 0) {
+      throw new AdminResourcesError({
+        status: 404,
+        code: "SERVICE_NOT_FOUND",
+        message: "Servicio no encontrado"
+      });
+    }
+
+    if (updates.length) {
+      updateParams.push(centerId, serviceId);
+      await connection.query(
+        `UPDATE services SET ${updates.join(", ")} WHERE center_id = ? AND id = ?`,
+        updateParams
+      );
+    }
+
+    if (normalizedFeatureKeys !== undefined) {
+      if (!(await hasServiceRoomRequirementsTable(connection))) {
+        throw new AdminResourcesError({
+          status: 500,
+          code: "SERVICE_REQUIREMENTS_SCHEMA_MISSING",
+          message: "No se pudo actualizar requisitos del servicio"
+        });
+      }
+
+      await connection.query(
+        "DELETE FROM service_room_requirements WHERE center_id = ? AND service_id = ?",
+        [centerId, serviceId]
+      );
+
+      if (normalizedFeatureKeys.length) {
+        const requirementValues = normalizedFeatureKeys.map(() => "(?, ?, ?, 1)").join(", ");
+        const requirementParams = [];
+        for (const featureKey of normalizedFeatureKeys) {
+          requirementParams.push(centerId, serviceId, featureKey);
+        }
+
+        await connection.query(
+          `INSERT INTO service_room_requirements (center_id, service_id, feature_key, is_active)
+           VALUES ${requirementValues}`,
+          requirementParams
+        );
+      }
+    }
+
+    const [updatedService] = await connection.query(
+      `SELECT id,
+        name,
+        duration_minutes AS durationMinutes,
+        price_amount AS priceAmount,
+        currency_code AS currencyCode,
+        is_active AS isActive
+       FROM services
+       WHERE center_id = ? AND id = ?
+       LIMIT 1`,
+      [centerId, serviceId]
+    );
+    let updatedRequirements = [];
+    if (await hasServiceRoomRequirementsTable(connection)) {
+      const [requirementRows] = await connection.query(
+        `SELECT feature_key AS featureKey
+         FROM service_room_requirements
+         WHERE center_id = ? AND service_id = ? AND is_active = 1
+         ORDER BY feature_key ASC`,
+        [centerId, serviceId]
+      );
+      updatedRequirements = requirementRows;
+    }
+
+    await connection.commit();
+    return toServiceMutationResult(updatedService[0], updatedRequirements);
+  } catch (error) {
+    await connection.rollback();
+
+    if (error instanceof ValidationError || error instanceof AdminResourcesError) {
+      throw error;
+    }
+
+    throw new AdminResourcesError({
+      status: 500,
+      code: "SERVICE_UPDATE_ERROR",
+      message: "No se pudo actualizar el servicio"
+    });
+  }
+}
+
+async function updateServiceRoomCompatibility({
+  connection,
+  adminSession,
+  serviceId: rawServiceId,
+  roomId: rawRoomId,
+  isActive
+}) {
+  const centerId = parseAdminCenterId(adminSession);
+  if (!centerId) {
+    throw new ValidationError("Sesion admin sin centerId", { field: "adminSession.centerId" });
+  }
+
+  const serviceId = Number(rawServiceId);
+  if (!Number.isInteger(serviceId) || serviceId <= 0) {
+    throw new ValidationError("serviceId invalido", { field: "serviceId" });
+  }
+
+  const roomId = Number(rawRoomId);
+  if (!Number.isInteger(roomId) || roomId <= 0) {
+    throw new ValidationError("roomId invalido", { field: "roomId" });
+  }
+
+  const normalizedIsActive = normalizeRequiredIsActive(isActive);
+
+  await connection.beginTransaction();
+
+  try {
+    const [serviceRows] = await connection.query(
+      `SELECT id, name
+       FROM services
+       WHERE center_id = ?
+         AND id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [centerId, serviceId]
+    );
+
+    if (serviceRows.length === 0) {
+      throw new AdminResourcesError({
+        status: 404,
+        code: "SERVICE_NOT_FOUND",
+        message: "Servicio no encontrado"
+      });
+    }
+
+    const [roomRows] = await connection.query(
+      `SELECT id, name
+       FROM rooms
+       WHERE center_id = ?
+         AND id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [centerId, roomId]
+    );
+
+    if (roomRows.length === 0) {
+      throw new AdminResourcesError({
+        status: 404,
+        code: "ROOM_NOT_FOUND",
+        message: "Sala no encontrada"
+      });
+    }
+
+    await connection.query(
+      `INSERT INTO service_rooms (center_id, service_id, room_id, is_active)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         is_active = VALUES(is_active)`,
+      [centerId, serviceId, roomId, normalizedIsActive]
+    );
+
+    await connection.commit();
+
+    const statusMeta = toStatusMeta(normalizedIsActive);
+    return {
+      id: `${serviceId}-${roomId}`,
+      serviceId,
+      serviceLabel: serviceRows[0].name || `Servicio ${serviceId}`,
+      roomId,
+      roomLabel: roomRows[0].name || `Sala ${roomId}`,
+      isActive: normalizedIsActive === 1,
+      status: statusMeta.status,
+      statusLabel: statusMeta.statusLabel
+    };
+  } catch (error) {
+    await connection.rollback();
+
+    if (error instanceof ValidationError || error instanceof AdminResourcesError) {
+      throw error;
+    }
+
+    throw new AdminResourcesError({
+      status: 500,
+      code: "COMPATIBILITY_UPDATE_ERROR",
+      message: "No se pudo actualizar la compatibilidad"
+    });
+  }
+}
+
 module.exports = {
   AdminResourcesError,
   createRoom,
+  createService,
   listAdminResources,
+  updateService,
+  updateServiceRoomCompatibility,
   updateRoom,
   _resetServiceRoomRequirementsSchemaCache: resetServiceRoomRequirementsSchemaCache
 };

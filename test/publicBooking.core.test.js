@@ -106,6 +106,26 @@ class FakeBookingConnection {
     return therapistIds.size;
   }
 
+  _serviceRoomCount(centerId, serviceId) {
+    const roomIds = new Set();
+
+    for (const sr of this.state.serviceRooms) {
+      if (sr.centerId !== centerId || sr.serviceId !== serviceId || sr.isActive !== 1) {
+        continue;
+      }
+
+      const room = this.state.rooms.find(
+        (entry) => entry.centerId === centerId && entry.id === sr.roomId && entry.isActive === 1
+      );
+
+      if (room) {
+        roomIds.add(sr.roomId);
+      }
+    }
+
+    return roomIds.size;
+  }
+
   async query(sql, params = []) {
     const normalizedSql = sql.replace(/\s+/g, " ").trim();
 
@@ -130,7 +150,8 @@ class FakeBookingConnection {
           id: service.id,
           name: service.name,
           durationMinutes: service.durationMinutes,
-          therapistCount: this._serviceTherapistCount(centerId, service.id)
+          therapistCount: this._serviceTherapistCount(centerId, service.id),
+          compatibleRoomsCount: this._serviceRoomCount(centerId, service.id)
         }));
       return [rows];
     }
@@ -981,8 +1002,35 @@ test("catalog filtra servicios y terapeutas inactivos", async () => {
 
   assert.equal(result.services.length, 1);
   assert.equal(result.services[0].id, "10");
+  assert.equal(result.services[0].reservable, true);
+  assert.equal(result.services[0].compatibleRoomsCount, 1);
   assert.equal(result.therapists.length, 1);
   assert.equal(result.therapists[0].id, "100");
+});
+
+test("catalog no marca reservable un servicio sin sala compatible activa", async () => {
+  const fixture = createFixture({
+    serviceRooms: []
+  });
+  fixture.services = [
+    ...fixture.services,
+    { id: 12, centerId: 1, name: "Terapia sin sala", durationMinutes: 60, isActive: 1, bufferBeforeMinutes: 0, bufferAfterMinutes: 0 }
+  ];
+  fixture.therapistServices = [
+    ...fixture.therapistServices,
+    { centerId: 1, therapistId: 100, serviceId: 12, isActive: 1 }
+  ];
+  const connection = new FakeBookingConnection(fixture);
+
+  const result = await getCatalog({
+    connection,
+    tenantSlug: "luna-mandala"
+  });
+
+  const serviceWithTherapistButNoRoom = result.services.find((service) => service.id === "12");
+  assert.equal(serviceWithTherapistButNoRoom.therapistCount, 1);
+  assert.equal(serviceWithTherapistButNoRoom.compatibleRoomsCount, 0);
+  assert.equal(serviceWithTherapistButNoRoom.reservable, false);
 });
 
 test("identify devuelve cliente nuevo si no existe", async () => {

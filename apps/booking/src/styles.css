@@ -279,9 +279,17 @@ button {
 }
 
 .phone-input {
+  color: rgba(15, 23, 42, 0.85);
   font-size: 26px !important;
+  font-weight: 800;
   line-height: 1.15;
   letter-spacing: 0;
+}
+
+.phone-input::placeholder {
+  color: rgba(100, 116, 139, 0.38);
+  font-weight: 800;
+  opacity: 1;
 }
 
 .therapist-helper {

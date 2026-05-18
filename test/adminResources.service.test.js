@@ -5,6 +5,8 @@ const {
   _resetServiceRoomRequirementsSchemaCache,
   createRoom,
   listAdminResources,
+  updateService,
+  updateServiceRoomCompatibility,
   updateRoom
 } = require("../server/services/adminResources.service");
 
@@ -63,7 +65,8 @@ test("listAdminResources devuelve settings semantico con labels y summary", asyn
         assert.equal(sql.includes("admin_resources_base:compatibilities"), true);
         assert.equal(sql.includes("admin_resources_base:features"), true);
         assert.equal(sql.includes("admin_resources_base:schedules"), true);
-        assert.deepEqual(params, [1, 1, 1, 1, 1]);
+        assert.equal(sql.includes("admin_resources_base:therapist_services"), true);
+        assert.deepEqual(params, [1, 1, 1, 1, 1, 1]);
       },
       resultSets: [
         [
@@ -89,9 +92,33 @@ test("listAdminResources devuelve settings semantico con labels y summary", asyn
           { id: 21, name: "Sala Sol", capacity: 1, isActive: 0 }
         ],
         [
-          { serviceId: 10, serviceName: "Masaje", roomId: 20, roomName: "Sala Luna", isActive: 1 },
-          { serviceId: 10, serviceName: "Masaje", roomId: 21, roomName: "Sala Sol", isActive: 0 },
-          { serviceId: 11, serviceName: "Reiki", roomId: 21, roomName: "Sala Sol", isActive: 1 }
+          {
+            serviceId: 10,
+            serviceName: "Masaje",
+            serviceIsActive: 1,
+            roomId: 20,
+            roomName: "Sala Luna",
+            roomIsActive: 1,
+            isActive: 1
+          },
+          {
+            serviceId: 10,
+            serviceName: "Masaje",
+            serviceIsActive: 1,
+            roomId: 21,
+            roomName: "Sala Sol",
+            roomIsActive: 0,
+            isActive: 0
+          },
+          {
+            serviceId: 11,
+            serviceName: "Reiki",
+            serviceIsActive: 0,
+            roomId: 21,
+            roomName: "Sala Sol",
+            roomIsActive: 0,
+            isActive: 1
+          }
         ],
         [
           { roomId: 20, featureKey: "camilla" },
@@ -124,6 +151,24 @@ test("listAdminResources devuelve settings semantico con labels y summary", asyn
             validTo: "2026-05-31",
             isActive: 0,
             resourceName: "Sala Luna"
+          }
+        ],
+        [
+          {
+            serviceId: 10,
+            therapistId: 501,
+            therapistName: "Ana",
+            isActive: 1,
+            therapistIsActive: 1,
+            serviceIsActive: 1
+          },
+          {
+            serviceId: 10,
+            therapistId: 502,
+            therapistName: "Bruno",
+            isActive: 0,
+            therapistIsActive: 1,
+            serviceIsActive: 1
           }
         ]
       ]
@@ -161,6 +206,11 @@ test("listAdminResources devuelve settings semantico con labels y summary", asyn
   assert.equal(payload.settings.services[0].priceLabel, "180 BOB");
   assert.equal(payload.settings.services[0].status, "ACTIVE");
   assert.equal(payload.settings.services[0].compatibleRoomsCount, 1);
+  assert.deepEqual(payload.settings.services[0].compatibleRooms, [{ id: 20, name: "Sala Luna" }]);
+  assert.equal(payload.settings.services[0].compatibleRoomsLabel, "Sala Luna");
+  assert.equal(payload.settings.services[0].activeTherapistsCount, 1);
+  assert.deepEqual(payload.settings.services[0].activeTherapists, [{ id: 501, name: "Ana" }]);
+  assert.equal(payload.settings.services[0].activeTherapistsLabel, "Ana");
   assert.deepEqual(payload.settings.services[0].requiredFeatureKeys, ["camilla", "mesa"]);
   assert.equal(payload.settings.services[0].requiredFeaturesLabel, "Camilla, Mesa");
 
@@ -199,9 +249,9 @@ test("listAdminResources aplica filtro resourceType para horarios", async () => 
       includes: "admin_resources_base:services",
       assert: ({ sql, params }) => {
         assert.equal(sql.includes("WHERE rs.center_id = ? AND rs.resource_type = ?"), true);
-        assert.deepEqual(params, [2, 2, 2, 2, 2, "room"]);
+        assert.deepEqual(params, [2, 2, 2, 2, 2, "room", 2]);
       },
-      resultSets: [[], [], [], [], []]
+      resultSets: [[], [], [], [], [], []]
     },
     {
       includes: "TABLE_NAME = 'service_room_requirements'",
@@ -397,6 +447,225 @@ test("updateRoom hace rollback si falla reemplazo de features", async () => {
       featureKeys: ["camilla"]
     }),
     (error) => error.code === "ROOM_UPDATE_ERROR"
+  );
+
+  assert.equal(steps.includes("begin"), true);
+  assert.equal(steps.includes("rollback"), true);
+  assert.equal(steps.includes("commit"), false);
+});
+
+test("updateService actualiza datos y requisitos dentro de transaccion", async () => {
+  const steps = [];
+  const connection = {
+    async beginTransaction() {
+      steps.push("begin");
+    },
+    async commit() {
+      steps.push("commit");
+    },
+    async rollback() {
+      steps.push("rollback");
+    },
+    async query(sql, params = []) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      steps.push({ sql: normalizedSql, params });
+
+      if (normalizedSql.includes("FROM services") && normalizedSql.includes("FOR UPDATE")) {
+        assert.deepEqual(params, [1, 10]);
+        return [[{ id: 10 }]];
+      }
+
+      if (normalizedSql.startsWith("UPDATE services SET")) {
+        assert.equal(normalizedSql.includes("name = ?"), true);
+        assert.equal(normalizedSql.includes("duration_minutes = ?"), true);
+        assert.equal(normalizedSql.includes("price_amount = ?"), true);
+        assert.equal(normalizedSql.includes("is_active = ?"), true);
+        assert.deepEqual(params, ["Carta Astral Premium", 90, 240, 1, 1, 10]);
+        return [{ affectedRows: 1 }];
+      }
+
+      if (normalizedSql.includes("TABLE_NAME = 'service_room_requirements'")) {
+        return [[{ tableCount: 1 }]];
+      }
+
+      if (normalizedSql.includes("DELETE FROM service_room_requirements")) {
+        assert.deepEqual(params, [1, 10]);
+        return [{ affectedRows: 1 }];
+      }
+
+      if (normalizedSql.startsWith("INSERT INTO service_room_requirements")) {
+        assert.deepEqual(params, [1, 10, "mesa"]);
+        return [{ affectedRows: 1 }];
+      }
+
+      if (normalizedSql.includes("FROM services WHERE center_id = ? AND id = ?")) {
+        assert.deepEqual(params, [1, 10]);
+        return [[{
+          id: 10,
+          name: "Carta Astral Premium",
+          durationMinutes: 90,
+          priceAmount: "240.00",
+          currencyCode: "BOB",
+          isActive: 1
+        }]];
+      }
+
+      if (normalizedSql.includes("FROM service_room_requirements")) {
+        assert.deepEqual(params, [1, 10]);
+        return [[{ featureKey: "mesa" }]];
+      }
+
+      throw new Error(`Query no esperada: ${normalizedSql}`);
+    }
+  };
+
+  const result = await updateService({
+    connection,
+    adminSession: { centerId: 1 },
+    serviceId: 10,
+    name: "Carta Astral Premium",
+    durationMinutes: 90,
+    priceAmount: "240",
+    isActive: true,
+    requiredFeatureKeys: ["mesa"]
+  });
+
+  assert.equal(result.name, "Carta Astral Premium");
+  assert.equal(result.durationLabel, "90 min");
+  assert.equal(result.priceLabel, "240 BOB");
+  assert.equal(result.status, "ACTIVE");
+  assert.deepEqual(result.requiredFeatureKeys, ["mesa"]);
+  assert.equal(steps.includes("begin"), true);
+  assert.equal(steps.includes("commit"), true);
+  assert.equal(steps.includes("rollback"), false);
+});
+
+test("updateService hace rollback si falta el servicio", async () => {
+  const steps = [];
+  const connection = {
+    async beginTransaction() {
+      steps.push("begin");
+    },
+    async commit() {
+      steps.push("commit");
+    },
+    async rollback() {
+      steps.push("rollback");
+    },
+    async query(sql) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      steps.push(normalizedSql);
+
+      if (normalizedSql.includes("FROM services") && normalizedSql.includes("FOR UPDATE")) {
+        return [[]];
+      }
+
+      throw new Error(`Query no esperada: ${normalizedSql}`);
+    }
+  };
+
+  await assert.rejects(
+    () => updateService({
+      connection,
+      adminSession: { centerId: 1 },
+      serviceId: 999,
+      name: "Servicio fantasma"
+    }),
+    (error) => error.code === "SERVICE_NOT_FOUND"
+  );
+
+  assert.equal(steps.includes("begin"), true);
+  assert.equal(steps.includes("rollback"), true);
+  assert.equal(steps.includes("commit"), false);
+});
+
+test("updateServiceRoomCompatibility activa o desactiva una relacion servicio-sala", async () => {
+  const steps = [];
+  const connection = {
+    async beginTransaction() {
+      steps.push("begin");
+    },
+    async commit() {
+      steps.push("commit");
+    },
+    async rollback() {
+      steps.push("rollback");
+    },
+    async query(sql, params = []) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      steps.push({ sql: normalizedSql, params });
+
+      if (normalizedSql.includes("FROM services") && normalizedSql.includes("FOR UPDATE")) {
+        assert.deepEqual(params, [1, 10]);
+        return [[{ id: 10, name: "Carta Astral" }]];
+      }
+
+      if (normalizedSql.includes("FROM rooms") && normalizedSql.includes("FOR UPDATE")) {
+        assert.deepEqual(params, [1, 20]);
+        return [[{ id: 20, name: "Sala Orión" }]];
+      }
+
+      if (normalizedSql.startsWith("INSERT INTO service_rooms")) {
+        assert.deepEqual(params, [1, 10, 20, 0]);
+        return [{ affectedRows: 2 }];
+      }
+
+      throw new Error(`Query no esperada: ${normalizedSql}`);
+    }
+  };
+
+  const result = await updateServiceRoomCompatibility({
+    connection,
+    adminSession: { centerId: 1 },
+    serviceId: 10,
+    roomId: 20,
+    isActive: false
+  });
+
+  assert.equal(result.id, "10-20");
+  assert.equal(result.serviceLabel, "Carta Astral");
+  assert.equal(result.roomLabel, "Sala Orión");
+  assert.equal(result.status, "INACTIVE");
+  assert.equal(result.statusLabel, "Inactivo");
+  assert.equal(result.isActive, false);
+  assert.equal(steps.includes("begin"), true);
+  assert.equal(steps.includes("commit"), true);
+  assert.equal(steps.includes("rollback"), false);
+});
+
+test("updateServiceRoomCompatibility hace rollback si falta servicio o sala", async () => {
+  const steps = [];
+  const connection = {
+    async beginTransaction() {
+      steps.push("begin");
+    },
+    async commit() {
+      steps.push("commit");
+    },
+    async rollback() {
+      steps.push("rollback");
+    },
+    async query(sql) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      steps.push(normalizedSql);
+
+      if (normalizedSql.includes("FROM services") && normalizedSql.includes("FOR UPDATE")) {
+        return [[]];
+      }
+
+      throw new Error(`Query no esperada: ${normalizedSql}`);
+    }
+  };
+
+  await assert.rejects(
+    () => updateServiceRoomCompatibility({
+      connection,
+      adminSession: { centerId: 1 },
+      serviceId: 999,
+      roomId: 20,
+      isActive: true
+    }),
+    (error) => error.code === "SERVICE_NOT_FOUND"
   );
 
   assert.equal(steps.includes("begin"), true);
