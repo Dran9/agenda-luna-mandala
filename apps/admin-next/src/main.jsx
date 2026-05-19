@@ -18,6 +18,7 @@ import "./styles/table.css";
 import "./styles/table-interactions.css";
 import "./styles/modal.css";
 import "./styles/drawer.css";
+import "./styles/payments.css";
 import "./styles/settings.css";
 import "./styles/foundation.css";
 import "./styles/surfaces.css";

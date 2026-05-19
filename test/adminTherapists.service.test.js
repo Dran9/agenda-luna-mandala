@@ -556,7 +556,7 @@ test("updateAdminTherapistProfile actualiza datos editables del perfil", async (
   assert.equal(steps.includes("rollback"), false);
 });
 
-test("updateAdminTherapistService activa una relacion terapeuta-servicio", async () => {
+test("updateAdminTherapistService crea una relacion terapeuta-servicio con arancel semilla", async () => {
   const steps = [];
   const connection = {
     async beginTransaction() {
@@ -583,12 +583,18 @@ test("updateAdminTherapistService activa una relacion terapeuta-servicio", async
 
       if (normalizedSql.includes("FROM services") && normalizedSql.includes("FOR UPDATE")) {
         assert.deepEqual(params, [1, 300]);
-        return [[{ id: 300 }]];
+        assert.equal(normalizedSql.includes("price_amount AS priceAmount"), true);
+        assert.equal(normalizedSql.includes("currency_code AS currencyCode"), true);
+        return [[{ id: 300, priceAmount: "180.00", currencyCode: "BOB" }]];
       }
 
       if (normalizedSql.startsWith("INSERT INTO therapist_services")) {
-        assert.deepEqual(params, [1, 12, 300, 1]);
+        assert.deepEqual(params, [1, 12, 300, "180.00", "BOB", 1]);
+        assert.equal(normalizedSql.includes("price_amount"), true);
+        assert.equal(normalizedSql.includes("currency_code"), true);
         assert.equal(normalizedSql.includes("ON DUPLICATE KEY UPDATE"), true);
+        assert.equal(normalizedSql.includes("price_amount = VALUES(price_amount)"), false);
+        assert.equal(normalizedSql.includes("currency_code = VALUES(currency_code)"), false);
         return [{ affectedRows: 1 }];
       }
 

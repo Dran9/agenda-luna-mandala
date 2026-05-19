@@ -4,6 +4,7 @@ const test = require("node:test");
 const { createAdminRouter } = require("../server/routes/admin.route");
 const { AdminAppointmentsError } = require("../server/services/adminAppointments.service");
 const { AdminClientsError } = require("../server/services/adminClients.service");
+const { AdminPaymentsError } = require("../server/services/adminPayments.service");
 const { AdminAuthError, verifyAdminToken } = require("../server/services/adminAuth.service");
 const { PublicBookingError, SlotOccupiedError, ValidationError } = require("../server/services/errors");
 const { signToken } = require("../server/utils/jwt");
@@ -1304,6 +1305,89 @@ test("POST /api/admin/appointments crea cita manual y retorna 201", async () => 
   assert.equal(receivedArgs.startsAt, "2026-05-20T10:00:00.000Z");
   assert.equal(receivedArgs.now instanceof Date, true);
   assert.equal(res.payload.creation.mode, "admin_manual");
+});
+
+test("POST /api/admin/appointments/:id/payments crea pago manual y retorna 201", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+  let receivedArgs = null;
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 7, centerId: 1, email: "admin.dev@lunamandala.local", role: "owner" }),
+    createAppointmentPayment: async (args) => {
+      receivedArgs = args;
+      return {
+        payment: {
+          id: 9,
+          appointmentId: 77,
+          status: "pending",
+          amount: 250,
+          currencyCode: "BOB"
+        }
+      };
+    }
+  });
+
+  const handler = getRouteHandler(router, "/appointments/:id/payments", "post");
+  const req = {
+    params: { id: "77" },
+    body: { method: "transfer", reference: "Banco 123", notes: "Manual" },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(receivedArgs.connection, connection);
+  assert.equal(receivedArgs.appointmentId, "77");
+  assert.equal(receivedArgs.reference, "Banco 123");
+  assert.equal(res.payload.payment.status, "pending");
+});
+
+test("POST /api/admin/payments/:id/approve mapea errores de pagos", async () => {
+  const connection = {
+    release() {}
+  };
+  const pool = {
+    async getConnection() {
+      return connection;
+    }
+  };
+  const router = createAdminRouter({
+    getPool: () => pool,
+    verifyToken: () => ({ adminId: 7, centerId: 1, email: "admin.dev@lunamandala.local", role: "owner" }),
+    approvePayment: async () => {
+      throw new AdminPaymentsError({
+        status: 409,
+        code: "PAYMENT_INVALID_TRANSITION",
+        message: "Transicion de pago invalida"
+      });
+    }
+  });
+
+  const handler = getRouteHandler(router, "/payments/:id/approve", "post");
+  const req = {
+    params: { id: "9" },
+    body: { notes: "Pagado en caja" },
+    get() {
+      return "Bearer token-demo";
+    }
+  };
+  const res = createResponseMock();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.payload.error.code, "PAYMENT_INVALID_TRANSITION");
 });
 
 test("POST /api/admin/appointments mapea errores de disponibilidad de reserva publica", async () => {

@@ -144,3 +144,49 @@ test("updateAppointmentRoomMutationOptions falls back to variables for detail in
     { queryKey: ["appointments", "detail", 42] }
   ]);
 });
+
+test("paymentMutationOptions invalidates table and drawer detail", async () => {
+  const invalidations = [];
+  const queryClient = {
+    async invalidateQueries(payload) {
+      invalidations.push(payload);
+    }
+  };
+
+  const { paymentMutationOptions } = await import("../mutationOptions.js");
+  const options = paymentMutationOptions({
+    date: "2026-05-18",
+    mutationFn: async () => ({ payment: { appointmentId: 42 } }),
+    queryClient
+  });
+
+  await options.onSuccess({ payment: { appointmentId: 42 } });
+
+  assert.deepEqual(invalidations, [
+    { queryKey: ["appointments", "2026-05-18"] },
+    { queryKey: ["appointments", "detail", 42] }
+  ]);
+});
+
+test("paymentMutationOptions falls back to variables for detail invalidation", async () => {
+  const invalidations = [];
+  const queryClient = {
+    async invalidateQueries(payload) {
+      invalidations.push(payload);
+    }
+  };
+
+  const { paymentMutationOptions } = await import("../mutationOptions.js");
+  const options = paymentMutationOptions({
+    date: "2026-05-18",
+    mutationFn: async () => ({ payment: {} }),
+    queryClient
+  });
+
+  await options.onSuccess({ payment: {} }, { appointmentId: 42 });
+
+  assert.deepEqual(invalidations, [
+    { queryKey: ["appointments", "2026-05-18"] },
+    { queryKey: ["appointments", "detail", 42] }
+  ]);
+});

@@ -22,6 +22,7 @@ import {
   statusActionsForAppointment
 } from "./detailUtils";
 import { useAppointmentDetailQuery } from "./queries";
+import { PaymentSection } from "./PaymentSection";
 import {
   useUpdateAppointmentRoomMutation,
   useUpdateAppointmentStatusMutation
@@ -135,6 +136,8 @@ export function AppointmentDetailDrawer({ appointmentId, date, open, onClose }) 
               </Button>
             </form>
           ) : null}
+
+          <PaymentSection appointment={appointment} date={date} />
 
           <section className="drawer-section drawer-actions" aria-label="Acciones de cita">
             {actions.length ? actions.map((action) => (

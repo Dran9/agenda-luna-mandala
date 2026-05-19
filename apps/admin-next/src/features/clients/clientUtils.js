@@ -22,7 +22,8 @@ const PAYMENT_STATUS_LABELS = {
   submitted: "En revisión",
   approved: "Aprobado",
   rejected: "Rechazado",
-  cancelled: "Cancelado"
+  canceled: "Anulado",
+  cancelled: "Anulado"
 };
 
 export function clientsForAdmin(payload) {

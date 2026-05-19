@@ -3,9 +3,14 @@ import test from "node:test";
 
 import {
   appointmentDetailPath,
+  appointmentPaymentsPath,
   appointmentRoomPath,
   appointmentsPath,
   appointmentStatusPath,
+  paymentApprovePath,
+  paymentCancelPath,
+  paymentRejectPath,
+  paymentSubmitPath,
   resourcesPath,
   therapistsPath
 } from "../apiPaths.js";
@@ -35,6 +40,14 @@ test("appointment detail paths target the selected appointment", () => {
   assert.equal(appointmentDetailPath(42), "/api/admin/appointments/42");
   assert.equal(appointmentStatusPath(42), "/api/admin/appointments/42/status");
   assert.equal(appointmentRoomPath(42), "/api/admin/appointments/42/room");
+  assert.equal(appointmentPaymentsPath(42), "/api/admin/appointments/42/payments");
+});
+
+test("payment action paths target manual payment endpoints", () => {
+  assert.equal(paymentSubmitPath(9), "/api/admin/payments/9/submit");
+  assert.equal(paymentApprovePath(9), "/api/admin/payments/9/approve");
+  assert.equal(paymentRejectPath(9), "/api/admin/payments/9/reject");
+  assert.equal(paymentCancelPath(9), "/api/admin/payments/9/cancel");
 });
 
 test("therapistsPath targets active therapist options", () => {

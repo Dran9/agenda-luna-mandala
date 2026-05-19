@@ -1090,7 +1090,10 @@ async function updateAdminTherapistService({
     }
 
     const [serviceRows] = await connection.query(
-      `SELECT id
+      `SELECT
+         id,
+         price_amount AS priceAmount,
+         currency_code AS currencyCode
        FROM services
        WHERE center_id = ?
          AND id = ?
@@ -1113,12 +1116,21 @@ async function updateAdminTherapistService({
         therapist_id,
         service_id,
         priority,
+        price_amount,
+        currency_code,
         is_active
       )
-      VALUES (?, ?, ?, 100, ?)
+      VALUES (?, ?, ?, 100, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         is_active = VALUES(is_active)`,
-      [center.id, resolvedTherapistId, resolvedServiceId, normalizedIsActive]
+      [
+        center.id,
+        resolvedTherapistId,
+        resolvedServiceId,
+        serviceRows[0].priceAmount,
+        serviceRows[0].currencyCode,
+        normalizedIsActive
+      ]
     );
 
     await connection.commit();
