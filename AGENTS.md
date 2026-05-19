@@ -3,12 +3,12 @@
 ## Trabajo Actual
 
 - **Base activa**: `main`.
-- **Rama de trabajo actual**: `codex/payment-c0-manual`.
-- **Estado**: PR #1 Runtime/Admin stabilization base, PR #2 Admin Next C0 y PR #3 Admin Next Foundation C1 ya estan mergeados en `main`. PR #4 Payment C0 Manual esta abierto como draft en revision sobre `main`.
-- **Scope actual**: implementacion draft de Payment C0 Manual segun contrato. La fase actual permite ajustes de review dentro del PR #4, sin ampliar alcance.
-- **Edit-zone principal**: contrato Payment C0, backend/admin de pago manual C0, arancel por relacion `therapist_services`, Admin UI de controles manuales y tests relacionados.
-- **Read-only salvo autorizacion explicita**: DB remota, runtime/deploy, root `package.json`, root lockfile y archivos sensibles no relacionados con Payment C0 Manual.
-- **No negociables actuales**: no WhatsApp/OCR/email bancario/webhooks en C0; no QR live; no liquidacion a terapeutas; no usar precio global de servicio como arancel final de pago; no deploy ni cambios runtime en este PR.
+- **Rama de trabajo actual**: `main`.
+- **Estado**: PR #1 Runtime/Admin stabilization base, PR #2 Admin Next C0, PR #3 Admin Next Foundation C1 y PR #4 Payment C0 Manual estan mergeados en `main`. PR #4 fue mergeado con commit `ad4b15e570d4fbdc73bfa6b1c282eea7d7389793`.
+- **Scope actual**: Payment C0 Local QA Closure + Deploy Readiness. Payment C0 ya existe en codigo local/main, pero no esta deployado y no se toco DB remota.
+- **Edit-zone principal**: documentacion de cierre QA local y readiness: `docs/21_PAYMENT_C0_LOCAL_QA_CLOSURE.md` y `docs/22_PAYMENT_C0_DEPLOY_READINESS_PLAN.md`.
+- **Read-only salvo autorizacion explicita**: DB remota, runtime/deploy, `server/`, migraciones, `apps/admin-next/`, root `package.json`, root lockfile y archivos sensibles no relacionados con el cierre documental.
+- **No negociables actuales**: no deploy; no DB remota; no migraciones remotas; no push ni PR nuevo sin autorizacion explicita; no WhatsApp/OCR/email bancario/webhooks en C0; no QR live; no liquidacion a terapeutas; no apagar Docker local.
 
 Esta seccion se actualiza cuando cambia la fase activa del proyecto. Si esta desactualizada o no coincide con la rama en la que estas, parar y reportar antes de codificar.
 
